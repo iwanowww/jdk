@@ -91,6 +91,8 @@ class MacroAssembler: public Assembler {
   Address as_Address(AddressLiteral adr);
   Address as_Address(ArrayAddress adr, Register rscratch);
 
+  Address as_Address_unchecked(AddressLiteral adr);
+
   // Support for NULL-checks
   //
   // Generates code that causes a NULL OS exception if the content of reg is NULL.

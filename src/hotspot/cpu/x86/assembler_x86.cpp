@@ -12077,7 +12077,7 @@ bool Assembler::reachable(AddressLiteral adr) {
     // Flipping stuff in the codecache to be unreachable causes issues
     // with things like inline caches where the additional instructions
     // are not handled.
-    if (CodeCache::find_blob(adr._target) == NULL) {
+    if (CodeCache::contains(adr._target)) {
       return false;
     }
   }
@@ -12108,6 +12108,39 @@ bool Assembler::reachable(AddressLiteral adr) {
   }
   return is_simm32(disp);
 }
+
+#ifdef ASSERT
+static bool is_in_code_cache(address addr) {
+  return (CodeCache::low_bound() <= addr) && (addr < CodeCache::high_bound());
+}
+
+bool Assembler::always_reachable(AddressLiteral adr) {
+  switch (adr.reloc()) {
+    // This should be rip relative and easily reachable.
+    case relocInfo::internal_word_type: {
+      return true;
+    }
+    // This should be rip relative within the code cache and easily
+    // reachable until we get huge code caches. (At which point
+    // IC code is going to have issues).
+    case relocInfo::virtual_call_type:
+    case relocInfo::opt_virtual_call_type:
+    case relocInfo::static_call_type:
+    case relocInfo::static_stub_type: {
+      return true;
+    }
+    case relocInfo::runtime_call_type:
+    case relocInfo::external_word_type:
+    case relocInfo::poll_return_type: // these are really external_word but need special
+    case relocInfo::poll_type: {      // relocs to identify them
+      return is_in_code_cache(adr._target);
+    }
+    default: {
+      return false;
+    }
+  }
+}
+#endif // ASSERT
 
 void Assembler::emit_data64(jlong data,
                             relocInfo::relocType rtype,
