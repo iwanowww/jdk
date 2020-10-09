@@ -862,7 +862,7 @@ public:
   // NOTE: this call transfers to the effective address of entry NOT
   // the address contained by entry. This is because this is more natural
   // for jumps/calls.
-  void call(AddressLiteral entry, Register rscratch = rscratch1);
+  void call(AddressLiteral entry);
 
   // Emit the CompiledIC call idiom
   void ic_call(address entry, jint method_index = 0);
@@ -1130,7 +1130,6 @@ public:
   void divss(XMMRegister dst, AddressLiteral src, Register rscratch);
 
   // Move Unaligned Double Quadword
-<<<<<<< HEAD
   void movdqu(Address     dst, XMMRegister    src);
   void movdqu(XMMRegister dst, Address        src);
   void movdqu(XMMRegister dst, XMMRegister    src);
@@ -2082,7 +2081,7 @@ class SkipIfEqual {
   Label _label;
 
  public:
-   SkipIfEqual(MacroAssembler*, const bool* flag_addr, bool value);
+   SkipIfEqual(MacroAssembler*, const bool* flag_addr, bool value, Register rscratch);
    ~SkipIfEqual();
 };
 

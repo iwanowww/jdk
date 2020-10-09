@@ -1268,7 +1268,7 @@ void MacroAssembler::atomic_incq(Address counter_addr) {
   incrementq(counter_addr);
 }
 
-void MacroAssembler::atomic_incq(AddressLiteral counter_addr, Register scr) {
+void MacroAssembler::atomic_incq(AddressLiteral counter_addr, Register rscratch) {
   if (reachable(counter_addr)) {
     atomic_incq(as_Address(counter_addr));
   } else {
@@ -1339,10 +1339,11 @@ void MacroAssembler::call(Register entry) {
   Assembler::call(entry);
 }
 
-void MacroAssembler::call(AddressLiteral entry, Register rscratch) {
+void MacroAssembler::call(AddressLiteral entry) {
   if (reachable(entry)) {
     Assembler::call_literal(entry.target(), entry.rspec());
   } else {
+    Register rscratch = rscratch1;
     lea(rscratch, entry);
     Assembler::call(rscratch);
   }
@@ -2574,7 +2575,7 @@ void MacroAssembler::movdqu(XMMRegister dst, XMMRegister src) {
     Assembler::movdqu(dst, src);
 }
 
-void MacroAssembler::movdqu(XMMRegister dst, AddressLiteral src, Register scratchReg) {
+void MacroAssembler::movdqu(XMMRegister dst, AddressLiteral src, Register rscratch) {
   if (reachable(src)) {
     movdqu(dst, as_Address(src));
   } else {
@@ -2598,11 +2599,10 @@ void MacroAssembler::vmovdqu(XMMRegister dst, XMMRegister src) {
     Assembler::vmovdqu(dst, src);
 }
 
-void MacroAssembler::vmovdqu(XMMRegister dst, AddressLiteral src, Register scratch_reg) {
+void MacroAssembler::vmovdqu(XMMRegister dst, AddressLiteral src, Register rscratch) {
   if (reachable(src)) {
     vmovdqu(dst, as_Address(src));
-  }
-  else {
+  } else {
     lea(rscratch, src);
     vmovdqu(dst, Address(rscratch, 0));
   }
@@ -3577,7 +3577,7 @@ void MacroAssembler::pshuflw(XMMRegister dst, XMMRegister src, int mode) {
   Assembler::pshuflw(dst, src, mode);
 }
 
-void MacroAssembler::vandpd(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg) {
+void MacroAssembler::vandpd(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch) {
   if (reachable(src)) {
     vandpd(dst, nds, as_Address(src), vector_len);
   } else {
@@ -3586,7 +3586,7 @@ void MacroAssembler::vandpd(XMMRegister dst, XMMRegister nds, AddressLiteral src
   }
 }
 
-void MacroAssembler::vandps(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg) {
+void MacroAssembler::vandps(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch) {
   if (reachable(src)) {
     vandps(dst, nds, as_Address(src), vector_len);
   } else {
@@ -3669,7 +3669,7 @@ void MacroAssembler::vnegatesd(XMMRegister dst, XMMRegister nds, AddressLiteral 
   vxorpd(dst, nds, src, Assembler::AVX_128bit, rscratch);
 }
 
-void MacroAssembler::vxorpd(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg) {
+void MacroAssembler::vxorpd(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch) {
   if (reachable(src)) {
     vxorpd(dst, nds, as_Address(src), vector_len);
   } else {
@@ -3678,7 +3678,7 @@ void MacroAssembler::vxorpd(XMMRegister dst, XMMRegister nds, AddressLiteral src
   }
 }
 
-void MacroAssembler::vxorps(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg) {
+void MacroAssembler::vxorps(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch) {
   if (reachable(src)) {
     vxorps(dst, nds, as_Address(src), vector_len);
   } else {
@@ -3687,7 +3687,7 @@ void MacroAssembler::vxorps(XMMRegister dst, XMMRegister nds, AddressLiteral src
   }
 }
 
-void MacroAssembler::vpxor(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg) {
+void MacroAssembler::vpxor(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch) {
   if (UseAVX > 1 || (vector_len < 1)) {
     if (reachable(src)) {
       Assembler::vpxor(dst, nds, as_Address(src), vector_len);
@@ -9484,10 +9484,9 @@ Assembler::Condition MacroAssembler::negate_condition(Assembler::Condition cond)
   ShouldNotReachHere(); return Assembler::overflow;
 }
 
-SkipIfEqual::SkipIfEqual(
-    MacroAssembler* masm, const bool* flag_addr, bool value) {
+SkipIfEqual::SkipIfEqual(MacroAssembler* masm, const bool* flag_addr, bool value, Register rscratch) {
   _masm = masm;
-  _masm->cmp8(ExternalAddress((address)flag_addr), value, rscratch1);
+  _masm->cmp8(ExternalAddress((address)flag_addr), value, rscratch);
   _masm->jcc(Assembler::equal, _label);
 }
 
