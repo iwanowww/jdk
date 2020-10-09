@@ -1390,28 +1390,9 @@ void PhaseIterGVN::remove_globally_dead_node( Node *dead ) {
       _stack.pop();
       // Remove dead node from iterative worklist
       _worklist.remove(dead);
-      C->remove_modified_node(dead);
-      // Constant node that has no out-edges and has only one in-edge from
-      // root is usually dead. However, sometimes reshaping walk makes
-      // it reachable by adding use edges. So, we will NOT count Con nodes
-      // as dead to be conservative about the dead node count at any
-      // given time.
-      if (!dead->is_Con()) {
-        C->record_dead_node(dead->_idx);
-      }
-      if (dead->is_macro()) {
-        C->remove_macro_node(dead);
-      }
-      if (dead->is_expensive()) {
-        C->remove_expensive_node(dead);
-      }
-      CastIINode* cast = dead->isa_CastII();
-      if (cast != NULL && cast->has_range_check()) {
-        C->remove_range_check_cast(cast);
-      }
-      if (dead->Opcode() == Op_Opaque4) {
-        C->remove_opaque4_node(dead);
-      }
+
+      C->remove_dead_node(dead);
+
       BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
       bs->unregister_potential_barrier_node(dead);
     }

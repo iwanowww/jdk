@@ -2111,6 +2111,8 @@ void Compile::Optimize() {
 
   // Perform escape analysis
   if (_do_escape_analysis && ConnectionGraph::has_candidates(this)) {
+    ResourceMark rm;
+
     if (has_loops()) {
       // Cleanup graph (remove dead nodes).
       TracePhase tp("idealLoop", &timers[_t_idealLoop]);
@@ -2118,23 +2120,39 @@ void Compile::Optimize() {
       if (major_progress()) print_method(PHASE_PHASEIDEAL_BEFORE_EA, 2);
       if (failing())  return;
     }
-    ConnectionGraph::do_analysis(this, &igvn);
+
+    ConnectionGraph* con_graph = ConnectionGraph::do_analysis(this, &igvn);
 
     if (failing())  return;
+
+    set_congraph(con_graph);
 
     // Optimize out fields loads from scalar replaceable allocations.
     igvn.optimize();
-    print_method(PHASE_ITER_GVN_AFTER_EA, 2);
 
     if (failing())  return;
 
-    if (congraph() != NULL && macro_count() > 0) {
+    print_method(PHASE_ITER_GVN_AFTER_EA, 2);
+
+    bool progress = true;
+    while (progress && congraph() != NULL && macro_count() > 0) {
       TracePhase tp("macroEliminate", &timers[_t_macroEliminate]);
       PhaseMacroExpand mexp(igvn);
+
+      int mcount = C->macro_count();
       mexp.eliminate_macro_nodes();
-      igvn.set_delay_transform(false);
+
+      igvn.set_delay_transform(false); // delay_transform is set in PhaseMacroExpand ctor
 
       igvn.optimize();
+
+      if (failing())  return;
+
+      progress = (C->macro_count() < mcount);
+
+      congraph()->purge(); // cleanup dead nodes
+      congraph()->recompute_scalar_replaceable();
+
       print_method(PHASE_ITER_GVN_AFTER_ELIMINATION, 2);
 
       if (failing())  return;

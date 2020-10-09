@@ -2545,3 +2545,16 @@ const Type* TypeNode::Value(PhaseGVN* phase) const { return _type; }
 uint TypeNode::ideal_reg() const {
   return _type->ideal_reg();
 }
+
+template<>
+void GrowableArray<Node*>::print() {
+#ifndef PRODUCT
+  for (int i = 0; i < _len; i++) {
+    if (_data[i] != NULL) {
+      tty->print("%5d--> ", i);
+      _data[i]->dump();
+    }
+  }
+#endif
+}
+

@@ -75,7 +75,7 @@
 // the connection graph, the following IR nodes are treated as local variables:
 //     Phi    (pointer values)
 //     LoadP, LoadN
-//     Proj#5 (value returned from callnodes including allocations)
+//     Proj#5 (value returned from call nodes including allocations)
 //     CheckCastPP, CastPP
 //
 // The LoadP, Proj and CheckCastPP behave like variables assigned to only once.
@@ -209,11 +209,14 @@ public:
 
   int edge_count()              const { return _edges.length(); }
   PointsToNode* edge(int e)     const { return _edges.at(e); }
-  bool add_edge(PointsToNode* edge)    { return _edges.append_if_missing(edge); }
+  bool add_edge(PointsToNode* edge)   { return _edges.append_if_missing(edge); }
+  void remove_edge(PointsToNode* edge){ _edges.remove(edge); }
+  bool has_edge(PointsToNode* edge) const;
 
   int use_count()             const { return _uses.length(); }
   PointsToNode* use(int e)    const { return _uses.at(e); }
-  bool add_use(PointsToNode* use)    { return _uses.append_if_missing(use); }
+  bool add_use(PointsToNode* use)   { return _uses.append_if_missing(use); }
+  void remove_use(PointsToNode* use){ _uses.remove(use); }
 
   // Mark base edge use to distinguish from stored value edge.
   bool add_base_use(FieldNode* use) { return _uses.append_if_missing((PointsToNode*)((intptr_t)use + 1)); }
@@ -229,11 +232,13 @@ public:
   // Return true if one node points to an other.
   bool meet(PointsToNode* ptn);
 
+  void purge(VectorSet live_ptn_nodes);
+
 #ifndef PRODUCT
   NodeType node_type() const { return (NodeType)_type;}
-  void dump(bool print_state=true) const;
+  void dump(bool print_state) const;
+  void dump() const { dump(true); }
 #endif
-
 };
 
 class LocalVarNode: public PointsToNode {
@@ -252,15 +257,14 @@ public:
 };
 
 class FieldNode: public PointsToNode {
+  friend class PointsToNode;
+
   GrowableArray<PointsToNode*> _bases; // List of JavaObject nodes which point to this node
   const int   _offset; // Field's offset.
   const bool  _is_oop; // Field points to object
         bool  _has_unknown_base; // Has phantom_object base
 public:
-  FieldNode(ConnectionGraph *CG, Node* n, EscapeState es, int offs, bool is_oop):
-    PointsToNode(CG, n, es, Field),
-    _offset(offs), _is_oop(is_oop),
-    _has_unknown_base(false) {}
+  inline FieldNode(ConnectionGraph *CG, Node* n, EscapeState es, int offs, bool is_oop);
 
   int      offset()              const { return _offset;}
   bool     is_oop()              const { return _is_oop;}
@@ -269,12 +273,10 @@ public:
 
   int base_count()              const { return _bases.length(); }
   PointsToNode* base(int e)     const { return _bases.at(e); }
-  bool add_base(PointsToNode* base)    { return _bases.append_if_missing(base); }
-#ifdef ASSERT
+  bool add_base(PointsToNode* base)   { return _bases.append_if_missing(base); }
+  void remove_base(PointsToNode* base){ _bases.remove(base); }
   // Return true if bases points to this java object.
-  bool has_base(JavaObjectNode* ptn) const;
-#endif
-
+  bool has_base(PointsToNode* ptn) const;
 };
 
 class ArraycopyNode: public PointsToNode {
@@ -319,9 +321,16 @@ public:
 
 class ConnectionGraph: public ResourceObj {
   friend class PointsToNode;
+  friend class FieldNode;
 private:
-  GrowableArray<PointsToNode*>  _nodes; // Map from ideal nodes to
-                                        // ConnectionGraph nodes.
+  Node* _oop_null;
+  Node* _noop_null;
+  Node* _hook_node; // keeps _oop_null and _noop_null alive
+
+  GrowableArray<PointsToNode*>  _nodes; // Map from ideal nodes to ConnectionGraph nodes.
+
+  VectorSet _dead_ideal_nodes;
+  VectorSet   _dead_ptn_nodes;
 
   GrowableArray<PointsToNode*>  _worklist; // Nodes to be processed
   VectorSet                  _in_worklist;
@@ -334,18 +343,27 @@ private:
   bool               _verify;  // verify graph
 
   JavaObjectNode*    null_obj;
-  Node*             _pcmp_neq; // ConI(#CC_GT)
-  Node*              _pcmp_eq; // ConI(#CC_EQ)
+  JavaObjectNode* phantom_obj; // Unknown object
 
   Compile*           _compile; // Compile object for current compilation
   PhaseIterGVN*         _igvn; // Value numbering
 
   Unique_Node_List ideal_nodes; // Used by CG construction and types splitting.
 
-public:
-  JavaObjectNode* phantom_obj; // Unknown object
+  // Worklists used by EA.
+  Unique_Node_List               delayed_worklist;
+  GrowableArray<Node*>           alloc_worklist;
+  GrowableArray<Node*>           ptr_cmp_worklist;
+  GrowableArray<Node*>           storestore_worklist;
+  GrowableArray<ArrayCopyNode*>  arraycopy_worklist;
+  GrowableArray<PointsToNode*>   ptnodes_worklist;
+  GrowableArray<JavaObjectNode*> java_objects_worklist;
+  GrowableArray<JavaObjectNode*> non_escaped_allocs;
+  GrowableArray<FieldNode*>      oop_fields_worklist;
+  GrowableArray<FieldNode*>      null_field_base_worklist;
+  // nulls + scalar replaceable?
+  DEBUG_ONLY( GrowableArray<Node*> addp_worklist; )
 
-private:
   // Address of an element in _nodes.  Used when the element is to be modified
   PointsToNode* ptnode_adr(int idx) const {
     // There should be no new ideal nodes during ConnectionGraph build,
@@ -375,16 +393,10 @@ private:
   void add_final_edges(Node *n);
 
   // Finish Graph construction.
-  bool complete_connection_graph(GrowableArray<PointsToNode*>&   ptnodes_worklist,
-                                 GrowableArray<JavaObjectNode*>& non_escaped_worklist,
-                                 GrowableArray<JavaObjectNode*>& java_objects_worklist,
-                                 GrowableArray<FieldNode*>&      oop_fields_worklist);
+  bool complete_connection_graph();
 
 #ifdef ASSERT
-  void verify_connection_graph(GrowableArray<PointsToNode*>&   ptnodes_worklist,
-                               GrowableArray<JavaObjectNode*>& non_escaped_worklist,
-                               GrowableArray<JavaObjectNode*>& java_objects_worklist,
-                               GrowableArray<Node*>& addp_worklist);
+  void verify_connection_graph();
 #endif
 
   // Add all references to this JavaObject node.
@@ -423,7 +435,8 @@ private:
   int find_field_value(FieldNode* field);
 
   // Find fields initializing values for allocations.
-  int find_init_values(JavaObjectNode* ptn, PointsToNode* init_val, PhaseTransform* phase);
+  int find_init_values_null   (JavaObjectNode* ptn, PhaseTransform* phase);
+  int find_init_values_phantom(JavaObjectNode* ptn);
 
   // Set the escape state of an object and its fields.
   void set_escape_state(PointsToNode* ptn, PointsToNode::EscapeState esc) {
@@ -445,17 +458,15 @@ private:
 
   // Propagate GlobalEscape and ArgEscape escape states to all nodes
   // and check that we still have non-escaping java objects.
-  bool find_non_escaped_objects(GrowableArray<PointsToNode*>& ptnodes_worklist,
-                                GrowableArray<JavaObjectNode*>& non_escaped_worklist);
+  bool find_non_escaped_objects();
 
   // Adjust scalar_replaceable state after Connection Graph is built.
   void adjust_scalar_replaceable_state(JavaObjectNode* jobj);
 
   // Optimize ideal graph.
-  void optimize_ideal_graph(GrowableArray<Node*>& ptr_cmp_worklist,
-                            GrowableArray<Node*>& storestore_worklist);
+  void optimize_ideal_graph();
   // Optimize objects compare.
-  Node* optimize_ptr_compare(Node* n);
+  const TypeInt* optimize_ptr_compare(Node* n);
 
   // Returns unique corresponding java object or NULL.
   JavaObjectNode* unique_java_object(Node *n);
@@ -514,9 +525,8 @@ private:
 
   bool is_captured_store_address(Node* addp);
 
-  // Propagate unique types created for unescaped allocated objects
-  // through the graph
-  void split_unique_types(GrowableArray<Node *>  &alloc_worklist, GrowableArray<ArrayCopyNode*> &arraycopy_worklist);
+  // Propagate unique types created for non-escaped allocated objects through the graph.
+  void split_unique_types();
 
   // Helper methods for unique types split.
   bool split_AddP(Node *addp, Node *base);
@@ -531,7 +541,7 @@ private:
 
   GrowableArray<MergeMemNode*>  _mergemem_worklist; // List of all MergeMem nodes
 
-  Node_Array _node_map; // used for bookeeping during type splitting
+  Node_Array _node_map; // used for bookkeeping during type splitting
                         // Used for the following purposes:
                         // Memory Phi    - most recent unique Phi split out
                         //                 from this Phi
@@ -561,12 +571,13 @@ private:
 
 public:
   ConnectionGraph(Compile *C, PhaseIterGVN *igvn);
+  ~ConnectionGraph();
 
   // Check for non-escaping candidates
   static bool has_candidates(Compile *C);
 
   // Perform escape analysis
-  static void do_analysis(Compile *C, PhaseIterGVN *igvn);
+  static ConnectionGraph* do_analysis(Compile *C, PhaseIterGVN *igvn);
 
   bool not_global_escape(Node *n);
 
@@ -601,8 +612,13 @@ public:
   void add_to_congraph_unsafe_access(Node* n, uint opcode, Unique_Node_List* delayed_worklist);
   bool add_final_edges_unsafe_access(Node* n, uint opcode);
 
+  void recompute_scalar_replaceable();
+  void remove_dead_node(Node* dead);
+  void purge();
+
 #ifndef PRODUCT
   void dump(GrowableArray<PointsToNode*>& ptnodes_worklist);
+  void dump();
 #endif
 };
 
@@ -618,5 +634,11 @@ inline PointsToNode::PointsToNode(ConnectionGraph *CG, Node* n, EscapeState es, 
   _pidx(CG->next_pidx()) {
   assert(n != NULL && es != UnknownEscape, "sanity");
 }
+
+inline FieldNode::FieldNode(ConnectionGraph *CG, Node* n, EscapeState es, int offs, bool is_oop) :
+  PointsToNode(CG, n, es, Field),
+  _bases(CG->_compile->comp_arena(), 2, 0, NULL),
+  _offset(offs), _is_oop(is_oop),
+  _has_unknown_base(false) {}
 
 #endif // SHARE_OPTO_ESCAPE_HPP
