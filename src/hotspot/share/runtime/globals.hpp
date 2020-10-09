@@ -2485,6 +2485,13 @@ const intx ObjectAlignmentInBytes = 8;
   product(int, SubtypeCheckType, 0,                                         \
                 "TODO")                                                     \
                                                                             \
+  product(int, SubtypeCheckHashBits, 3,                                     \
+                "") \
+          range(0, 64)                                                      \
+                                                                            \
+  product(int, SubtypeCheckStride, 8,                                       \
+                "") \
+                                                                            \
 
 // end of RUNTIME_FLAGS
 

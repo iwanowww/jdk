@@ -3685,6 +3685,10 @@ void InstanceKlass::print_class_load_logging(ClassLoaderData* loader_data,
                          cfs->length()));
     }
 
+    if (secondary_supers() != NULL) {
+      debug_stream.print(" secondary_supers: %d", secondary_supers()->length());
+    }
+
     msg.debug("%s", debug_stream.as_string());
   }
 }

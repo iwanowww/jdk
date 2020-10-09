@@ -152,6 +152,7 @@ class MacroAssembler: public Assembler {
   void decrementq(Register reg, int value = 1);
   void decrementq(Address dst, int value = 1);
 
+  void incrementl(AddressLiteral dst, int value, Register rscratch);
   void incrementl(Address dst, int value = 1);
   void incrementl(Register reg, int value = 1);
 
@@ -688,6 +689,9 @@ class MacroAssembler: public Assembler {
     if (src.is_constant()) addptr(dst, (int) src.as_constant());
     else                   addptr(dst,       src.as_register());
   }
+
+  using Assembler::addl;
+  void addl(AddressLiteral dst, Register src, Register rscratch);
 
   void andptr(Register dst, int32_t src);
   void andptr(Register src1, Register src2) { LP64_ONLY(andq(src1, src2)) NOT_LP64(andl(src1, src2)) ; }

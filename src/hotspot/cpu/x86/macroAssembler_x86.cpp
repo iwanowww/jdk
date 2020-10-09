@@ -946,6 +946,15 @@ void MacroAssembler::addptr(Address dst, Register src) {
   LP64_ONLY(addq(dst, src)) NOT_LP64(addl(dst, src));
 }
 
+void MacroAssembler::addl(AddressLiteral dst, Register src, Register rscratch) {
+  if (reachable(dst)) {
+    Assembler::addl(as_Address(dst), src);
+  } else {
+    lea(rscratch, dst);
+    Assembler::addl(Address(rscratch, 0), src);
+  }
+}
+
 void MacroAssembler::addsd(XMMRegister dst, AddressLiteral src) {
   if (reachable(src)) {
     Assembler::addsd(dst, as_Address(src));
@@ -2214,6 +2223,15 @@ void MacroAssembler::incrementl(Address dst, int value) {
   if (value == 0) {                        ; return; }
   if (value == 1 && UseIncDec) { incl(dst) ; return; }
   /* else */      { addl(dst, value)       ; return; }
+}
+
+void MacroAssembler::incrementl(AddressLiteral dst, int value, Register rscratch) {
+  if (reachable(dst)) {
+    incrementl(as_Address(dst), value);
+  } else {
+    lea(rscratch, dst);
+    incrementl(Address(rscratch, 0), value);
+  }
 }
 
 void MacroAssembler::jump(AddressLiteral dst) {
@@ -3632,6 +3650,85 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   LP64_ONLY( incrementl(Address(rcx, 0)) );
 #endif //PRODUCT
 
+  if (SubtypeCheckType == 4 || SubtypeCheckType == 5) {
+    if (temp_reg == noreg) {
+      temp_reg = rcx;
+    }
+    if (temp2_reg == noreg) {
+      temp2_reg = rdi;
+    }
+    assert(temp_reg != temp2_reg, "");
+    Label L_loop_entry, L_loop_continue, L_loop_not_found;
+
+    Register self_hash = rax;
+    push(self_hash);
+
+    movptr(self_hash, Address(super_klass, in_bytes(Klass::self_hash_offset())));
+
+
+    Address current_slot(temp_reg, 0);
+
+    if (SubtypeCheckType == 4) {
+      // 0th slot
+      lea(temp_reg, Address(sub_klass, in_bytes(Klass::secondary_supers_hash_offset()) + 0*BytesPerWord));
+      movptr(temp2_reg, current_slot);
+
+      testptr(temp2_reg, temp2_reg); // == 0?
+      jccb(Assembler::zero, L_loop_continue); // absent hash?
+
+      andptr(temp2_reg, self_hash);
+      cmpptr(temp2_reg, self_hash);
+      jccb(Assembler::notEqual, L_loop_not_found);
+
+      increment(temp_reg, BytesPerWord);
+    } else {
+      lea(temp_reg, Address(sub_klass, in_bytes(Klass::secondary_supers_hash_offset()) + 1*BytesPerWord));
+    }
+
+    // =================================== //
+
+    bind(L_loop_entry);
+
+    movptr(temp2_reg, current_slot);
+
+    testptr(temp2_reg, temp2_reg); // == 0?
+    jccb(Assembler::zero, L_loop_not_found);
+
+    andptr(temp2_reg, self_hash);
+    cmpptr(temp2_reg, self_hash);
+    jccb(Assembler::equal, L_loop_continue);
+
+    increment(temp_reg, BytesPerWord);
+    jmpb(L_loop_entry);
+
+    bind(L_loop_not_found);
+    if (UseNewCode) {
+      int3();
+    }
+#ifndef PRODUCT
+    if (PrintC1Statistics || PrintOptoStatistics) {
+      int* pst_counter = &SharedRuntime::_partial_subtype_failure_fast_ctr;
+      ExternalAddress pst_counter_addr((address) pst_counter);
+      incrementl(pst_counter_addr, 1, temp_reg);
+    }
+#endif //PRODUCT
+
+    if (set_cond_codes) {
+      testptr(sub_klass, sub_klass); // set NZ on failure
+    }
+
+    pop(self_hash);
+
+    if (pushed_rdi)  pop(rdi);
+    if (pushed_rcx)  pop(rcx);
+    if (pushed_rax)  pop(rax);
+
+    jmp(*L_failure);
+
+    bind(L_loop_continue);
+    pop(self_hash); // restore rax
+  }
+
   // We will consult the secondary-super array.
   movptr(rdi, secondary_supers_addr);
   // Load the array length.  (Positive movl does right thing on LP64.)
@@ -3639,7 +3736,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   // Skip to start of data.
   addptr(rdi, Array<Klass*>::base_offset_in_bytes());
 
-  if (SubtypeCheckType == 2) {
+  if (SubtypeCheckType > 1) {
     Label L_loop_entry, L_loop_success, L_loop_failure;
     Address current_slot(rdi, 0);
 
@@ -3656,9 +3753,29 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     jmpb(L_loop_entry);
 
     bind(L_loop_failure);
+#ifndef PRODUCT
+    if (PrintC1Statistics || PrintOptoStatistics) {
+      {
+        movptr(rdi, secondary_supers_addr);
+        movl(rdi, Address(rdi, Array<Klass*>::length_offset_in_bytes()));
+        subl(rdi, rcx);
+
+        int* pst_counter = &SharedRuntime::_partial_subtype_failure_slots_ctr;
+        ExternalAddress pst_counter_addr((address) pst_counter);
+        addl(pst_counter_addr, rdi, rcx /*rscratch*/);
+      }
+      {
+        int* pst_counter = &SharedRuntime::_partial_subtype_failure_ctr;
+        ExternalAddress pst_counter_addr((address) pst_counter);
+        incrementl(pst_counter_addr, 1, rcx /*rscratch*/);
+      }
+    }
+#endif //PRODUCT
+
     if (set_cond_codes) {
       testptr(sub_klass, sub_klass); // set NZ on failure
     }
+
     if (pushed_rdi)  pop(rdi);
     if (pushed_rcx)  pop(rcx);
     if (pushed_rax)  pop(rax);
@@ -3666,6 +3783,26 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     jmp(*L_failure);
 
     bind(L_loop_success);
+#ifndef PRODUCT
+    if (PrintC1Statistics || PrintOptoStatistics) {
+      {
+        movptr(rdi, secondary_supers_addr);
+        movl(rdi, Address(rdi, Array<Klass*>::length_offset_in_bytes()));
+
+        int* pst_counter = &SharedRuntime::_partial_subtype_success_slots_ctr;
+        ExternalAddress pst_counter_addr((address) pst_counter);
+
+        addl(pst_counter_addr, rdi, rcx /*rscratch*/);
+        incrementl(pst_counter_addr, 1, rcx /*rscratch*/);
+      }
+      {
+        int* pst_counter = &SharedRuntime::_partial_subtype_success_ctr;
+        ExternalAddress pst_counter_addr((address) pst_counter);
+        incrementl(pst_counter_addr, 1, rcx /*rscratch*/);
+      }
+    }
+#endif //PRODUCT
+
     if (set_cond_codes) {
       xorl(rcx, rcx); // set Z on success
     }

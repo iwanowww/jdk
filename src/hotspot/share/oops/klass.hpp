@@ -130,7 +130,8 @@ class Klass : public Metadata {
 
   // FIXME
   uintptr_t _self_hash; // TODO: turn into an optional field?
-  uintptr_t _secondary_supers_hash; // TODO: turn into an optional field?
+
+  uintptr_t _secondary_supers_hash[128]; // TODO: turn into an optional field?
 
   // Class name.  Instance classes: java/lang/String, etc.  Array classes: [I,
   // [Ljava/lang/String;, etc.  Set to zero for all other kinds of classes.
@@ -232,8 +233,13 @@ protected:
   uintptr_t    self_hash() const      { return _self_hash; }
   void     set_self_hash(uintptr_t h) { assert(h != 0 && h != uintptr_t(-1), ""); _self_hash = h; }
 
-  uintptr_t    secondary_supers_hash() const      { return _secondary_supers_hash; }
-  void     set_secondary_supers_hash(uintptr_t h) { _secondary_supers_hash = h; }
+  uintptr_t    secondary_supers_hash() const      { return _secondary_supers_hash[0]; }
+  void     set_secondary_supers_hash(uintptr_t h) {
+    uint len = sizeof(_secondary_supers_hash) / sizeof(_secondary_supers_hash[0]);
+    for (uint i = 0; i < len; i++) {
+      _secondary_supers_hash[i] = h;
+    }
+  }
 
   Klass* secondary_super_cache() const     { return _secondary_super_cache; }
   void set_secondary_super_cache(Klass* k) { _secondary_super_cache = k; }
@@ -241,7 +247,7 @@ protected:
   Array<Klass*>* secondary_supers() const { return _secondary_supers; }
   void set_secondary_supers(Array<Klass*>* k) {
     _secondary_supers = k;
-    _secondary_supers_hash = compute_secondary_supers_hash();
+    compute_secondary_supers_hash();
   }
 
   // Return the element of the _super chain of the given depth.

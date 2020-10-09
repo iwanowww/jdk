@@ -2785,7 +2785,7 @@ Node* Phase::gen_subtype_check(Node* subklass, Node* superklass, Node** ctrl, No
   // ???
 
   // Probabilistic negative test
-  if (SubtypeCheckType == 1) {
+  if (SubtypeCheckType == 1 || SubtypeCheckType == 3 || SubtypeCheckType == 5) {
     // FIXME: Klass::_super_hash is uintptr_t
 
     Node* super_addr = gvn.transform(new AddPNode(superklass, superklass, gvn.MakeConX(in_bytes(Klass::self_hash_offset()))));

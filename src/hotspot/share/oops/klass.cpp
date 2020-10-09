@@ -240,6 +240,17 @@ bool Klass::can_be_primary_super_slow() const {
     return true;
 }
 
+//static int compare_klasses(Klass** s1, Klass** s2) {
+//  intptr_t diff = (intptr_t)(*s1) - (intptr_t)(*s2);
+//  if (diff < 0) {
+//    return -1;
+//  } else if (diff == 0) {
+//    return 0;
+//  } else if (diff > 0) {
+//    return 1;
+//  }
+//}
+
 void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interfaces, TRAPS) {
   if (k == NULL) {
     set_super(NULL);
@@ -349,6 +360,9 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
     }
   #endif
 
+//    if ((SubtypeCheckType & 4) > 0) {
+//      qsort(s2->adr_at(0), s2->length(), sizeof(Klass*), (_sort_Fn)compare_klasses);
+//    }
     set_secondary_supers(s2);
   }
   set_self_hash(compute_self_hash());
@@ -360,8 +374,7 @@ uintptr_t Klass::compute_self_hash() {
     return _self_hash;
   }
   intptr_t hash = 0;
-  int HASH_BITS_NEEDED = 3;
-  for (int i = 0; i < HASH_BITS_NEEDED; i++) {
+  for (int i = 0; i < SubtypeCheckHashBits; i++) {
     int n = os::random() & right_n_bits(6); // < 64
     if (is_set_nth_bit(hash, n)) {
       i--; continue; // retry
@@ -372,16 +385,22 @@ uintptr_t Klass::compute_self_hash() {
 }
 
 uintptr_t Klass::compute_secondary_supers_hash() {
-  uintptr_t secondary_supers_hash = 0;
   if (secondary_supers() != NULL) {
+    uint SECONDARY_SUPERS_HASH_LENGTH = sizeof(_secondary_supers_hash) / sizeof(_secondary_supers_hash[0]);
+    for (uint i = 0; i < SECONDARY_SUPERS_HASH_LENGTH; i++) {
+      _secondary_supers_hash[i] = 0;
+    }
+    assert((secondary_supers()->length() / SubtypeCheckStride) < (int)SECONDARY_SUPERS_HASH_LENGTH, "too large: klass=%s; secondary_supers=%d", name()->as_C_string(), secondary_supers()->length());
     for (int i = 0; i < secondary_supers()->length(); i++) {
       Klass* super = secondary_supers()->at(i);
       uintptr_t h = super->_self_hash;
       assert(h != 0 && h != (uintptr_t)-1, "%s", super->name()->as_C_string());
-      secondary_supers_hash |= h;
+      int j = (i / SubtypeCheckStride) + 1;
+      _secondary_supers_hash[0] |= h;
+      _secondary_supers_hash[j] |= h;
     }
   }
-  return secondary_supers_hash;
+  return _secondary_supers_hash[0];
 }
 
 GrowableArray<Klass*>* Klass::compute_secondary_supers(int num_extra_slots,
