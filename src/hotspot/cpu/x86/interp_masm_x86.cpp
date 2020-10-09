@@ -349,8 +349,8 @@ void InterpreterMacroAssembler::load_earlyret_value(TosState state) {
 #ifdef _LP64
   switch (state) {
     case atos: movptr(rax, oop_addr);
-               interp_verify_oop(rax, state);         break;
-    case ltos: movptr(rax, val_addr);                 break;
+               interp_verify_oop(rax, state);       break;
+    case ltos: movptr(rax, val_addr);               break;
     case btos:                                   // fall through
     case ztos:                                   // fall through
     case ctos:                                   // fall through
@@ -362,8 +362,8 @@ void InterpreterMacroAssembler::load_earlyret_value(TosState state) {
     default  : ShouldNotReachHere();
   }
   // Clean up tos value in the thread object
-  movl(tos_addr,  (int) ilgl);
-  movl(val_addr,  (int32_t) NULL_WORD);
+  movl(tos_addr, (int32_t) ilgl);
+  movptr(val_addr, NULL_WORD, rscratch1);
 #else
   const Address val_addr1(rcx, JvmtiThreadState::earlyret_value_offset()
                              + in_ByteSize(wordSize));
@@ -383,11 +383,11 @@ void InterpreterMacroAssembler::load_earlyret_value(TosState state) {
     case vtos: /* nothing to do */                    break;
     default  : ShouldNotReachHere();
   }
-#endif // _LP64
   // Clean up tos value in the thread object
   movl(tos_addr,  (int32_t) ilgl);
-  movptr(val_addr,  NULL_WORD, rscratch1);
-  NOT_LP64(movptr(val_addr1, NULL_WORD);)
+  movptr(val_addr,  NULL_WORD);
+  movptr(val_addr1, NULL_WORD);
+#endif // _LP64
 }
 
 
