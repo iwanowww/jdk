@@ -61,7 +61,7 @@ void MacroAssembler::ev_load_key(XMMRegister xmmdst, Register key, int offset, X
     if (xmm_shuf_mask != NULL) {
         pshufb(xmmdst, xmm_shuf_mask);
     } else {
-       pshufb(xmmdst, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+       pshufb(xmmdst, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), rscratch1);
     }
    evshufi64x2(xmmdst, xmmdst, xmmdst, 0x0, Assembler::AVX_512bit);
 }
@@ -95,7 +95,7 @@ void MacroAssembler::aesecb_encrypt(Register src_addr, Register dest_addr, Regis
 
     // Load Key shuf mask
     const XMMRegister xmm_key_shuf_mask = xmm31;  // used temporarily to swap key bytes up front
-    movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), rscratch1);
 
     // Load and shuffle key based on number of rounds
     ev_load_key(xmm8, key, 0 * 16, xmm_key_shuf_mask);
@@ -305,7 +305,7 @@ void MacroAssembler::aesecb_decrypt(Register src_addr, Register dest_addr, Regis
 
     // Load Key shuf mask
     const XMMRegister xmm_key_shuf_mask = xmm31;  // used temporarily to swap key bytes up front
-    movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), rscratch1);
 
     // Load and shuffle round keys. The java expanded key ordering is rotated one position in decryption.
     // So the first round key is loaded from 1*16 here and last round key is loaded from 0*16
@@ -555,17 +555,17 @@ void MacroAssembler::generateHtbl_one_block(Register htbl) {
     // load the original subkey hash
     movdqu(t, Address(htbl, 0));
     // shuffle using long swap mask
-    movdqu(xmm10, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()));
+    movdqu(xmm10, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), rscratch1);
     vpshufb(t, t, xmm10, Assembler::AVX_128bit);
 
     // Compute H' = GFMUL(H, 2)
     vpsrld(xmm3, t, 7, Assembler::AVX_128bit);
-    movdqu(xmm4, ExternalAddress(StubRoutines::x86::ghash_shufflemask_addr()));
+    movdqu(xmm4, ExternalAddress(StubRoutines::x86::ghash_shufflemask_addr()), rscratch1);
     vpshufb(xmm3, xmm3, xmm4, Assembler::AVX_128bit);
     movl(rax, 0xff00);
     movdl(xmm4, rax);
     vpshufb(xmm4, xmm4, xmm3, Assembler::AVX_128bit);
-    movdqu(xmm5, ExternalAddress(StubRoutines::x86::ghash_polynomial_addr()));
+    movdqu(xmm5, ExternalAddress(StubRoutines::x86::ghash_polynomial_addr()), rscratch1);
     vpand(xmm5, xmm5, xmm4, Assembler::AVX_128bit);
     vpsrld(xmm3, t, 31, Assembler::AVX_128bit);
     vpslld(xmm4, t, 1, Assembler::AVX_128bit);
@@ -641,7 +641,7 @@ void MacroAssembler::avx_ghash(Register input_state, Register htbl,
 
     // Shuffle the input state
     bind(BEGIN_PROCESS);
-    movdqu(lswap_mask, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()));
+    movdqu(lswap_mask, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), rscratch1);
     movdqu(state, Address(input_state, 0));
     vpshufb(state, state, lswap_mask, Assembler::AVX_128bit);
 
@@ -657,7 +657,7 @@ void MacroAssembler::avx_ghash(Register input_state, Register htbl,
     //Each block = 16 bytes.
     bind(PROCESS_8_BLOCKS);
     subl(blocks, 8);
-    movdqu(bswap_mask, ExternalAddress(StubRoutines::x86::ghash_byte_swap_mask_addr()));
+    movdqu(bswap_mask, ExternalAddress(StubRoutines::x86::ghash_byte_swap_mask_addr()), rscratch1);
     movdqu(data, Address(input_data, 16 * 7));
     vpshufb(data, data, bswap_mask, Assembler::AVX_128bit);
     //Loading 1*16 as calculated powers of H required starts at that location.
@@ -742,7 +742,7 @@ void MacroAssembler::avx_ghash(Register input_state, Register htbl,
     // Since this is one block operation we will only use H * 2 i.e. the first power of H
     bind(ONE_BLK_INIT);
     movdqu(tmp0, Address(htbl, 1 * 16));
-    movdqu(bswap_mask, ExternalAddress(StubRoutines::x86::ghash_byte_swap_mask_addr()));
+    movdqu(bswap_mask, ExternalAddress(StubRoutines::x86::ghash_byte_swap_mask_addr()), rscratch1);
 
     //Do one (128 bit x 128 bit) carry-less multiplication at a time followed by a reduction.
     bind(PROCESS_1_BLOCK);
@@ -846,7 +846,7 @@ void MacroAssembler::aesctr_encrypt(Register src_addr, Register dest_addr, Regis
     evmovdquq(xmm19, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 256), Assembler::AVX_512bit, r15);//Linc32
 
     // xmm31 contains the key shuffle mask.
-    movdqu(xmm31, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    movdqu(xmm31, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), rscratch1);
     // Load key function loads 128 bit key and shuffles it. Then we broadcast the shuffled key to convert it into a 512 bit value.
     // For broadcasting the values to ZMM, vshufi64 is used instead of evbroadcasti64x2 as the source in this case is ZMM register
     // that holds shuffled key value.
