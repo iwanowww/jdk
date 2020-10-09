@@ -1221,7 +1221,7 @@ int HandlerImpl::emit_exception_handler(CodeBuffer& cbuf) {
     return 0;  // CodeBuffer::expand failed
   }
   int offset = __ offset();
-  __ jump(RuntimeAddress(OptoRuntime::exception_blob()->entry_point()));
+  __ jump(RuntimeAddress(OptoRuntime::exception_blob()->entry_point()), rscratch1);
   assert(__ offset() - offset <= (int) size_exception_handler(), "overflow");
   __ end_a_stub();
   return offset;
@@ -1256,7 +1256,7 @@ int HandlerImpl::emit_deopt_handler(CodeBuffer& cbuf) {
   __ pushptr(here.addr());
 #endif
 
-  __ jump(RuntimeAddress(SharedRuntime::deopt_blob()->unpack()));
+  __ jump(RuntimeAddress(SharedRuntime::deopt_blob()->unpack()), rscratch1);
   assert(__ offset() - offset <= (int) size_deopt_handler(), "overflow %d", (__ offset() - offset));
   __ end_a_stub();
   return offset;
@@ -2402,7 +2402,7 @@ instruct addF_imm(regF dst, immF con) %{
   format %{ "addss   $dst, [$constantaddress]\t# load from constant table: float=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ addss($dst$$XMMRegister, $constantaddress($con));
+    __ addss($dst$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2438,7 +2438,7 @@ instruct addF_reg_imm(regF dst, regF src, immF con) %{
   format %{ "vaddss  $dst, $src, [$constantaddress]\t# load from constant table: float=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ vaddss($dst$$XMMRegister, $src$$XMMRegister, $constantaddress($con));
+    __ vaddss($dst$$XMMRegister, $src$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2473,7 +2473,7 @@ instruct addD_imm(regD dst, immD con) %{
   format %{ "addsd   $dst, [$constantaddress]\t# load from constant table: double=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ addsd($dst$$XMMRegister, $constantaddress($con));
+    __ addsd($dst$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2509,7 +2509,7 @@ instruct addD_reg_imm(regD dst, regD src, immD con) %{
   format %{ "vaddsd  $dst, $src, [$constantaddress]\t# load from constant table: double=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ vaddsd($dst$$XMMRegister, $src$$XMMRegister, $constantaddress($con));
+    __ vaddsd($dst$$XMMRegister, $src$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2544,7 +2544,7 @@ instruct subF_imm(regF dst, immF con) %{
   format %{ "subss   $dst, [$constantaddress]\t# load from constant table: float=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ subss($dst$$XMMRegister, $constantaddress($con));
+    __ subss($dst$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2580,7 +2580,7 @@ instruct subF_reg_imm(regF dst, regF src, immF con) %{
   format %{ "vsubss  $dst, $src, [$constantaddress]\t# load from constant table: float=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ vsubss($dst$$XMMRegister, $src$$XMMRegister, $constantaddress($con));
+    __ vsubss($dst$$XMMRegister, $src$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2615,7 +2615,7 @@ instruct subD_imm(regD dst, immD con) %{
   format %{ "subsd   $dst, [$constantaddress]\t# load from constant table: double=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ subsd($dst$$XMMRegister, $constantaddress($con));
+    __ subsd($dst$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2651,7 +2651,7 @@ instruct subD_reg_imm(regD dst, regD src, immD con) %{
   format %{ "vsubsd  $dst, $src, [$constantaddress]\t# load from constant table: double=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ vsubsd($dst$$XMMRegister, $src$$XMMRegister, $constantaddress($con));
+    __ vsubsd($dst$$XMMRegister, $src$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2686,7 +2686,7 @@ instruct mulF_imm(regF dst, immF con) %{
   format %{ "mulss   $dst, [$constantaddress]\t# load from constant table: float=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ mulss($dst$$XMMRegister, $constantaddress($con));
+    __ mulss($dst$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2722,7 +2722,7 @@ instruct mulF_reg_imm(regF dst, regF src, immF con) %{
   format %{ "vmulss  $dst, $src, [$constantaddress]\t# load from constant table: float=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ vmulss($dst$$XMMRegister, $src$$XMMRegister, $constantaddress($con));
+    __ vmulss($dst$$XMMRegister, $src$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2757,7 +2757,7 @@ instruct mulD_imm(regD dst, immD con) %{
   format %{ "mulsd   $dst, [$constantaddress]\t# load from constant table: double=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ mulsd($dst$$XMMRegister, $constantaddress($con));
+    __ mulsd($dst$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2793,7 +2793,7 @@ instruct mulD_reg_imm(regD dst, regD src, immD con) %{
   format %{ "vmulsd  $dst, $src, [$constantaddress]\t# load from constant table: double=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ vmulsd($dst$$XMMRegister, $src$$XMMRegister, $constantaddress($con));
+    __ vmulsd($dst$$XMMRegister, $src$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2828,7 +2828,7 @@ instruct divF_imm(regF dst, immF con) %{
   format %{ "divss   $dst, [$constantaddress]\t# load from constant table: float=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ divss($dst$$XMMRegister, $constantaddress($con));
+    __ divss($dst$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2864,7 +2864,7 @@ instruct divF_reg_imm(regF dst, regF src, immF con) %{
   format %{ "vdivss  $dst, $src, [$constantaddress]\t# load from constant table: float=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ vdivss($dst$$XMMRegister, $src$$XMMRegister, $constantaddress($con));
+    __ vdivss($dst$$XMMRegister, $src$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2899,7 +2899,7 @@ instruct divD_imm(regD dst, immD con) %{
   format %{ "divsd   $dst, [$constantaddress]\t# load from constant table: double=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ divsd($dst$$XMMRegister, $constantaddress($con));
+    __ divsd($dst$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2935,7 +2935,7 @@ instruct divD_reg_imm(regD dst, regD src, immD con) %{
   format %{ "vdivsd  $dst, $src, [$constantaddress]\t# load from constant table: double=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ vdivsd($dst$$XMMRegister, $src$$XMMRegister, $constantaddress($con));
+    __ vdivsd($dst$$XMMRegister, $src$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2946,7 +2946,7 @@ instruct absF_reg(regF dst) %{
   ins_cost(150);
   format %{ "andps   $dst, [0x7fffffff]\t# abs float by sign masking" %}
   ins_encode %{
-    __ andps($dst$$XMMRegister, ExternalAddress(float_signmask()));
+    __ andps($dst$$XMMRegister, ExternalAddress(float_signmask()), rscratch1);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2958,8 +2958,7 @@ instruct absF_reg_reg(vlRegF dst, vlRegF src) %{
   format %{ "vandps  $dst, $src, [0x7fffffff]\t# abs float by sign masking" %}
   ins_encode %{
     int vector_len = 0;
-    __ vandps($dst$$XMMRegister, $src$$XMMRegister,
-              ExternalAddress(float_signmask()), vector_len);
+    __ vandps($dst$$XMMRegister, $src$$XMMRegister, ExternalAddress(float_signmask()), vector_len, rscratch1);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2971,7 +2970,7 @@ instruct absD_reg(regD dst) %{
   format %{ "andpd   $dst, [0x7fffffffffffffff]\t"
             "# abs double by sign masking" %}
   ins_encode %{
-    __ andpd($dst$$XMMRegister, ExternalAddress(double_signmask()));
+    __ andpd($dst$$XMMRegister, ExternalAddress(double_signmask()), rscratch1);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2984,8 +2983,7 @@ instruct absD_reg_reg(vlRegD dst, vlRegD src) %{
             "# abs double by sign masking" %}
   ins_encode %{
     int vector_len = 0;
-    __ vandpd($dst$$XMMRegister, $src$$XMMRegister,
-              ExternalAddress(double_signmask()), vector_len);
+    __ vandpd($dst$$XMMRegister, $src$$XMMRegister, ExternalAddress(double_signmask()), vector_len, rscratch1);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -2996,7 +2994,7 @@ instruct negF_reg(regF dst) %{
   ins_cost(150);
   format %{ "xorps   $dst, [0x80000000]\t# neg float by sign flipping" %}
   ins_encode %{
-    __ xorps($dst$$XMMRegister, ExternalAddress(float_signflip()));
+    __ xorps($dst$$XMMRegister, ExternalAddress(float_signflip()), rscratch1);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -3007,8 +3005,7 @@ instruct negF_reg_reg(vlRegF dst, vlRegF src) %{
   ins_cost(150);
   format %{ "vnegatess  $dst, $src, [0x80000000]\t# neg float by sign flipping" %}
   ins_encode %{
-    __ vnegatess($dst$$XMMRegister, $src$$XMMRegister,
-                 ExternalAddress(float_signflip()));
+    __ vnegatess($dst$$XMMRegister, $src$$XMMRegister, ExternalAddress(float_signflip()), rscratch1);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -3020,7 +3017,7 @@ instruct negD_reg(regD dst) %{
   format %{ "xorpd   $dst, [0x8000000000000000]\t"
             "# neg double by sign flipping" %}
   ins_encode %{
-    __ xorpd($dst$$XMMRegister, ExternalAddress(double_signflip()));
+    __ xorpd($dst$$XMMRegister, ExternalAddress(double_signflip()), rscratch1);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -3032,8 +3029,7 @@ instruct negD_reg_reg(vlRegD dst, vlRegD src) %{
   format %{ "vnegatesd  $dst, $src, [0x8000000000000000]\t"
             "# neg double by sign flipping" %}
   ins_encode %{
-    __ vnegatesd($dst$$XMMRegister, $src$$XMMRegister,
-                 ExternalAddress(double_signflip()));
+    __ vnegatesd($dst$$XMMRegister, $src$$XMMRegister, ExternalAddress(double_signflip()), rscratch1);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -3069,7 +3065,7 @@ instruct sqrtF_imm(regF dst, immF con) %{
   format %{ "sqrtss  $dst, [$constantaddress]\t# load from constant table: float=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ sqrtss($dst$$XMMRegister, $constantaddress($con));
+    __ sqrtss($dst$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -3104,7 +3100,7 @@ instruct sqrtD_imm(regD dst, immD con) %{
   format %{ "sqrtsd  $dst, [$constantaddress]\t# load from constant table: double=$con" %}
   ins_cost(150);
   ins_encode %{
-    __ sqrtsd($dst$$XMMRegister, $constantaddress($con));
+    __ sqrtsd($dst$$XMMRegister, __ as_Address($constantaddress($con)));
   %}
   ins_pipe(pipe_slow);
 %}
@@ -3133,14 +3129,13 @@ instruct roundD_mem(legRegD dst, memory src, immU8 rmode) %{
   ins_pipe(pipe_slow);
 %}
 
-instruct roundD_imm(legRegD dst, immD con, immU8 rmode, rRegI scratch_reg) %{
+instruct roundD_imm(legRegD dst, immD con, immU8 rmode) %{
   match(Set dst (RoundDoubleMode con rmode));
-  effect(TEMP scratch_reg);
   format %{ "roundsd $dst,[$constantaddress]\t# load from constant table: double=$con" %}
   ins_cost(150);
   ins_encode %{
     assert(UseSSE >= 4, "required");
-    __ roundsd($dst$$XMMRegister, $constantaddress($con), $rmode$$constant, $scratch_reg$$Register);
+    __ roundsd($dst$$XMMRegister, __ as_Address($constantaddress($con)), $rmode$$constant);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -3335,9 +3330,9 @@ instruct ReplB_imm(vec dst, immI con) %{
     uint vlen = vector_length(this);
     InternalAddress const_addr = $constantaddress(replicate8_imm($con$$constant, 1));
     if (vlen == 4) {
-      __ movdl($dst$$XMMRegister, const_addr);
+      __ movdl($dst$$XMMRegister, const_addr, rscratch1);
     } else {
-      __ movq($dst$$XMMRegister, const_addr);
+      __ movq($dst$$XMMRegister, const_addr, rscratch1);
       if (vlen >= 16) {
         if (VM_Version::supports_avx2()) {
           int vlen_enc = vector_length_encoding(this);
@@ -3413,9 +3408,9 @@ instruct ReplS_imm(vec dst, immI con) %{
     uint vlen = vector_length(this);
     InternalAddress const_addr = $constantaddress(replicate8_imm($con$$constant, 2));
     if (vlen == 2) {
-      __ movdl($dst$$XMMRegister, const_addr);
+      __ movdl($dst$$XMMRegister, const_addr, rscratch1);
     } else {
-      __ movq($dst$$XMMRegister, const_addr);
+      __ movq($dst$$XMMRegister, const_addr, rscratch1);
       if (vlen >= 8) {
         if (VM_Version::supports_avx2()) {
           int vlen_enc = vector_length_encoding(this);
@@ -3491,14 +3486,14 @@ instruct ReplI_imm(vec dst, immI con) %{
     uint vlen = vector_length(this);
     InternalAddress const_addr = $constantaddress(replicate8_imm($con$$constant, 4));
     if (vlen <= 4) {
-      __ movq($dst$$XMMRegister, const_addr);
+      __ movq($dst$$XMMRegister, const_addr, rscratch1);
       if (vlen == 4) {
         __ punpcklqdq($dst$$XMMRegister, $dst$$XMMRegister);
       }
     } else {
       assert(VM_Version::supports_avx2(), "sanity");
       int vector_len = vector_length_encoding(this);
-      __ movq($dst$$XMMRegister, const_addr);
+      __ movq($dst$$XMMRegister, const_addr, rscratch1);
       __ vpbroadcastd($dst$$XMMRegister, $dst$$XMMRegister, vector_len);
     }
   %}
@@ -3640,12 +3635,12 @@ instruct ReplL_imm(vec dst, immL con) %{
     uint vlen = vector_length(this);
     InternalAddress const_addr = $constantaddress($con);
     if (vlen == 2) {
-      __ movq($dst$$XMMRegister, const_addr);
+      __ movq($dst$$XMMRegister, const_addr, rscratch1);
       __ punpcklqdq($dst$$XMMRegister, $dst$$XMMRegister);
     } else {
       assert(VM_Version::supports_avx2(), "sanity");
       int vlen_enc = vector_length_encoding(this);
-      __ movq($dst$$XMMRegister, const_addr);
+      __ movq($dst$$XMMRegister, const_addr, rscratch1);
       __ vpbroadcastq($dst$$XMMRegister, $dst$$XMMRegister, vlen_enc);
     }
   %}
