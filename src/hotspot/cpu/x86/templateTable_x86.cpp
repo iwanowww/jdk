@@ -289,10 +289,10 @@ void TemplateTable::fconst(int value) {
       __ xorps(xmm0, xmm0);
       break;
     case 1:
-      __ movflt(xmm0, ExternalAddress((address) &one));
+      __ movflt(xmm0, ExternalAddress((address) &one), rscratch1);
       break;
     case 2:
-      __ movflt(xmm0, ExternalAddress((address) &two));
+      __ movflt(xmm0, ExternalAddress((address) &two), rscratch1);
       break;
     default:
       ShouldNotReachHere();
@@ -320,7 +320,7 @@ void TemplateTable::dconst(int value) {
       __ xorpd(xmm0, xmm0);
       break;
     case 1:
-      __ movdbl(xmm0, ExternalAddress((address) &one));
+      __ movdbl(xmm0, ExternalAddress((address) &one), rscratch1);
       break;
     default:
       ShouldNotReachHere();
@@ -506,7 +506,7 @@ void TemplateTable::condy_helper(Label& Done) {
   __ get_vm_result_2(flags, rdi);
   __ restore_locals();
 #else
-  __ get_vm_result_2(flags, r15_thread);
+  __ get_vm_result_2(flags, r15_thread, rscratch1);
 #endif
   // VMr = obj = base address to find primitive value to push
   // VMr2 = flags = (tos, off) using format of CPCE::_flags
@@ -762,7 +762,7 @@ void TemplateTable::index_check_without_pop(Register array, Register index) {
   __ jccb(Assembler::below, skip);
   // Pass array to create more detailed exceptions.
   __ mov(NOT_LP64(rax) LP64_ONLY(c_rarg1), array);
-  __ jump(ExternalAddress(Interpreter::_throw_ArrayIndexOutOfBoundsException_entry));
+  __ jump(ExternalAddress(Interpreter::_throw_ArrayIndexOutOfBoundsException_entry), rscratch1);
   __ bind(skip);
 }
 
@@ -1141,7 +1141,7 @@ void TemplateTable::aastore() {
 
   // Come here on failure
   // object is at TOS
-  __ jump(ExternalAddress(Interpreter::_throw_ArrayStoreException_entry));
+  __ jump(ExternalAddress(Interpreter::_throw_ArrayStoreException_entry), rscratch1);
 
   // Come here on success
   __ bind(ok_is_subtype);
@@ -1422,12 +1422,12 @@ void TemplateTable::ldiv() {
   // generate explicit div0 check
   __ testq(rcx, rcx);
   __ jump_cc(Assembler::zero,
-             ExternalAddress(Interpreter::_throw_ArithmeticException_entry));
+             ExternalAddress(Interpreter::_throw_ArithmeticException_entry), rscratch1);
   // Note: could xor rax and rcx and compare with (-1 ^ min_int). If
   //       they are not equal, one could do a normal division (no correction
   //       needed), which may speed up this implementation for the common case.
   //       (see also JVM spec., p.243 & p.271)
-  __ corrected_idivq(rcx); // kills rbx
+  __ corrected_idivq(rcx, rscratch1); // kills rbx
 #else
   __ pop_l(rbx, rcx);
   __ push(rcx); __ push(rbx);
@@ -1448,12 +1448,12 @@ void TemplateTable::lrem() {
   __ pop_l(rax);
   __ testq(rcx, rcx);
   __ jump_cc(Assembler::zero,
-             ExternalAddress(Interpreter::_throw_ArithmeticException_entry));
+             ExternalAddress(Interpreter::_throw_ArithmeticException_entry), rscratch1);
   // Note: could xor rax and rcx and compare with (-1 ^ min_int). If
   //       they are not equal, one could do a normal division (no correction
   //       needed), which may speed up this implementation for the common case.
   //       (see also JVM spec., p.243 & p.271)
-  __ corrected_idivq(rcx); // kills rbx
+  __ corrected_idivq(rcx, rscratch1); // kills rbx
   __ mov(rax, rdx);
 #else
   __ pop_l(rbx, rcx);
@@ -1462,7 +1462,7 @@ void TemplateTable::lrem() {
   // check if y = 0
   __ orl(rax, rdx);
   __ jump_cc(Assembler::zero,
-             ExternalAddress(Interpreter::_throw_ArithmeticException_entry));
+             ExternalAddress(Interpreter::_throw_ArithmeticException_entry), rscratch1);
   __ call_VM_leaf(CAST_FROM_FN_PTR(address, SharedRuntime::lrem));
   __ addptr(rsp, 4 * wordSize);
 #endif
@@ -1691,7 +1691,7 @@ void TemplateTable::fneg() {
   transition(ftos, ftos);
   if (UseSSE >= 1) {
     static jlong *float_signflip  = double_quadword(&float_signflip_pool[1],  CONST64(0x8000000080000000),  CONST64(0x8000000080000000));
-    __ xorps(xmm0, ExternalAddress((address) float_signflip));
+    __ xorps(xmm0, ExternalAddress((address) float_signflip), rscratch1);
   } else {
     LP64_ONLY(ShouldNotReachHere());
     NOT_LP64(__ fchs());
@@ -1703,7 +1703,7 @@ void TemplateTable::dneg() {
   if (UseSSE >= 2) {
     static jlong *double_signflip =
       double_quadword(&double_signflip_pool[1], CONST64(0x8000000000000000), CONST64(0x8000000000000000));
-    __ xorpd(xmm0, ExternalAddress((address) double_signflip));
+    __ xorpd(xmm0, ExternalAddress((address) double_signflip), rscratch1);
   } else {
 #ifdef _LP64
     ShouldNotReachHere();
@@ -1824,7 +1824,7 @@ void TemplateTable::convert() {
     Label L;
     __ cvttss2siq(rax, xmm0);
     // NaN or overflow/underflow?
-    __ cmp64(rax, ExternalAddress((address) &is_nan));
+    __ cmp64(rax, ExternalAddress((address) &is_nan), rscratch1);
     __ jcc(Assembler::notEqual, L);
     __ call_VM_leaf(CAST_FROM_FN_PTR(address, SharedRuntime::f2l), 1);
     __ bind(L);
@@ -1848,7 +1848,7 @@ void TemplateTable::convert() {
     Label L;
     __ cvttsd2siq(rax, xmm0);
     // NaN or overflow/underflow?
-    __ cmp64(rax, ExternalAddress((address) &is_nan));
+    __ cmp64(rax, ExternalAddress((address) &is_nan), rscratch1);
     __ jcc(Assembler::notEqual, L);
     __ call_VM_leaf(CAST_FROM_FN_PTR(address, SharedRuntime::d2l), 1);
     __ bind(L);
@@ -2717,7 +2717,7 @@ void TemplateTable::load_field_cp_cache_entry(Register obj,
                                     ConstantPoolCacheEntry::f1_offset())));
     const int mirror_offset = in_bytes(Klass::java_mirror_offset());
     __ movptr(obj, Address(obj, mirror_offset));
-    __ resolve_oop_handle(obj);
+    __ resolve_oop_handle(obj, rscratch2);
   }
 }
 
@@ -4114,7 +4114,7 @@ void TemplateTable::checkcast() {
   __ get_vm_result_2(rax, rdi);
   __ restore_locals();
 #else
-  __ get_vm_result_2(rax, r15_thread);
+  __ get_vm_result_2(rax, r15_thread, rscratch1);
 #endif
 
   __ pop_ptr(rdx); // restore receiver
@@ -4136,7 +4136,7 @@ void TemplateTable::checkcast() {
   // Come here on failure
   __ push_ptr(rdx);
   // object is at TOS
-  __ jump(ExternalAddress(Interpreter::_throw_ClassCastException_entry));
+  __ jump(ExternalAddress(Interpreter::_throw_ClassCastException_entry), rscratch1);
 
   // Come here on success
   __ bind(ok_is_subtype);
@@ -4179,7 +4179,7 @@ void TemplateTable::instanceof() {
   __ get_vm_result_2(rax, rdi);
   __ restore_locals();
 #else
-  __ get_vm_result_2(rax, r15_thread);
+  __ get_vm_result_2(rax, r15_thread, rscratch1);
 #endif
 
   __ pop_ptr(rdx); // restore receiver
@@ -4255,7 +4255,7 @@ void TemplateTable::_breakpoint() {
 void TemplateTable::athrow() {
   transition(atos, vtos);
   __ null_check(rax);
-  __ jump(ExternalAddress(Interpreter::throw_exception_entry()));
+  __ jump(ExternalAddress(Interpreter::throw_exception_entry()), rscratch1);
 }
 
 //-----------------------------------------------------------------------------
@@ -4435,7 +4435,7 @@ void TemplateTable::wide() {
   transition(vtos, vtos);
   __ load_unsigned_byte(rbx, at_bcp(1));
   ExternalAddress wtable((address)Interpreter::_wentry_point);
-  __ jump(ArrayAddress(wtable, Address(noreg, rbx, Address::times_ptr)));
+  __ jump(ArrayAddress(wtable, Address(noreg, rbx, Address::times_ptr)), rscratch1);
   // Note: the rbcp increment step is part of the individual wide bytecode implementations
 }
 
