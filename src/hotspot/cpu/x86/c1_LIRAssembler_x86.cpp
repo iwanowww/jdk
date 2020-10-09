@@ -625,7 +625,7 @@ void LIR_Assembler::const2reg(LIR_Opr src, LIR_Opr dest, LIR_PatchCode patch_cod
           __ xorps(dest->as_xmm_float_reg(), dest->as_xmm_float_reg());
         } else {
           __ movflt(dest->as_xmm_float_reg(),
-                   InternalAddress(float_constant(c->as_jfloat())), rscratch1);
+                   InternalAddress(float_constant(c->as_jfloat())), noreg);
         }
       } else {
 #ifndef _LP64
@@ -651,7 +651,7 @@ void LIR_Assembler::const2reg(LIR_Opr src, LIR_Opr dest, LIR_PatchCode patch_cod
           __ xorpd(dest->as_xmm_double_reg(), dest->as_xmm_double_reg());
         } else {
           __ movdbl(dest->as_xmm_double_reg(),
-                    InternalAddress(double_constant(c->as_jdouble())), rscratch1);
+                    InternalAddress(double_constant(c->as_jdouble())), noreg);
         }
       } else {
 #ifndef _LP64
@@ -2433,7 +2433,7 @@ void LIR_Assembler::intrinsic_op(LIR_Code code, LIR_Opr value, LIR_Opr tmp, LIR_
             }
             assert(!tmp->is_valid(), "do not need temporary");
             __ andpd(dest->as_xmm_double_reg(),
-                     ExternalAddress((address)double_signmask_pool), rscratch1);
+                     __ as_Address(ExternalAddress((address)double_signmask_pool)));
           }
         }
         break;
@@ -2728,7 +2728,7 @@ void LIR_Assembler::comp_op(LIR_Condition condition, LIR_Opr opr1, LIR_Opr opr2,
       __ ucomiss(reg1, frame_map()->address_for_slot(opr2->single_stack_ix()));
     } else if (opr2->is_constant()) {
       // xmm register - constant
-      __ ucomiss(reg1, InternalAddress(float_constant(opr2->as_jfloat())), rscratch1);
+      __ ucomiss(reg1, InternalAddress(float_constant(opr2->as_jfloat())), noreg);
     } else if (opr2->is_address()) {
       // xmm register - address
       if (op->info() != NULL) {
@@ -2749,7 +2749,7 @@ void LIR_Assembler::comp_op(LIR_Condition condition, LIR_Opr opr1, LIR_Opr opr2,
       __ ucomisd(reg1, frame_map()->address_for_slot(opr2->double_stack_ix()));
     } else if (opr2->is_constant()) {
       // xmm register - constant
-      __ ucomisd(reg1, InternalAddress(double_constant(opr2->as_jdouble())), rscratch1);
+      __ ucomisd(reg1, InternalAddress(double_constant(opr2->as_jdouble())), noreg);
     } else if (opr2->is_address()) {
       // xmm register - address
       if (op->info() != NULL) {
@@ -2895,7 +2895,7 @@ void LIR_Assembler::emit_static_call_stub() {
   // must be set to -1 at code generation time
   assert(((__ offset() + 1) % BytesPerWord) == 0, "must be aligned");
   // On 64bit this will die since it will take a movq & jmp, must be only a jmp
-  __ jump(RuntimeAddress(__ pc()), rscratch1);
+  __ jump(RuntimeAddress(__ pc()), noreg);
 
   assert(__ offset() - start <= call_stub_size(), "stub too big");
   __ end_a_stub();
@@ -3824,7 +3824,7 @@ void LIR_Assembler::negate(LIR_Opr left, LIR_Opr dest, LIR_Opr tmp) {
         __ movflt(dest->as_xmm_float_reg(), left->as_xmm_float_reg());
       }
       __ xorps(dest->as_xmm_float_reg(),
-               ExternalAddress((address)float_signflip_pool), rscratch1);
+               __ as_Address(ExternalAddress((address)float_signflip_pool)));
     }
   } else if (dest->is_double_xmm()) {
 #ifdef _LP64
@@ -3841,7 +3841,7 @@ void LIR_Assembler::negate(LIR_Opr left, LIR_Opr dest, LIR_Opr tmp) {
         __ movdbl(dest->as_xmm_double_reg(), left->as_xmm_double_reg());
       }
       __ xorpd(dest->as_xmm_double_reg(),
-               ExternalAddress((address)double_signflip_pool), rscratch1);
+               __ as_Address(ExternalAddress((address)double_signflip_pool)));
     }
 #ifndef _LP64
   } else if (left->is_single_fpu() || left->is_double_fpu()) {
