@@ -5819,22 +5819,11 @@ address generate_avx_ghash_processBlocks() {
 
     address start = __ pc();
 
-    const XMMRegister x0  = xmm0;
-    const XMMRegister x1  = xmm1;
-    const XMMRegister x2  = xmm2;
-    const XMMRegister x3  = xmm3;
-
-    const XMMRegister x4  = xmm4;
-    const XMMRegister x5  = xmm5;
-    const XMMRegister x6  = xmm6;
-    const XMMRegister x7  = xmm7;
-
-    const Register tmp   = r11;
-
     BLOCK_COMMENT("Entry:");
     __ enter(); // required for proper stackwalking of RuntimeStub frame
 
-    __ fast_exp(x0, x1, x2, x3, x4, x5, x6, x7, rax, rcx, rdx, tmp);
+    __ fast_exp(xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7,
+                rax, rcx, rdx, r8);
 
     __ leave(); // required for proper stackwalking of RuntimeStub frame
     __ ret(0);
@@ -5848,23 +5837,11 @@ address generate_avx_ghash_processBlocks() {
 
     address start = __ pc();
 
-    const XMMRegister x0 = xmm0;
-    const XMMRegister x1 = xmm1;
-    const XMMRegister x2 = xmm2;
-    const XMMRegister x3 = xmm3;
-
-    const XMMRegister x4 = xmm4;
-    const XMMRegister x5 = xmm5;
-    const XMMRegister x6 = xmm6;
-    const XMMRegister x7 = xmm7;
-
-    const Register tmp1 = r11;
-    const Register tmp2 = r8;
-
     BLOCK_COMMENT("Entry:");
     __ enter(); // required for proper stackwalking of RuntimeStub frame
 
-    __ fast_log(x0, x1, x2, x3, x4, x5, x6, x7, rax, rcx, rdx, tmp1, tmp2);
+    __ fast_log(xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7,
+                rax, rcx, rdx, r8, r9);
 
     __ leave(); // required for proper stackwalking of RuntimeStub frame
     __ ret(0);
@@ -5878,22 +5855,11 @@ address generate_avx_ghash_processBlocks() {
 
     address start = __ pc();
 
-    const XMMRegister x0 = xmm0;
-    const XMMRegister x1 = xmm1;
-    const XMMRegister x2 = xmm2;
-    const XMMRegister x3 = xmm3;
-
-    const XMMRegister x4 = xmm4;
-    const XMMRegister x5 = xmm5;
-    const XMMRegister x6 = xmm6;
-    const XMMRegister x7 = xmm7;
-
-    const Register tmp = r11;
-
     BLOCK_COMMENT("Entry:");
     __ enter(); // required for proper stackwalking of RuntimeStub frame
 
-    __ fast_log10(x0, x1, x2, x3, x4, x5, x6, x7, rax, rcx, rdx, tmp);
+    __ fast_log10(xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7,
+                  rax, rcx, rdx, r8, r9);
 
     __ leave(); // required for proper stackwalking of RuntimeStub frame
     __ ret(0);
@@ -5907,25 +5873,11 @@ address generate_avx_ghash_processBlocks() {
 
     address start = __ pc();
 
-    const XMMRegister x0 = xmm0;
-    const XMMRegister x1 = xmm1;
-    const XMMRegister x2 = xmm2;
-    const XMMRegister x3 = xmm3;
-
-    const XMMRegister x4 = xmm4;
-    const XMMRegister x5 = xmm5;
-    const XMMRegister x6 = xmm6;
-    const XMMRegister x7 = xmm7;
-
-    const Register tmp1 = r8;
-    const Register tmp2 = r9;
-    const Register tmp3 = r10;
-    const Register tmp4 = r11;
-
     BLOCK_COMMENT("Entry:");
     __ enter(); // required for proper stackwalking of RuntimeStub frame
 
-    __ fast_pow(x0, x1, x2, x3, x4, x5, x6, x7, rax, rcx, rdx, tmp1, tmp2, tmp3, tmp4);
+    __ fast_pow(xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7,
+                rax, rcx, rdx, r8, r9, r10, r11);
 
     __ leave(); // required for proper stackwalking of RuntimeStub frame
     __ ret(0);
@@ -5939,21 +5891,6 @@ address generate_avx_ghash_processBlocks() {
 
     address start = __ pc();
 
-    const XMMRegister x0 = xmm0;
-    const XMMRegister x1 = xmm1;
-    const XMMRegister x2 = xmm2;
-    const XMMRegister x3 = xmm3;
-
-    const XMMRegister x4 = xmm4;
-    const XMMRegister x5 = xmm5;
-    const XMMRegister x6 = xmm6;
-    const XMMRegister x7 = xmm7;
-
-    const Register tmp1 = r8;
-    const Register tmp2 = r9;
-    const Register tmp3 = r10;
-    const Register tmp4 = r11;
-
     BLOCK_COMMENT("Entry:");
     __ enter(); // required for proper stackwalking of RuntimeStub frame
 
@@ -5961,7 +5898,8 @@ address generate_avx_ghash_processBlocks() {
     __ push(rsi);
     __ push(rdi);
 #endif
-    __ fast_sin(x0, x1, x2, x3, x4, x5, x6, x7, rax, rbx, rcx, rdx, tmp1, tmp2, tmp3, tmp4);
+    __ fast_sin(xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7,
+                rax, rbx, rcx, rdx, r8);
 
 #ifdef _WIN64
     __ pop(rdi);
@@ -5990,11 +5928,6 @@ address generate_avx_ghash_processBlocks() {
     const XMMRegister x6 = xmm6;
     const XMMRegister x7 = xmm7;
 
-    const Register tmp1 = r8;
-    const Register tmp2 = r9;
-    const Register tmp3 = r10;
-    const Register tmp4 = r11;
-
     BLOCK_COMMENT("Entry:");
     __ enter(); // required for proper stackwalking of RuntimeStub frame
 
@@ -6002,8 +5935,12 @@ address generate_avx_ghash_processBlocks() {
     __ push(rsi);
     __ push(rdi);
 #endif
-    __ fast_cos(x0, x1, x2, x3, x4, x5, x6, x7, rax, rcx, rdx, tmp1, tmp2, tmp3, tmp4);
+    __ push(r12);
 
+    __ fast_cos(xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7,
+                rax, rcx, rdx, rbx, r8, r9, r10, r11);
+
+    __ pop(r12);
 #ifdef _WIN64
     __ pop(rdi);
     __ pop(rsi);
@@ -6021,20 +5958,11 @@ address generate_avx_ghash_processBlocks() {
 
     address start = __ pc();
 
-    const XMMRegister x0 = xmm0;
-    const XMMRegister x1 = xmm1;
-    const XMMRegister x2 = xmm2;
-    const XMMRegister x3 = xmm3;
-
-    const XMMRegister x4 = xmm4;
-    const XMMRegister x5 = xmm5;
-    const XMMRegister x6 = xmm6;
-    const XMMRegister x7 = xmm7;
-
     const Register tmp1 = r8;
     const Register tmp2 = r9;
     const Register tmp3 = r10;
     const Register tmp4 = r11;
+    const Register tmp5 = r12;
 
     BLOCK_COMMENT("Entry:");
     __ enter(); // required for proper stackwalking of RuntimeStub frame
@@ -6043,8 +5971,12 @@ address generate_avx_ghash_processBlocks() {
     __ push(rsi);
     __ push(rdi);
 #endif
-    __ fast_tan(x0, x1, x2, x3, x4, x5, x6, x7, rax, rcx, rdx, tmp1, tmp2, tmp3, tmp4);
+    __ push(r12);
 
+    __ fast_tan(xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7,
+                rax, rcx, rdx, r8, r9, r10, r11, r12);
+
+    __ pop(r12);
 #ifdef _WIN64
     __ pop(rdi);
     __ pop(rsi);
@@ -6247,24 +6179,6 @@ address generate_avx_ghash_processBlocks() {
       StubRoutines::_updateBytesCRC32C = generate_updateBytesCRC32C(supports_clmul);
     }
     if (UseLibmIntrinsic && InlineIntrinsics) {
-      if (vmIntrinsics::is_intrinsic_available(vmIntrinsics::_dsin) ||
-          vmIntrinsics::is_intrinsic_available(vmIntrinsics::_dcos) ||
-          vmIntrinsics::is_intrinsic_available(vmIntrinsics::_dtan)) {
-        StubRoutines::x86::_ONEHALF_adr = (address)StubRoutines::x86::_ONEHALF;
-        StubRoutines::x86::_P_2_adr = (address)StubRoutines::x86::_P_2;
-        StubRoutines::x86::_SC_4_adr = (address)StubRoutines::x86::_SC_4;
-        StubRoutines::x86::_Ctable_adr = (address)StubRoutines::x86::_Ctable;
-        StubRoutines::x86::_SC_2_adr = (address)StubRoutines::x86::_SC_2;
-        StubRoutines::x86::_SC_3_adr = (address)StubRoutines::x86::_SC_3;
-        StubRoutines::x86::_SC_1_adr = (address)StubRoutines::x86::_SC_1;
-        StubRoutines::x86::_PI_INV_TABLE_adr = (address)StubRoutines::x86::_PI_INV_TABLE;
-        StubRoutines::x86::_PI_4_adr = (address)StubRoutines::x86::_PI_4;
-        StubRoutines::x86::_PI32INV_adr = (address)StubRoutines::x86::_PI32INV;
-        StubRoutines::x86::_SIGN_MASK_adr = (address)StubRoutines::x86::_SIGN_MASK;
-        StubRoutines::x86::_P_1_adr = (address)StubRoutines::x86::_P_1;
-        StubRoutines::x86::_P_3_adr = (address)StubRoutines::x86::_P_3;
-        StubRoutines::x86::_NEG_ZERO_adr = (address)StubRoutines::x86::_NEG_ZERO;
-      }
       if (vmIntrinsics::is_intrinsic_available(vmIntrinsics::_dexp)) {
         StubRoutines::_dexp = generate_libmExp();
       }
