@@ -1146,7 +1146,7 @@ void MacroAssembler::biased_locking_enter(Register lock_reg,
   andptr(header_reg, ~((int) markWord::age_mask_in_place));
   if (counters != NULL) {
     cond_inc32(Assembler::zero,
-               ExternalAddress((address) counters->biased_lock_entry_count_addr()), rscratch1);
+               ExternalAddress((address) counters->biased_lock_entry_count_addr()), tmp_reg);
   }
   jcc(Assembler::equal, done);
 
@@ -1201,7 +1201,7 @@ void MacroAssembler::biased_locking_enter(Register lock_reg,
   // interpreter runtime in the slow case.
   if (counters != NULL) {
     cond_inc32(Assembler::zero,
-               ExternalAddress((address) counters->anonymously_biased_lock_entry_count_addr()), rscratch1);
+               ExternalAddress((address) counters->anonymously_biased_lock_entry_count_addr()), tmp_reg);
   }
   if (slow_case != NULL) {
     jcc(Assembler::notZero, *slow_case);
@@ -1233,7 +1233,7 @@ void MacroAssembler::biased_locking_enter(Register lock_reg,
   // bias. The revocation will occur in the runtime in the slow case.
   if (counters != NULL) {
     cond_inc32(Assembler::zero,
-               ExternalAddress((address) counters->rebiased_lock_entry_count_addr()), rscratch1);
+               ExternalAddress((address) counters->rebiased_lock_entry_count_addr()), tmp_reg);
   }
   if (slow_case != NULL) {
     jcc(Assembler::notZero, *slow_case);
@@ -1261,7 +1261,7 @@ void MacroAssembler::biased_locking_enter(Register lock_reg,
   // removing the bias bit from the object's header.
   if (counters != NULL) {
     cond_inc32(Assembler::zero,
-               ExternalAddress((address) counters->revoked_lock_entry_count_addr()), rscratch1);
+               ExternalAddress((address) counters->revoked_lock_entry_count_addr()), tmp_reg);
   }
 
   bind(cas_label);
@@ -1575,7 +1575,7 @@ void MacroAssembler::call_VM_base(Register oop_result,
 
     Label ok;
     jcc(Assembler::equal, ok);
-    jump(RuntimeAddress(StubRoutines::forward_exception_entry()), rscratch1);
+    jump(RuntimeAddress(StubRoutines::forward_exception_entry()), noreg /*rscratch*/); // stub
     bind(ok);
 #endif // LP64
   }
@@ -3628,7 +3628,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 #ifndef PRODUCT
   int* pst_counter = &SharedRuntime::_partial_subtype_ctr;
   ExternalAddress pst_counter_addr((address) pst_counter);
-  incrementl(pst_counter_addr, rcx /*rscratch*/);
+  incrementl(pst_counter_addr, rcx);
 #endif //PRODUCT
 
   // We will consult the secondary-super array.
@@ -3743,7 +3743,7 @@ void MacroAssembler::_verify_oop(Register reg, const char* s, const char* file, 
   ExternalAddress buffer((address) b);
   // avoid using pushptr, as it modifies scratch registers
   // and our contract is not to modify anything
-  movptr(rax, buffer.addr());
+  movptr(rax, buffer.addr()); // code string
   push(rax);
   // call indirectly to solve generation ordering problem
   movptr(rax, ExternalAddress(StubRoutines::verify_oop_subroutine_entry_address()));
