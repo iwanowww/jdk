@@ -820,7 +820,7 @@ class MacroAssembler: public Assembler {
   // NOTE: this call transfers to the effective address of entry NOT
   // the address contained by entry. This is because this is more natural
   // for jumps/calls.
-  void call(AddressLiteral entry, Register rscratch = rscratch1);
+  void call(AddressLiteral entry);
 
   // Emit the CompiledIC call idiom
   void ic_call(address entry, jint method_index = 0);
@@ -1084,7 +1084,7 @@ public:
   void vmovdqu(Address     dst, XMMRegister    src);
   void vmovdqu(XMMRegister dst, Address        src);
   void vmovdqu(XMMRegister dst, XMMRegister    src);
-  void vmovdqu(XMMRegister dst, AddressLiteral src, Register rscratch = rscratch1);
+  void vmovdqu(XMMRegister dst, AddressLiteral src, Register rscratch);
 
   void evmovdquq(XMMRegister dst, Address        src, int vector_len) { Assembler::evmovdquq(dst, src, vector_len); }
   void evmovdquq(XMMRegister dst, XMMRegister    src, int vector_len) { Assembler::evmovdquq(dst, src, vector_len); }
@@ -1736,7 +1736,7 @@ class SkipIfEqual {
   Label _label;
 
  public:
-   SkipIfEqual(MacroAssembler*, const bool* flag_addr, bool value);
+   SkipIfEqual(MacroAssembler*, const bool* flag_addr, bool value, Register rscratch);
    ~SkipIfEqual();
 };
 
