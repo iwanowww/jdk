@@ -959,7 +959,7 @@ AdapterHandlerEntry* SharedRuntime::generate_i2c2i_adapters(MacroAssembler *masm
     __ cmpptr(temp, Address(holder, CompiledICHolder::holder_klass_offset()));
     __ movptr(rbx, Address(holder, CompiledICHolder::holder_metadata_offset()));
     __ jcc(Assembler::equal, ok);
-    __ jump(RuntimeAddress(SharedRuntime::get_ic_miss_stub()), rscratch1);
+    __ jump(RuntimeAddress(SharedRuntime::get_ic_miss_stub()), noreg /*rscratch*/); // stub
 
     __ bind(ok);
     // Method might have been compiled since the call site was patched to
@@ -967,7 +967,7 @@ AdapterHandlerEntry* SharedRuntime::generate_i2c2i_adapters(MacroAssembler *masm
     // the call site corrected.
     __ cmpptr(Address(rbx, in_bytes(Method::code_offset())), (int32_t)NULL_WORD);
     __ jcc(Assembler::equal, skip_fixup);
-    __ jump(RuntimeAddress(SharedRuntime::get_ic_miss_stub()), rscratch1);
+    __ jump(RuntimeAddress(SharedRuntime::get_ic_miss_stub()), noreg /*rscratch*/); // stub
   }
 
   address c2i_entry = __ pc();
@@ -989,7 +989,7 @@ AdapterHandlerEntry* SharedRuntime::generate_i2c2i_adapters(MacroAssembler *masm
     __ load_method_holder(klass, method);
     __ clinit_barrier(klass, r15_thread, &L_skip_barrier /*L_fast_path*/);
 
-    __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()), rscratch1); // slow path
+    __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()), noreg /*rscratch*/); // slow path
 
     __ bind(L_skip_barrier);
     c2i_no_clinit_check_entry = __ pc();
@@ -2140,7 +2140,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   __ cmpq(ic_reg, rscratch1);
   __ jcc(Assembler::equal, hit);
 
-  __ jump(RuntimeAddress(SharedRuntime::get_ic_miss_stub()), rscratch1);
+  __ jump(RuntimeAddress(SharedRuntime::get_ic_miss_stub()), noreg /*rscratch*/); // stub
 
   // Verified entry point must be aligned
   __ align(8);
@@ -2155,7 +2155,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ mov_metadata(klass, method->method_holder()); // InstanceKlass*
     __ clinit_barrier(klass, r15_thread, &L_skip_barrier /*L_fast_path*/);
 
-    __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()), rscratch1); // slow path
+    __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()), noreg /*rscratch*/); // slow path
 
     __ bind(L_skip_barrier);
   }
@@ -2429,7 +2429,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   // argument registers at this point (what if we save/restore them there are no oop?
 
   {
-    SkipIfEqual skip(masm, &DTraceMethodProbes, false, rscratch1);
+    SkipIfEqual skip(masm, &DTraceMethodProbes, false /*, rscratch1*/);
     // protect the args we've loaded
     save_args(masm, total_c_args, c_arg, out_regs);
     __ mov_metadata(c_rarg1, method());
@@ -2690,7 +2690,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
   }
   {
-    SkipIfEqual skip(masm, &DTraceMethodProbes, false, rscratch1);
+    SkipIfEqual skip(masm, &DTraceMethodProbes, false /*, rscratch1*/);
     save_native_result(masm, ret_type, stack_slots);
     __ mov_metadata(c_rarg1, method());
     __ call_VM_leaf(
@@ -2740,7 +2740,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ bind(exception_pending);
 
     // and forward the exception
-    __ jump(RuntimeAddress(StubRoutines::forward_exception_entry()), rscratch1);
+    __ jump(RuntimeAddress(StubRoutines::forward_exception_entry()), noreg /*rscratch*/); // stub
   }
 
   // Slow path locking & unlocking
@@ -3500,7 +3500,7 @@ SafepointBlob* SharedRuntime::generate_handler_blob(address call_ptr, int poll_t
 
   RegisterSaver::restore_live_registers(masm, save_vectors);
 
-  __ jump(RuntimeAddress(StubRoutines::forward_exception_entry()), rscratch1);
+  __ jump(RuntimeAddress(StubRoutines::forward_exception_entry()), noreg /*rscratch*/);
 
   // No exception case
   __ bind(noException);
@@ -3659,7 +3659,7 @@ RuntimeStub* SharedRuntime::generate_resolve_blob(address destination, const cha
   __ movptr(Address(r15_thread, JavaThread::vm_result_offset()), (int)NULL_WORD);
 
   __ movptr(rax, Address(r15_thread, Thread::pending_exception_offset()));
-  __ jump(RuntimeAddress(StubRoutines::forward_exception_entry()), rscratch1);
+  __ jump(RuntimeAddress(StubRoutines::forward_exception_entry()), noreg /*rscratch*/);
 
   // -------------
   // make sure all code is generated
