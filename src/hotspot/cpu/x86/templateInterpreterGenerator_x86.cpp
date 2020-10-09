@@ -1077,10 +1077,10 @@ address TemplateInterpreterGenerator::generate_native_entry(bool synchronized) {
     ExternalAddress float_handler(AbstractInterpreter::result_handler(T_FLOAT));
     ExternalAddress double_handler(AbstractInterpreter::result_handler(T_DOUBLE));
     __ cmpptr(Address(rbp, (frame::interpreter_frame_oop_temp_offset + 1)*wordSize),
-              float_handler.addr());
+              float_handler.addr(), noreg);
     __ jcc(Assembler::equal, push_double);
     __ cmpptr(Address(rbp, (frame::interpreter_frame_oop_temp_offset + 1)*wordSize),
-              double_handler.addr());
+              double_handler.addr(), noreg);
     __ jcc(Assembler::notEqual, L);
     __ bind(push_double);
     __ push_d(); // FP values are returned using the FPU, so push FPU contents (even if UseSSE > 0).

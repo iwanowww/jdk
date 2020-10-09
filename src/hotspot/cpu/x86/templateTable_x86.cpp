@@ -503,7 +503,7 @@ void TemplateTable::condy_helper(Label& Done) {
 #ifndef _LP64
   // borrow rdi from locals
   __ get_thread(rdi);
-  __ get_vm_result_2(flags, rdi);
+  __ get_vm_result_2(flags, rdi, noreg);
   __ restore_locals();
 #else
   __ get_vm_result_2(flags, r15_thread, rscratch1);
@@ -1435,7 +1435,7 @@ void TemplateTable::ldiv() {
   // check if y = 0
   __ orl(rax, rdx);
   __ jump_cc(Assembler::zero,
-             ExternalAddress(Interpreter::_throw_ArithmeticException_entry));
+             ExternalAddress(Interpreter::_throw_ArithmeticException_entry), noreg);
   __ call_VM_leaf(CAST_FROM_FN_PTR(address, SharedRuntime::ldiv));
   __ addptr(rsp, 4 * wordSize);  // take off temporaries
 #endif
@@ -4111,7 +4111,7 @@ void TemplateTable::checkcast() {
 #ifndef _LP64
   // borrow rdi from locals
   __ get_thread(rdi);
-  __ get_vm_result_2(rax, rdi);
+  __ get_vm_result_2(rax, rdi, noreg);
   __ restore_locals();
 #else
   __ get_vm_result_2(rax, r15_thread, rscratch1);
@@ -4176,7 +4176,7 @@ void TemplateTable::instanceof() {
 #ifndef _LP64
   // borrow rdi from locals
   __ get_thread(rdi);
-  __ get_vm_result_2(rax, rdi);
+  __ get_vm_result_2(rax, rdi, noreg);
   __ restore_locals();
 #else
   __ get_vm_result_2(rax, r15_thread, rscratch1);
