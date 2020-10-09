@@ -1064,6 +1064,9 @@ const intx ObjectAlignmentInBytes = 8;
   develop(bool, EagerInitialization, false,                                 \
           "Eagerly initialize classes if possible")                         \
                                                                             \
+  develop(bool, ResolveSignatureClasses, true,                              \
+          "Eagerly resolve signature classes when compilation is invoked")  \
+                                                                            \
   product(bool, LogTouchedMethods, false, DIAGNOSTIC,                       \
           "Log methods which have been ever touched in runtime")            \
                                                                             \

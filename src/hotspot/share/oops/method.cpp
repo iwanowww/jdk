@@ -1683,16 +1683,11 @@ void Method::init_intrinsic_id() {
   }
 }
 
-bool Method::load_signature_classes(const methodHandle& m, TRAPS) {
-  if (!THREAD->can_call_java()) {
-    // There is nothing useful this routine can do from within the Compile thread.
-    // Hopefully, the signature contains only well-known classes.
-    // We could scan for this and return true/false, but the caller won't care.
-    return false;
-  }
+bool Method::load_signature_classes(TRAPS) {
+  assert(THREAD->can_call_java(), "sanity");
   bool sig_is_loaded = true;
   ResourceMark rm(THREAD);
-  for (ResolvingSignatureStream ss(m()); !ss.is_done(); ss.next()) {
+  for (ResolvingSignatureStream ss(this); !ss.is_done(); ss.next()) {
     if (ss.is_reference()) {
       // load everything, including arrays "[Lfoo;"
       Klass* klass = ss.as_klass(SignatureStream::ReturnNull, THREAD);
@@ -1706,21 +1701,26 @@ bool Method::load_signature_classes(const methodHandle& m, TRAPS) {
           return false;
         }
       }
-      if( klass == NULL) { sig_is_loaded = false; }
+      if (klass == NULL) {
+        log_debug(compilation)("Signature class %s not found", ss.as_symbol()->as_C_string());
+        sig_is_loaded = false;
+      }
     }
   }
   return sig_is_loaded;
 }
 
-bool Method::has_unloaded_classes_in_signature(const methodHandle& m, TRAPS) {
+bool Method::has_unloaded_classes_in_signature(TRAPS) {
   ResourceMark rm(THREAD);
-  for(ResolvingSignatureStream ss(m()); !ss.is_done(); ss.next()) {
+  for (ResolvingSignatureStream ss(this); !ss.is_done(); ss.next()) {
     if (ss.type() == T_OBJECT) {
       // Do not use ss.is_reference() here, since we don't care about
       // unloaded array component types.
       Klass* klass = ss.as_klass_if_loaded(THREAD);
       assert(!HAS_PENDING_EXCEPTION, "as_klass_if_loaded contract");
-      if (klass == NULL) return true;
+      if (klass == NULL) {
+        return true;
+      }
     }
   }
   return false;
