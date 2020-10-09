@@ -2157,6 +2157,35 @@ void Compile::Optimize() {
 
       if (failing())  return;
     }
+
+    if (UseNewCode3 && ConnectionGraph::has_candidates(this)) {
+      set_congraph(NULL); // reset
+      ConnectionGraph::do_analysis(this, &igvn);
+
+      guarantee(!failing(), "");
+
+      // Optimize out fields loads from scalar replaceable allocations.
+      igvn.optimize();
+      print_method(PHASE_ITER_GVN_AFTER_EA, 2);
+
+      guarantee(!failing(), "");
+
+      if (congraph() != NULL && macro_count() > 0) {
+        int mcount = C->macro_count();
+
+        TracePhase tp("macroEliminate", &timers[_t_macroEliminate]);
+        PhaseMacroExpand mexp(igvn);
+        mexp.eliminate_macro_nodes();
+        igvn.set_delay_transform(false);
+
+        igvn.optimize();
+        print_method(PHASE_ITER_GVN_AFTER_ELIMINATION, 2);
+
+        guarantee(!failing(), "");
+
+        guarantee(mcount == macro_count(), "no more eliminations allowed");
+      }
+    }
   }
 
   // Loop transforms on the ideal graph.  Range Check Elimination,
