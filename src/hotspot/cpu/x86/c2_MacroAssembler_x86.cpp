@@ -506,7 +506,7 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
   cmpxchgptr(boxReg, Address(objReg, oopDesc::mark_offset_in_bytes()));      // Updates tmpReg
   if (counters != NULL) {
     cond_inc32(Assembler::equal,
-               ExternalAddress((address)counters->fast_path_entry_count_addr()), rscratch1);
+               ExternalAddress((address)counters->fast_path_entry_count_addr()), scrReg);
   }
   jcc(Assembler::equal, DONE_LABEL);           // Success
 
@@ -519,7 +519,7 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
   movptr(Address(boxReg, 0), tmpReg);
   if (counters != NULL) {
     cond_inc32(Assembler::equal,
-               ExternalAddress((address)counters->fast_path_entry_count_addr()), rscratch1);
+               ExternalAddress((address)counters->fast_path_entry_count_addr()), scrReg);
   }
   jmp(DONE_LABEL);
 
