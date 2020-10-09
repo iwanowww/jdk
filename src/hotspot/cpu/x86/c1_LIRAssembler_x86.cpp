@@ -192,7 +192,7 @@ void LIR_Assembler::push(LIR_Opr opr) {
   } else if (opr->is_constant()) {
     LIR_Const* const_opr = opr->as_constant_ptr();
     if (const_opr->type() == T_OBJECT) {
-      __ push_oop(const_opr->as_jobject());
+      __ push_oop(const_opr->as_jobject(), rscratch1);
     } else if (const_opr->type() == T_INT) {
       __ push_jint(const_opr->as_jint());
     } else {
@@ -363,7 +363,7 @@ void LIR_Assembler::clinit_barrier(ciMethod* method) {
   __ mov_metadata(klass, method->holder()->constant_encoding());
   __ clinit_barrier(klass, thread, &L_skip_barrier /*L_fast_path*/);
 
-  __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()));
+  __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()), rscratch1);
 
   __ bind(L_skip_barrier);
 }
@@ -443,8 +443,8 @@ int LIR_Assembler::emit_unwind_handler() {
   Register thread = NOT_LP64(rsi) LP64_ONLY(r15_thread);
   NOT_LP64(__ get_thread(rsi));
   __ movptr(rax, Address(thread, JavaThread::exception_oop_offset()));
-  __ movptr(Address(thread, JavaThread::exception_oop_offset()), (intptr_t)NULL_WORD);
-  __ movptr(Address(thread, JavaThread::exception_pc_offset()), (intptr_t)NULL_WORD);
+  __ movptr(Address(thread, JavaThread::exception_oop_offset()), (intptr_t)NULL_WORD, rscratch1);
+  __ movptr(Address(thread, JavaThread::exception_pc_offset()),  (intptr_t)NULL_WORD, rscratch1);
 
   __ bind(_unwind_handler_entry);
   __ verify_not_null_oop(rax);
@@ -479,7 +479,7 @@ int LIR_Assembler::emit_unwind_handler() {
 
   // remove the activation and dispatch to the unwind handler
   __ remove_frame(initial_frame_size_in_bytes());
-  __ jump(RuntimeAddress(Runtime1::entry_for(Runtime1::unwind_exception_id)));
+  __ jump(RuntimeAddress(Runtime1::entry_for(Runtime1::unwind_exception_id)), rscratch1);
 
   // Emit the slow path assembly
   if (stub != NULL) {
@@ -509,8 +509,8 @@ int LIR_Assembler::emit_deopt_handler() {
   int offset = code_offset();
   InternalAddress here(__ pc());
 
-  __ pushptr(here.addr());
-  __ jump(RuntimeAddress(SharedRuntime::deopt_blob()->unpack()));
+  __ pushptr(here.addr(), rscratch1);
+  __ jump(RuntimeAddress(SharedRuntime::deopt_blob()->unpack()), rscratch1);
   guarantee(code_offset() - offset <= deopt_handler_size(), "overflow");
   __ end_a_stub();
 
@@ -528,7 +528,7 @@ void LIR_Assembler::return_op(LIR_Opr result) {
   __ remove_frame(initial_frame_size_in_bytes());
 
   if (StackReservedPages > 0 && compilation()->has_reserved_stack_access()) {
-    __ reserved_stack_check();
+    __ reserved_stack_check(rscratch1);
   }
 
   bool result_is_oop = result->is_valid() ? result->is_oop() : false;
@@ -635,7 +635,7 @@ void LIR_Assembler::const2reg(LIR_Opr src, LIR_Opr dest, LIR_PatchCode patch_cod
           __ xorps(dest->as_xmm_float_reg(), dest->as_xmm_float_reg());
         } else {
           __ movflt(dest->as_xmm_float_reg(),
-                   InternalAddress(float_constant(c->as_jfloat())));
+                   InternalAddress(float_constant(c->as_jfloat())), rscratch1);
         }
       } else {
 #ifndef _LP64
@@ -661,7 +661,7 @@ void LIR_Assembler::const2reg(LIR_Opr src, LIR_Opr dest, LIR_PatchCode patch_cod
           __ xorpd(dest->as_xmm_double_reg(), dest->as_xmm_double_reg());
         } else {
           __ movdbl(dest->as_xmm_double_reg(),
-                    InternalAddress(double_constant(c->as_jdouble())));
+                    InternalAddress(double_constant(c->as_jdouble())), rscratch1);
         }
       } else {
 #ifndef _LP64
@@ -702,7 +702,7 @@ void LIR_Assembler::const2stack(LIR_Opr src, LIR_Opr dest) {
       break;
 
     case T_OBJECT:
-      __ movoop(frame_map()->address_for_slot(dest->single_stack_ix()), c->as_jobject());
+      __ movoop(frame_map()->address_for_slot(dest->single_stack_ix()), c->as_jobject(), rscratch1);
       break;
 
     case T_LONG:  // fall through
@@ -757,7 +757,7 @@ void LIR_Assembler::const2mem(LIR_Opr src, LIR_Opr dest, BasicType type, CodeEmi
       } else {
         if (is_literal_address(addr)) {
           ShouldNotReachHere();
-          __ movoop(as_Address(addr, noreg), c->as_jobject());
+          __ movoop(as_Address(addr, noreg), c->as_jobject(), rscratch1);
         } else {
 #ifdef _LP64
           __ movoop(rscratch1, c->as_jobject());
@@ -2465,7 +2465,7 @@ void LIR_Assembler::intrinsic_op(LIR_Code code, LIR_Opr value, LIR_Opr tmp, LIR_
             }
             assert(!tmp->is_valid(), "do not need temporary");
             __ andpd(dest->as_xmm_double_reg(),
-                     ExternalAddress((address)double_signmask_pool));
+                     ExternalAddress((address)double_signmask_pool), rscratch1);
           }
         }
         break;
@@ -2706,7 +2706,7 @@ void LIR_Assembler::comp_op(LIR_Condition condition, LIR_Opr opr1, LIR_Opr opr2,
         if (o == NULL) {
           __ cmpptr(reg1, (int32_t)NULL_WORD);
         } else {
-          __ cmpoop(reg1, o);
+          __ cmpoop(reg1, o, rscratch1);
         }
       } else {
         fatal("unexpected type: %s", basictype_to_str(c->type()));
@@ -2760,7 +2760,7 @@ void LIR_Assembler::comp_op(LIR_Condition condition, LIR_Opr opr1, LIR_Opr opr2,
       __ ucomiss(reg1, frame_map()->address_for_slot(opr2->single_stack_ix()));
     } else if (opr2->is_constant()) {
       // xmm register - constant
-      __ ucomiss(reg1, InternalAddress(float_constant(opr2->as_jfloat())));
+      __ ucomiss(reg1, InternalAddress(float_constant(opr2->as_jfloat())), rscratch1);
     } else if (opr2->is_address()) {
       // xmm register - address
       if (op->info() != NULL) {
@@ -2781,7 +2781,7 @@ void LIR_Assembler::comp_op(LIR_Condition condition, LIR_Opr opr1, LIR_Opr opr2,
       __ ucomisd(reg1, frame_map()->address_for_slot(opr2->double_stack_ix()));
     } else if (opr2->is_constant()) {
       // xmm register - constant
-      __ ucomisd(reg1, InternalAddress(double_constant(opr2->as_jdouble())));
+      __ ucomisd(reg1, InternalAddress(double_constant(opr2->as_jdouble())), rscratch1);
     } else if (opr2->is_address()) {
       // xmm register - address
       if (op->info() != NULL) {
@@ -2932,7 +2932,7 @@ void LIR_Assembler::emit_static_call_stub() {
   // must be set to -1 at code generation time
   assert(((__ offset() + 1) % BytesPerWord) == 0, "must be aligned");
   // On 64bit this will die since it will take a movq & jmp, must be only a jmp
-  __ jump(RuntimeAddress(__ pc()));
+  __ jump(RuntimeAddress(__ pc()), rscratch1);
 
   if (UseAOT) {
     // Trampoline to aot code
@@ -3087,7 +3087,7 @@ void LIR_Assembler::store_parameter(jobject o,  int offset_from_rsp_in_words) {
   assert(offset_from_rsp_in_words >= 0, "invalid offset from rsp");
   int offset_from_rsp_in_bytes = offset_from_rsp_in_words * BytesPerWord;
   assert(offset_from_rsp_in_bytes < frame_map()->reserved_argument_area_size(), "invalid offset");
-  __ movoop (Address(rsp, offset_from_rsp_in_bytes), o);
+  __ movoop (Address(rsp, offset_from_rsp_in_bytes), o, rscratch1);
 }
 
 
@@ -3095,7 +3095,7 @@ void LIR_Assembler::store_parameter(Metadata* m,  int offset_from_rsp_in_words) 
   assert(offset_from_rsp_in_words >= 0, "invalid offset from rsp");
   int offset_from_rsp_in_bytes = offset_from_rsp_in_words * BytesPerWord;
   assert(offset_from_rsp_in_bytes < frame_map()->reserved_argument_area_size(), "invalid offset");
-  __ mov_metadata(Address(rsp, offset_from_rsp_in_bytes), m);
+  __ mov_metadata(Address(rsp, offset_from_rsp_in_bytes), m, rscratch1);
 }
 
 
@@ -3160,7 +3160,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
     store_parameter(j_rarg4, 4);
 #ifndef PRODUCT
     if (PrintC1Statistics) {
-      __ incrementl(ExternalAddress((address)&Runtime1::_generic_arraycopystub_cnt));
+      __ incrementl(ExternalAddress((address)&Runtime1::_generic_arraycopystub_cnt), rscratch1);
     }
 #endif
     __ call(RuntimeAddress(copyfunc_addr));
@@ -3169,7 +3169,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
     __ mov(c_rarg4, j_rarg4);
 #ifndef PRODUCT
     if (PrintC1Statistics) {
-      __ incrementl(ExternalAddress((address)&Runtime1::_generic_arraycopystub_cnt));
+      __ incrementl(ExternalAddress((address)&Runtime1::_generic_arraycopystub_cnt), rscratch1);
     }
 #endif
     __ call(RuntimeAddress(copyfunc_addr));
@@ -3183,7 +3183,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
 
 #ifndef PRODUCT
     if (PrintC1Statistics) {
-      __ incrementl(ExternalAddress((address)&Runtime1::_generic_arraycopystub_cnt));
+      __ incrementl(ExternalAddress((address)&Runtime1::_generic_arraycopystub_cnt), rscratch1);
     }
 #endif
     __ call_VM_leaf(copyfunc_addr, 5); // removes pushed parameter from the stack
@@ -3416,7 +3416,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
           Label failed;
           __ testl(rax, rax);
           __ jcc(Assembler::notZero, failed);
-          __ incrementl(ExternalAddress((address)&Runtime1::_arraycopy_checkcast_cnt));
+          __ incrementl(ExternalAddress((address)&Runtime1::_arraycopy_checkcast_cnt), rscratch1);
           __ bind(failed);
         }
 #endif
@@ -3426,7 +3426,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
 
 #ifndef PRODUCT
         if (PrintC1Statistics) {
-          __ incrementl(ExternalAddress((address)&Runtime1::_arraycopy_checkcast_attempt_cnt));
+          __ incrementl(ExternalAddress((address)&Runtime1::_arraycopy_checkcast_attempt_cnt), rscratch1);
         }
 #endif
 
@@ -3495,7 +3495,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
 
 #ifndef PRODUCT
   if (PrintC1Statistics) {
-    __ incrementl(ExternalAddress(Runtime1::arraycopy_count_address(basic_type)));
+    __ incrementl(ExternalAddress(Runtime1::arraycopy_count_address(basic_type)), rscratch1);
   }
 #endif
 
@@ -3619,7 +3619,7 @@ void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
         ciKlass* receiver = vc_data->receiver(i);
         if (receiver == NULL) {
           Address recv_addr(mdo, md->byte_offset_of_slot(data, VirtualCallData::receiver_offset(i)));
-          __ mov_metadata(recv_addr, known_klass->constant_encoding());
+          __ mov_metadata(recv_addr, known_klass->constant_encoding(), rscratch1);
           Address data_addr(mdo, md->byte_offset_of_slot(data, VirtualCallData::receiver_count_offset(i)));
           __ addptr(data_addr, DataLayout::counter_increment);
           return;
@@ -3851,7 +3851,7 @@ void LIR_Assembler::negate(LIR_Opr left, LIR_Opr dest, LIR_Opr tmp) {
         __ movflt(dest->as_xmm_float_reg(), left->as_xmm_float_reg());
       }
       __ xorps(dest->as_xmm_float_reg(),
-               ExternalAddress((address)float_signflip_pool));
+               ExternalAddress((address)float_signflip_pool), rscratch1);
     }
   } else if (dest->is_double_xmm()) {
 #ifdef _LP64
@@ -3868,7 +3868,7 @@ void LIR_Assembler::negate(LIR_Opr left, LIR_Opr dest, LIR_Opr tmp) {
         __ movdbl(dest->as_xmm_double_reg(), left->as_xmm_double_reg());
       }
       __ xorpd(dest->as_xmm_double_reg(),
-               ExternalAddress((address)double_signflip_pool));
+               ExternalAddress((address)double_signflip_pool), rscratch1);
     }
 #ifndef _LP64
   } else if (left->is_single_fpu() || left->is_double_fpu()) {

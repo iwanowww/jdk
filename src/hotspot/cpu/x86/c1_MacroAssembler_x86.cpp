@@ -80,7 +80,7 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
   // if the object header was the same, we're done
   if (PrintBiasedLockingStatistics) {
     cond_inc32(Assembler::equal,
-               ExternalAddress((address)BiasedLocking::fast_path_entry_count_addr()));
+               ExternalAddress((address)BiasedLocking::fast_path_entry_count_addr()), scratch);
   }
   jcc(Assembler::equal, done);
   // if the object header was not the same, it is now in the hdr register
@@ -316,7 +316,7 @@ void C1_MacroAssembler::inline_cache_check(Register receiver, Register iCache) {
   // if icache check fails, then jump to runtime routine
   // Note: RECEIVER must still contain the receiver!
   jump_cc(Assembler::notEqual,
-          RuntimeAddress(SharedRuntime::get_ic_miss_stub()));
+          RuntimeAddress(SharedRuntime::get_ic_miss_stub()), rscratch1);
   const int ic_cmp_size = LP64_ONLY(10) NOT_LP64(9);
   assert(UseCompressedClassPointers || offset() - start_offset == ic_cmp_size, "check alignment in emit_method_entry");
 }
