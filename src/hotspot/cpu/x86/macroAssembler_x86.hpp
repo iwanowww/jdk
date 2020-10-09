@@ -1033,13 +1033,36 @@ public:
                 Register rax, Register rcx, Register rdx, Register tmp);
 
 #ifdef _LP64
+ private:
+  // Initialized in macroAssembler_x86_constants.cpp
+  static address ONE;
+  static address ONEHALF;
+  static address SIGN_MASK;
+  static address TWO_POW_55;
+  static address TWO_POW_M55;
+  static address SHIFTER;
+  static address ZERO;
+  static address NEG_ZERO;
+  static address PI32INV;
+  static address PI_INV_TABLE;
+  static address Ctable;
+  static address SC_1;
+  static address SC_2;
+  static address SC_3;
+  static address SC_4;
+  static address PI_4;
+  static address P_1;
+  static address P_3;
+  static address P_2;
+
+ public:
   void fast_log(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xmm2, XMMRegister xmm3,
                 XMMRegister xmm4, XMMRegister xmm5, XMMRegister xmm6, XMMRegister xmm7,
                 Register rax, Register rcx, Register rdx, Register tmp1, Register tmp2);
 
   void fast_log10(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xmm2, XMMRegister xmm3,
                   XMMRegister xmm4, XMMRegister xmm5, XMMRegister xmm6, XMMRegister xmm7,
-                  Register rax, Register rcx, Register rdx, Register r11);
+                  Register rax, Register rcx, Register rdx, Register r11, Register rscratch);
 
   void fast_pow(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xmm2, XMMRegister xmm3, XMMRegister xmm4,
                 XMMRegister xmm5, XMMRegister xmm6, XMMRegister xmm7, Register rax, Register rcx,
@@ -1047,17 +1070,17 @@ public:
 
   void fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xmm2, XMMRegister xmm3,
                 XMMRegister xmm4, XMMRegister xmm5, XMMRegister xmm6, XMMRegister xmm7,
-                Register rax, Register rbx, Register rcx, Register rdx, Register tmp1, Register tmp2,
-                Register tmp3, Register tmp4);
+                Register rax, Register rbx, Register rcx, Register rdx, Register tmp1);
 
   void fast_cos(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xmm2, XMMRegister xmm3,
                 XMMRegister xmm4, XMMRegister xmm5, XMMRegister xmm6, XMMRegister xmm7,
-                Register rax, Register rcx, Register rdx, Register tmp1,
-                Register tmp2, Register tmp3, Register tmp4);
+                Register eax, Register ecx, Register edx, Register r8,
+                Register  r9, Register r10, Register r11, Register rscratch);
+
   void fast_tan(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xmm2, XMMRegister xmm3,
                 XMMRegister xmm4, XMMRegister xmm5, XMMRegister xmm6, XMMRegister xmm7,
-                Register rax, Register rcx, Register rdx, Register tmp1,
-                Register tmp2, Register tmp3, Register tmp4);
+                Register rax, Register rcx, Register rdx, Register tmp1, Register tmp2,
+                Register tmp3, Register tmp4, Register tmp5);
 #else
   void fast_log(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xmm2, XMMRegister xmm3,
                 XMMRegister xmm4, XMMRegister xmm5, XMMRegister xmm6, XMMRegister xmm7,
