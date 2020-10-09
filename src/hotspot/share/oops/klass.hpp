@@ -128,6 +128,10 @@ class Klass : public Metadata {
   // secondary supers, else is &_primary_supers[depth()].
   juint       _super_check_offset;
 
+  // FIXME
+  uintptr_t _self_hash; // TODO: turn into an optional field?
+  uintptr_t _secondary_supers_hash; // TODO: turn into an optional field?
+
   // Class name.  Instance classes: java/lang/String, etc.  Array classes: [I,
   // [Ljava/lang/String;, etc.  Set to zero for all other kinds of classes.
   Symbol*     _name;
@@ -193,6 +197,9 @@ protected:
 
   void* operator new(size_t size, ClassLoaderData* loader_data, size_t word_size, TRAPS) throw();
 
+  uintptr_t compute_self_hash();
+  uintptr_t compute_secondary_supers_hash();
+
  public:
   int id() { return _id; }
 
@@ -222,11 +229,20 @@ protected:
   juint    super_check_offset() const  { return _super_check_offset; }
   void set_super_check_offset(juint o) { _super_check_offset = o; }
 
+  uintptr_t    self_hash() const      { return _self_hash; }
+  void     set_self_hash(uintptr_t h) { assert(h != 0 && h != uintptr_t(-1), ""); _self_hash = h; }
+
+  uintptr_t    secondary_supers_hash() const      { return _secondary_supers_hash; }
+  void     set_secondary_supers_hash(uintptr_t h) { _secondary_supers_hash = h; }
+
   Klass* secondary_super_cache() const     { return _secondary_super_cache; }
   void set_secondary_super_cache(Klass* k) { _secondary_super_cache = k; }
 
   Array<Klass*>* secondary_supers() const { return _secondary_supers; }
-  void set_secondary_supers(Array<Klass*>* k) { _secondary_supers = k; }
+  void set_secondary_supers(Array<Klass*>* k) {
+    _secondary_supers = k;
+    _secondary_supers_hash = compute_secondary_supers_hash();
+  }
 
   // Return the element of the _super chain of the given depth.
   // If there is no such element, return either NULL or this.
@@ -342,6 +358,8 @@ protected:
   // Compiler support
   static ByteSize super_offset()                 { return in_ByteSize(offset_of(Klass, _super)); }
   static ByteSize super_check_offset_offset()    { return in_ByteSize(offset_of(Klass, _super_check_offset)); }
+  static ByteSize self_hash_offset()             { return in_ByteSize(offset_of(Klass, _self_hash)); }
+  static ByteSize secondary_supers_hash_offset() { return in_ByteSize(offset_of(Klass, _secondary_supers_hash)); }
   static ByteSize primary_supers_offset()        { return in_ByteSize(offset_of(Klass, _primary_supers)); }
   static ByteSize secondary_super_cache_offset() { return in_ByteSize(offset_of(Klass, _secondary_super_cache)); }
   static ByteSize secondary_supers_offset()      { return in_ByteSize(offset_of(Klass, _secondary_supers)); }

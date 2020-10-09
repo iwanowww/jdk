@@ -2693,11 +2693,11 @@ Node* Phase::gen_subtype_check(Node* subklass, Node* superklass, Node** ctrl, No
     default:
       ShouldNotReachHere();
     }
+  } else {
+    // %%% Possible further optimization:  Even if the superklass is not exact,
+    // if the subklass is the unique subtype of the superklass, the check
+    // will always succeed.  We could leave a dependency behind to ensure this.
   }
-
-  // %%% Possible further optimization:  Even if the superklass is not exact,
-  // if the subklass is the unique subtype of the superklass, the check
-  // will always succeed.  We could leave a dependency behind to ensure this.
 
   // First load the super-klass's check-offset
   Node *p1 = gvn.transform(new AddPNode(superklass, superklass, gvn.MakeConX(in_bytes(Klass::super_check_offset_offset()))));
@@ -2755,7 +2755,7 @@ Node* Phase::gen_subtype_check(Node* subklass, Node* superklass, Node** ctrl, No
   // Gather the various success & failures here
   RegionNode *r_ok_subtype = new RegionNode(4);
   gvn.record_for_igvn(r_ok_subtype);
-  RegionNode *r_not_subtype = new RegionNode(3);
+  RegionNode *r_not_subtype = new RegionNode(4);
   gvn.record_for_igvn(r_not_subtype);
 
   r_ok_subtype->init_req(1, iftrue1);
@@ -2776,6 +2776,34 @@ Node* Phase::gen_subtype_check(Node* subklass, Node* superklass, Node** ctrl, No
   IfNode *iff3 = gen_subtype_check_compare(*ctrl, subklass, superklass, BoolTest::eq, PROB_LIKELY(0.36f), gvn, T_ADDRESS);
   r_ok_subtype->init_req(2, gvn.transform(new IfTrueNode(iff3)));
   *ctrl = gvn.transform(new IfFalseNode(iff3));
+
+  // Considerations:
+  // Klass::_super_hash is constant
+  //
+  // Depending on how many bits are set (when super is known), we can consider skipping the test.
+  //
+  // ???
+
+  // Probabilistic negative test
+  if (SubtypeCheckType == 1) {
+    // FIXME: Klass::_super_hash is uintptr_t
+
+    Node* super_addr = gvn.transform(new AddPNode(superklass, superklass, gvn.MakeConX(in_bytes(Klass::self_hash_offset()))));
+    Node* super_hash = gvn.transform(new LoadLNode(NULL, C->immutable_memory(), super_addr, gvn.type(super_addr)->is_ptr(), TypeLong::LONG, MemNode::unordered));
+
+    Node* sub_addr = gvn.transform(new AddPNode(subklass, subklass, gvn.MakeConX(in_bytes(Klass::secondary_supers_hash_offset()))));
+    Node* sub_hash = gvn.transform(new LoadLNode(NULL, C->immutable_memory(), sub_addr, gvn.type(sub_addr)->is_ptr(), TypeLong::LONG, MemNode::unordered));
+
+    Node* and_hash = gvn.transform(new AndLNode(super_hash, sub_hash));
+    Node* cmp = gvn.transform(new CmpLNode(and_hash, super_hash));
+    Node* bol = gvn.transform(new BoolNode(cmp, BoolTest::ne));
+
+    IfNode* iff4 = new IfNode(*ctrl, bol, PROB_FAIR, COUNT_UNKNOWN);
+    gvn.transform(iff4);
+
+    r_not_subtype->init_req(2, gvn.transform(new IfTrueNode(iff4)));
+    *ctrl = gvn.transform(new IfFalseNode(iff4));
+  }
 
   // -- Roads not taken here: --
   // We could also have chosen to perform the self-check at the beginning
@@ -2801,9 +2829,9 @@ Node* Phase::gen_subtype_check(Node* subklass, Node* superklass, Node** ctrl, No
   Node* psc = gvn.transform(
     new PartialSubtypeCheckNode(*ctrl, subklass, superklass));
 
-  IfNode *iff4 = gen_subtype_check_compare(*ctrl, psc, gvn.zerocon(T_OBJECT), BoolTest::ne, PROB_FAIR, gvn, T_ADDRESS);
-  r_not_subtype->init_req(2, gvn.transform(new IfTrueNode (iff4)));
-  r_ok_subtype ->init_req(3, gvn.transform(new IfFalseNode(iff4)));
+  IfNode *iff5 = gen_subtype_check_compare(*ctrl, psc, gvn.zerocon(T_OBJECT), BoolTest::ne, PROB_FAIR, gvn, T_ADDRESS);
+  r_not_subtype->init_req(3, gvn.transform(new IfTrueNode (iff5)));
+  r_ok_subtype ->init_req(3, gvn.transform(new IfFalseNode(iff5)));
 
   // Return false path; set default control to true path.
   *ctrl = gvn.transform(r_ok_subtype);

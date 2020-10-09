@@ -207,6 +207,8 @@ Klass::Klass(KlassID id) : _id(id),
   CDS_JAVA_HEAP_ONLY(_archived_mirror = narrowOop::null;)
   _primary_supers[0] = this;
   set_super_check_offset(in_bytes(primary_supers_offset()));
+  set_secondary_supers_hash(0);
+  set_self_hash(compute_self_hash());
 }
 
 jint Klass::array_layout_helper(BasicType etype) {
@@ -349,6 +351,37 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
 
     set_secondary_supers(s2);
   }
+  set_self_hash(compute_self_hash());
+//  set_secondary_supers_hash(compute_secondary_supers_hash());
+}
+
+uintptr_t Klass::compute_self_hash() {
+  if (_self_hash > 0) {
+    return _self_hash;
+  }
+  intptr_t hash = 0;
+  int HASH_BITS_NEEDED = 3;
+  for (int i = 0; i < HASH_BITS_NEEDED; i++) {
+    int n = os::random() & right_n_bits(6); // < 64
+    if (is_set_nth_bit(hash, n)) {
+      i--; continue; // retry
+    }
+    set_nth_bit(hash, n);
+  }
+  return (uintptr_t)hash;
+}
+
+uintptr_t Klass::compute_secondary_supers_hash() {
+  uintptr_t secondary_supers_hash = 0;
+  if (secondary_supers() != NULL) {
+    for (int i = 0; i < secondary_supers()->length(); i++) {
+      Klass* super = secondary_supers()->at(i);
+      uintptr_t h = super->_self_hash;
+      assert(h != 0 && h != (uintptr_t)-1, "%s", super->name()->as_C_string());
+      secondary_supers_hash |= h;
+    }
+  }
+  return secondary_supers_hash;
 }
 
 GrowableArray<Klass*>* Klass::compute_secondary_supers(int num_extra_slots,

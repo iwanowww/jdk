@@ -49,6 +49,7 @@
 #include "runtime/thread.hpp"
 #include "utilities/macros.hpp"
 #include "crc32c.h"
+#include "macroAssembler_x86.hpp"
 
 #ifdef PRODUCT
 #define BLOCK_COMMENT(str) /* nothing */
@@ -3638,35 +3639,77 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   // Skip to start of data.
   addptr(rdi, Array<Klass*>::base_offset_in_bytes());
 
-  // Scan RCX words at [RDI] for an occurrence of RAX.
-  // Set NZ/Z based on last compare.
-  // Z flag value will not be set by 'repne' if RCX == 0 since 'repne' does
-  // not change flags (only scas instruction which is repeated sets flags).
-  // Set Z = 0 (not equal) before 'repne' to indicate that class was not found.
+  if (SubtypeCheckType == 2) {
+    Label L_loop_entry, L_loop_success, L_loop_failure;
+    Address current_slot(rdi, 0);
+
+    bind(L_loop_entry);
+
+    testl(rcx, rcx); // == 0?
+    jccb(Assembler::zero, L_loop_failure);
+
+    cmpptr(super_klass, current_slot);
+    jccb(Assembler::equal, L_loop_success);
+
+    increment(rdi, BytesPerWord);
+    decrementl(rcx);
+    jmpb(L_loop_entry);
+
+    bind(L_loop_failure);
+    if (set_cond_codes) {
+      testptr(sub_klass, sub_klass); // set NZ on failure
+    }
+    if (pushed_rdi)  pop(rdi);
+    if (pushed_rcx)  pop(rcx);
+    if (pushed_rax)  pop(rax);
+
+    jmp(*L_failure);
+
+    bind(L_loop_success);
+    if (set_cond_codes) {
+      xorl(rcx, rcx); // set Z on success
+    }
+    if (pushed_rdi)  pop(rdi);
+    if (pushed_rcx)  pop(rcx);
+    if (pushed_rax)  pop(rax);
+
+    // Success.  Cache the super we found and proceed in triumph.
+    movptr(super_cache_addr, super_klass);
+
+    if (L_success != &L_fallthrough) {
+      jmp(*L_success);
+    }
+  } else {
+    // Scan RCX words at [RDI] for an occurrence of RAX.
+    // Set NZ/Z based on last compare.
+    // Z flag value will not be set by 'repne' if RCX == 0 since 'repne' does
+    // not change flags (only scas instruction which is repeated sets flags).
+    // Set Z = 0 (not equal) before 'repne' to indicate that class was not found.
 
     testptr(rax,rax); // Set Z = 0
     repne_scan();
 
-  // Unspill the temp. registers:
-  if (pushed_rdi)  pop(rdi);
-  if (pushed_rcx)  pop(rcx);
-  if (pushed_rax)  pop(rax);
+    // Unspill the temp. registers:
+    if (pushed_rdi)  pop(rdi);
+    if (pushed_rcx)  pop(rcx);
+    if (pushed_rax)  pop(rax);
 
-  if (set_cond_codes) {
-    // Special hack for the AD files:  rdi is guaranteed non-zero.
-    assert(!pushed_rdi, "rdi must be left non-NULL");
-    // Also, the condition codes are properly set Z/NZ on succeed/failure.
-  }
+    if (set_cond_codes) {
+      // Special hack for the AD files:  rdi is guaranteed non-zero.
+      assert(!pushed_rdi, "rdi must be left non-NULL");
+      // Also, the condition codes are properly set Z/NZ on succeed/failure.
+    }
 
-  if (L_failure == &L_fallthrough)
-        jccb(Assembler::notEqual, *L_failure);
-  else  jcc(Assembler::notEqual, *L_failure);
+    if (L_failure == &L_fallthrough)
+          jccb(Assembler::notEqual, *L_failure);
+    else  jcc(Assembler::notEqual, *L_failure);
 
-  // Success.  Cache the super we found and proceed in triumph.
-  movptr(super_cache_addr, super_klass);
+    // Success.  Cache the super we found and proceed in triumph.
+    movptr(super_cache_addr, super_klass);
 
-  if (L_success != &L_fallthrough) {
-    jmp(*L_success);
+    if (L_success != &L_fallthrough) {
+      jmp(*L_success);
+    }
   }
 
 #undef IS_A_TEMP
