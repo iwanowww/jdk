@@ -1614,7 +1614,7 @@ void MacroAssembler::call_VM_base(Register oop_result,
 
     Label ok;
     jcc(Assembler::equal, ok);
-    jump(RuntimeAddress(StubRoutines::forward_exception_entry()), rscratch1);
+    jump(RuntimeAddress(StubRoutines::forward_exception_entry()), noreg /*rscratch*/); // stub
     bind(ok);
 #endif // LP64
   }
@@ -4280,7 +4280,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 #ifndef PRODUCT
   int* pst_counter = &SharedRuntime::_partial_subtype_ctr;
   ExternalAddress pst_counter_addr((address) pst_counter);
-  incrementl(pst_counter_addr, rcx /*rscratch*/);
+  incrementl(pst_counter_addr, rcx);
 #endif //PRODUCT
 
   // We will consult the secondary-super array.
@@ -4395,7 +4395,7 @@ void MacroAssembler::_verify_oop(Register reg, const char* s, const char* file, 
   ExternalAddress buffer((address) b);
   // avoid using pushptr, as it modifies scratch registers
   // and our contract is not to modify anything
-  movptr(rax, buffer.addr());
+  movptr(rax, buffer.addr()); // code string
   push(rax);
   // call indirectly to solve generation ordering problem
   movptr(rax, ExternalAddress(StubRoutines::verify_oop_subroutine_entry_address()));
