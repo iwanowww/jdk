@@ -245,9 +245,29 @@ bool ConnectionGraph::compute_escape() {
     if (n->is_CallStaticJava()) {
       n->as_CallStaticJava()->_is_non_escaping = noescape;
     }
-    if (noescape && ptn->scalar_replaceable()) {
-      adjust_scalar_replaceable_state(ptn);
+    if (noescape) {
       if (ptn->scalar_replaceable()) {
+        adjust_scalar_replaceable_state(ptn);
+      }
+    } else {
+      ptn->set_scalar_replaceable(false);
+    }
+    if (!ptn->scalar_replaceable() && (ptn->escape_state() < PointsToNode::GlobalEscape)) {
+      ptn->set_unique(true); // downgrade to unique
+      adjust_unique_state(ptn);
+    }
+    if (SplitUniqueTypes == 0) { // NoEscape + SR
+      if (noescape && ptn->scalar_replaceable()) {
+        alloc_worklist.append(ptn->ideal_node());
+      }
+    } else if (SplitUniqueTypes == 1) { // NoEscape + SR/U
+      if (noescape && (ptn->scalar_replaceable() || ptn->unique())) {
+        alloc_worklist.append(ptn->ideal_node());
+      }
+    } else if (SplitUniqueTypes == 2) { // NoEscape/ArgEscape + SR/U
+      assert(ptn->escape_state() == PointsToNode::NoEscape ||
+             ptn->escape_state() == PointsToNode::ArgEscape, "");
+      if (ptn->scalar_replaceable() || ptn->unique()) {
         alloc_worklist.append(ptn->ideal_node());
       }
     }
@@ -289,14 +309,22 @@ bool ConnectionGraph::compute_escape() {
     for (int next = 0; next < alloc_length; ++next) {
       Node* n = alloc_worklist.at(next);
       PointsToNode* ptn = ptnode_adr(n->_idx);
-      assert(ptn->escape_state() == PointsToNode::NoEscape && ptn->scalar_replaceable(), "sanity");
+      if (SplitUniqueTypes == 0) {
+        assert(ptn->escape_state() == PointsToNode::NoEscape && ptn->scalar_replaceable(), "sanity");
+      } else if (SplitUniqueTypes == 1) {
+        assert(ptn->escape_state() == PointsToNode::NoEscape, "sanity");
+      } else if (SplitUniqueTypes == 2) {
+        assert(ptn->escape_state() == PointsToNode::NoEscape ||
+               ptn->escape_state() == PointsToNode::ArgEscape, "sanity");
+      }
     }
   }
 #endif
 
   // 5. Separate memory graph for scalar replaceable allcations.
   if (has_scalar_replaceable_candidates &&
-      C->AliasLevel() >= 3 && EliminateAllocations) {
+      C->AliasLevel() >= 3 &&
+      (EliminateAllocations || SplitUniqueTypes > 0)) {
     // Now use the escape information to create unique types for
     // scalar replaceable objects.
     split_unique_types(alloc_worklist, arraycopy_worklist);
@@ -1782,6 +1810,79 @@ void ConnectionGraph::adjust_scalar_replaceable_state(JavaObjectNode* jobj) {
   }
 }
 
+// Adjust unique state after Connection Graph is built.
+void ConnectionGraph::adjust_unique_state(JavaObjectNode* jobj) {
+
+  for (UseIterator i(jobj); i.has_next(); i.next()) {
+    PointsToNode* use = i.get();
+    if (use->is_Arraycopy()) {
+      continue;
+    }
+    if (use->is_Field()) {
+      FieldNode* field = use->as_Field();
+
+      // 2. An object is not unique if the field into which it is
+      // stored has multiple bases one of which is null.
+      if (field->base_count() > 1) {
+        for (BaseIterator i(field); i.has_next(); i.next()) {
+          PointsToNode* base = i.get();
+          if (base == null_obj) {
+            jobj->set_unique(false);
+          }
+        }
+      }
+    }
+    // 3. An object is not unique if it is merged with other objects.
+    for (EdgeIterator j(use); j.has_next(); j.next()) {
+      PointsToNode* ptn = j.get();
+      if (ptn->is_JavaObject() && ptn != jobj) {
+        // Mark all objects.
+        jobj->set_unique(false);
+         ptn->set_unique(false);
+      }
+    }
+  }
+
+  for (EdgeIterator j(jobj); j.has_next(); j.next()) {
+    if (j.get()->is_Arraycopy()) {
+      continue;
+    }
+
+    // Non-escaping object node should point only to field nodes.
+    FieldNode* field = j.get()->as_Field();
+
+    // 6. Or the address may point to more then one object. This may produce
+    // the false positive result (set not scalar replaceable)
+    // since the flow-insensitive escape analysis can't separate
+    // the case when stores overwrite the field's value from the case
+    // when stores happened on different control branches.
+    //
+    // Note: it will disable scalar replacement in some cases:
+    //
+    //    Point p[] = new Point[1];
+    //    p[0] = new Point(); // Will be not scalar replaced
+    //
+    // but it will save us from incorrect optimizations in next cases:
+    //
+    //    Point p[] = new Point[1];
+    //    if ( x ) p[0] = new Point(); // Will be not scalar replaced
+    //
+    if (field->base_count() > 1) {
+      for (BaseIterator i(field); i.has_next(); i.next()) {
+        PointsToNode* base = i.get();
+        // Don't take into account LocalVar nodes which
+        // may point to only one object which should be also
+        // this field's base by now.
+        if (base->is_JavaObject() && base != jobj) {
+          // Mark all bases.
+          jobj->set_unique(false);
+          base->set_unique(false);
+        }
+      }
+    }
+  }
+}
+
 #ifdef ASSERT
 void ConnectionGraph::verify_connection_graph(
                          GrowableArray<PointsToNode*>&   ptnodes_worklist,
@@ -2382,42 +2483,87 @@ Node* ConnectionGraph::get_addp_base(Node *addp) {
 
 Node* ConnectionGraph::find_second_addp(Node* addp, Node* n) {
   assert(addp->is_AddP() && addp->outcnt() > 0, "Don't process dead nodes");
-  Node* addp2 = addp->raw_out(0);
-  if (addp->outcnt() == 1 && addp2->is_AddP() &&
-      addp2->in(AddPNode::Base) == n &&
-      addp2->in(AddPNode::Address) == addp) {
-    assert(addp->in(AddPNode::Base) == n, "expecting the same base");
-    //
-    // Find array's offset to push it on worklist first and
-    // as result process an array's element offset first (pushed second)
-    // to avoid CastPP for the array's offset.
-    // Otherwise the inserted CastPP (LocalVar) will point to what
-    // the AddP (Field) points to. Which would be wrong since
-    // the algorithm expects the CastPP has the same point as
-    // as AddP's base CheckCastPP (LocalVar).
-    //
-    //    ArrayAllocation
-    //     |
-    //    CheckCastPP
-    //     |
-    //    memProj (from ArrayAllocation CheckCastPP)
-    //     |  ||
-    //     |  ||   Int (element index)
-    //     |  ||    |   ConI (log(element size))
-    //     |  ||    |   /
-    //     |  ||   LShift
-    //     |  ||  /
-    //     |  AddP (array's element offset)
-    //     |  |
-    //     |  | ConI (array's offset: #12(32-bits) or #24(64-bits))
-    //     | / /
-    //     AddP (array's offset)
-    //      |
-    //     Load/Store (memory operation on array's element)
-    //
-    return addp2;
+  for (DUIterator_Fast imax, i = addp->fast_outs(imax); i < imax; i++) {
+    Node* addp2 = addp->fast_out(i);
+    if (addp2->is_AddP() &&
+        addp2->in(AddPNode::Base) == n &&
+        addp2->in(AddPNode::Address) == addp) {
+      assert(addp->in(AddPNode::Base) == n, "expecting the same base");
+      //
+      // Find array's offset to push it on worklist first and
+      // as result process an array's element offset first (pushed second)
+      // to avoid CastPP for the array's offset.
+      // Otherwise the inserted CastPP (LocalVar) will point to what
+      // the AddP (Field) points to. Which would be wrong since
+      // the algorithm expects the CastPP has the same point as
+      // as AddP's base CheckCastPP (LocalVar).
+      //
+      //    ArrayAllocation
+      //     |
+      //    CheckCastPP
+      //     |
+      //    memProj (from ArrayAllocation CheckCastPP)
+      //     |  ||
+      //     |  ||   Int (element index)
+      //     |  ||    |   ConI (log(element size))
+      //     |  ||    |   /
+      //     |  ||   LShift
+      //     |  ||  /
+      //     |  AddP (array's element offset)
+      //     |  |
+      //     |  | ConI (array's offset: #12(32-bits) or #24(64-bits))
+      //     | / /
+      //     AddP (array's offset)
+      //      |
+      //     Load/Store (memory operation on array's element)
+      //
+      return addp2;
+    }
   }
   return NULL;
+}
+
+void ConnectionGraph::process_addp_node(Node* addp, Node* n, GrowableArray<Node*>& alloc_worklist) {
+  assert(addp->is_AddP() && addp->outcnt() > 0, "Don't process dead nodes");
+
+  for (DUIterator_Fast imax, i = addp->fast_outs(imax); i < imax; i++) {
+    Node* addp2 = addp->fast_out(i);
+    if (addp2->is_AddP() &&
+        addp2->in(AddPNode::Base) == n &&
+        addp2->in(AddPNode::Address) == addp) {
+      assert(addp->in(AddPNode::Base) == n, "expecting the same base");
+      //
+      // Find array's offset to push it on worklist first and
+      // as result process an array's element offset first (pushed second)
+      // to avoid CastPP for the array's offset.
+      // Otherwise the inserted CastPP (LocalVar) will point to what
+      // the AddP (Field) points to. Which would be wrong since
+      // the algorithm expects the CastPP has the same point as
+      // as AddP's base CheckCastPP (LocalVar).
+      //
+      //    ArrayAllocation
+      //     |
+      //    CheckCastPP
+      //     |
+      //    memProj (from ArrayAllocation CheckCastPP)
+      //     |  ||
+      //     |  ||   Int (element index)
+      //     |  ||    |   ConI (log(element size))
+      //     |  ||    |   /
+      //     |  ||   LShift
+      //     |  ||  /
+      //     |  AddP (array's element offset)
+      //     |  |
+      //     |  | ConI (array's offset: #12(32-bits) or #24(64-bits))
+      //     | / /
+      //     AddP (array's offset)
+      //      |
+      //     Load/Store (memory operation on array's element)
+      //
+      alloc_worklist.append_if_missing(addp2);
+    }
+  }
+  alloc_worklist.append_if_missing(addp);
 }
 
 //
@@ -2430,13 +2576,16 @@ bool ConnectionGraph::split_AddP(Node *addp, Node *base) {
   assert(base_t != NULL && base_t->is_known_instance(), "expecting instance oopptr");
   const TypeOopPtr *t = igvn->type(addp)->isa_oopptr();
   if (t == NULL) {
-    // We are computing a raw address for a store captured by an Initialize
-    // compute an appropriate address type (cases #3 and #5).
     assert(igvn->type(addp) == TypeRawPtr::NOTNULL, "must be raw pointer");
-    assert(addp->in(AddPNode::Address)->is_Proj(), "base of raw address must be result projection from allocation");
     intptr_t offs = (int)igvn->find_intptr_t_con(addp->in(AddPNode::Offset), Type::OffsetBot);
-    assert(offs != Type::OffsetBot, "offset must be a constant");
-    t = base_t->add_offset(offs)->is_oopptr();
+    if (addp->in(AddPNode::Address)->is_Proj() && offs != Type::OffsetBot) {
+      // We are computing a raw address for a store captured by an Initialize
+      // compute an appropriate address type (cases #3 and #5).
+      t = base_t->add_offset(offs)->is_oopptr();
+    } else {
+      assert(SplitUniqueTypes > 0, "sanity");
+      return false;
+    }
   }
   int inst_id =  base_t->instance_id();
   assert(!t->is_known_instance() || t->instance_id() == inst_id,
@@ -2946,7 +3095,8 @@ Node* ConnectionGraph::find_inst_mem(Node *orig_mem, int alias_idx, GrowableArra
 //    90  LoadP    _ 120  30   ... alias_index=6
 //   100  LoadP    _  80  20   ... alias_index=4
 //
-void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist, GrowableArray<ArrayCopyNode*> &arraycopy_worklist) {
+void ConnectionGraph::split_unique_types(GrowableArray<Node*>              &alloc_worklist,
+                                         GrowableArray<ArrayCopyNode*> &arraycopy_worklist) {
   GrowableArray<Node *>  memnode_worklist;
   GrowableArray<PhiNode *>  orig_phis;
   PhaseIterGVN  *igvn = _igvn;
@@ -2972,20 +3122,22 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
       PointsToNode::EscapeState es = ptn->escape_state();
       // We have an allocation or call which returns a Java object,
       // see if it is unescaped.
-      if (es != PointsToNode::NoEscape || !ptn->scalar_replaceable())
-        continue;
+      bool is_scalar_replaceable = (es == PointsToNode::NoEscape) && ptn->scalar_replaceable();
+      assert(is_scalar_replaceable || SplitUniqueTypes > 0, "sanity");
       // Find CheckCastPP for the allocate or for the return value of a call
       n = alloc->result_cast();
-      if (n == NULL) {            // No uses except Initialize node
-        if (alloc->is_Allocate()) {
-          // Set the scalar_replaceable flag for allocation
-          // so it could be eliminated if it has no uses.
-          alloc->as_Allocate()->_is_scalar_replaceable = true;
-        }
-        if (alloc->is_CallStaticJava()) {
-          // Set the scalar_replaceable flag for boxing method
-          // so it could be eliminated if it has no uses.
-          alloc->as_CallStaticJava()->_is_scalar_replaceable = true;
+      if (n == NULL) { // No uses except Initialize node
+        if (is_scalar_replaceable) {
+          if (alloc->is_Allocate()) {
+            // Set the scalar_replaceable flag for allocation
+            // so it could be eliminated if it has no uses.
+            alloc->as_Allocate()->_is_scalar_replaceable = true;
+          }
+          if (alloc->is_CallStaticJava()) {
+            // Set the scalar_replaceable flag for boxing method
+            // so it could be eliminated if it has no uses.
+            alloc->as_CallStaticJava()->_is_scalar_replaceable = true;
+          }
         }
         continue;
       }
@@ -3030,15 +3182,17 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
       if (!t->klass_is_exact())
         continue; // not an unique type
 
-      if (alloc->is_Allocate()) {
-        // Set the scalar_replaceable flag for allocation
-        // so it could be eliminated.
-        alloc->as_Allocate()->_is_scalar_replaceable = true;
-      }
-      if (alloc->is_CallStaticJava()) {
-        // Set the scalar_replaceable flag for boxing method
-        // so it could be eliminated.
-        alloc->as_CallStaticJava()->_is_scalar_replaceable = true;
+      if (is_scalar_replaceable) {
+        if (alloc->is_Allocate()) {
+          // Set the scalar_replaceable flag for allocation
+          // so it could be eliminated.
+          alloc->as_Allocate()->_is_scalar_replaceable = true;
+        }
+        if (alloc->is_CallStaticJava()) {
+          // Set the scalar_replaceable flag for boxing method
+          // so it could be eliminated.
+          alloc->as_CallStaticJava()->_is_scalar_replaceable = true;
+        }
       }
       set_escape_state(ptnode_adr(n->_idx), es); // CheckCastPP escape state
       // in order for an object to be scalar-replaceable, it must be:
@@ -3072,12 +3226,7 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
           assert(tgt->is_Field() && use->is_AddP(),
                  "only AddP nodes are Field edges in CG");
           if (use->outcnt() > 0) { // Don't process dead nodes
-            Node* addp2 = find_second_addp(use, use->in(AddPNode::Base));
-            if (addp2 != NULL) {
-              assert(alloc->is_AllocateArray(),"array allocation was expected");
-              alloc_worklist.append_if_missing(addp2);
-            }
-            alloc_worklist.append_if_missing(use);
+            process_addp_node(use, use->in(AddPNode::Base), alloc_worklist);
           }
         }
 
@@ -3089,12 +3238,7 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
         for (DUIterator_Fast imax, i = raw_result->fast_outs(imax); i < imax; i++) {
           Node *use = raw_result->fast_out(i);
           if (use->is_AddP() && use->outcnt() > 0) { // Don't process dead nodes
-            Node* addp2 = find_second_addp(use, raw_result);
-            if (addp2 != NULL) {
-              assert(alloc->is_AllocateArray(),"array allocation was expected");
-              alloc_worklist.append_if_missing(addp2);
-            }
-            alloc_worklist.append_if_missing(use);
+            process_addp_node(use, raw_result, alloc_worklist);
           } else if (use->is_MemBar()) {
             memnode_worklist.append_if_missing(use);
           }
@@ -3157,6 +3301,7 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
           record_for_optimizer(n);
         } else {
           assert(tn_type == TypePtr::NULL_PTR ||
+                 tn_type == TypeRawPtr::NOTNULL && jobj->unique() && !jobj->scalar_replaceable() ||
                  tn_t != NULL && !tinst->klass()->is_subtype_of(tn_t->klass()),
                  "unexpected type");
           continue; // Skip dead path with different type
@@ -3178,10 +3323,7 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
           memnode_worklist.append_if_missing(use);
         }
       } else if (use->is_AddP() && use->outcnt() > 0) { // No dead nodes
-        Node* addp2 = find_second_addp(use, n);
-        if (addp2 != NULL) {
-          alloc_worklist.append_if_missing(addp2);
-        }
+        process_addp_node(use, n, alloc_worklist);
         alloc_worklist.append_if_missing(use);
       } else if (use->is_Phi() ||
                  use->is_CheckCastPP() ||
@@ -3287,21 +3429,26 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
       assert(n != NULL && n->Opcode() == Op_SCMemProj, "memory projection required");
     } else {
       assert(n->is_Mem(), "memory node required.");
-      Node *addr = n->in(MemNode::Address);
-      const Type *addr_t = igvn->type(addr);
-      if (addr_t == Type::TOP)
-        continue;
-      assert (addr_t->isa_ptr() != NULL, "pointer type required.");
-      int alias_idx = _compile->get_alias_index(addr_t->is_ptr());
-      assert ((uint)alias_idx < new_index_end, "wrong alias index");
-      Node *mem = find_inst_mem(n->in(MemNode::Memory), alias_idx, orig_phis);
-      if (_compile->failing()) {
-        return;
-      }
-      if (mem != n->in(MemNode::Memory)) {
-        // We delay the memory edge update since we need old one in
-        // MergeMem code below when instances memory slices are separated.
-        set_map(n, mem);
+      // FIXME: as_Mem() can incorrectly cast LoadStore to MemNode.
+      bool is_mismatched = (n->is_Load() || n->is_Store()) && // MemNode
+                           n->as_Mem()->is_mismatched_access();
+      if (!is_mismatched) {
+        Node *addr = n->in(MemNode::Address);
+        const Type *addr_t = igvn->type(addr);
+        if (addr_t == Type::TOP)
+          continue;
+        assert (addr_t->isa_ptr() != NULL, "pointer type required.");
+        int alias_idx = _compile->get_alias_index(addr_t->is_ptr());
+        assert ((uint)alias_idx < new_index_end, "wrong alias index");
+        Node *mem = find_inst_mem(n->in(MemNode::Memory), alias_idx, orig_phis);
+        if (_compile->failing()) {
+          return;
+        }
+        if (mem != n->in(MemNode::Memory)) {
+          // We delay the memory edge update since we need old one in
+          // MergeMem code below when instances memory slices are separated.
+          set_map(n, mem);
+        }
       }
       if (n->is_Load()) {
         continue;  // don't push users
@@ -3334,6 +3481,15 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
           // EncodeISOArray overwrites destination array
           memnode_worklist.append_if_missing(use);
         }
+      } else if (use->is_CallLeaf()) {
+        // stubs: arg escape
+        // Proj #2 # Memory: @byte[int:>=0]:exact+any *, idx=10;
+        //   (CallLeafNoFP "jbyte_disjoint_arraycopy"
+        //     (Proj (Initialize (Proj#1 (AllocateArray#2))))
+        //     (AddP ConP#3 ConP#3 ConL#4)
+        //     (AddP (CheckCastPP (Proj#1 AllocateArray#2))#5 (CheckCastPP ...)#5 ConL#4)
+        //     ConL#4)
+        // TODO: any need to process the users?
       } else {
         uint op = use->Opcode();
         if ((use->in(MemNode::Memory) == n) &&
@@ -3477,6 +3633,9 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
       n->set_req(MemNode::Memory, nmem);
       igvn->hash_insert(n);
       record_for_optimizer(n);
+    } else if (n->is_CallStaticJava()) {
+      assert(n->as_CallJava()->method() == NULL &&
+             strncmp(n->as_CallStaticJava()->_name, "_multianewarray", 15) == 0, "");
     } else {
       assert(n->is_Allocate() || n->is_CheckCastPP() ||
              n->is_AddP() || n->is_Phi(), "unknown node used for set_map()");
@@ -3516,8 +3675,10 @@ void PointsToNode::dump(bool print_state) const {
     EscapeState es = escape_state();
     EscapeState fields_es = fields_escape_state();
     tty->print("%s(%s) ", esc_names[(int)es], esc_names[(int)fields_es]);
-    if (nt == PointsToNode::JavaObject && !this->scalar_replaceable())
+    if (nt == PointsToNode::JavaObject && !this->scalar_replaceable()) {
       tty->print("NSR ");
+      tty->print(this->unique() ? "U " : "NU ");
+    }
   }
   if (is_Field()) {
     FieldNode* f = (FieldNode*)this;

@@ -137,12 +137,28 @@ extern void print_alias_types();
 
 Node *MemNode::optimize_simple_memory_chain(Node *mchain, const TypeOopPtr *t_oop, Node *load, PhaseGVN *phase) {
   assert((t_oop != NULL), "sanity");
+  assert(load == NULL || load->is_Load(), "");
   bool is_instance = t_oop->is_known_instance_field();
   bool is_boxed_value_load = t_oop->is_ptr_to_boxed_value() &&
                              (load != NULL) && load->is_Load() &&
                              (phase->is_IterGVN() != NULL);
   if (!(is_instance || is_boxed_value_load))
     return mchain;  // don't try to optimize non-instance types
+  if (load != NULL) {
+    bool is_mismatched_access = (load != NULL) && load->as_Mem()->is_mismatched_access();
+    if (is_mismatched_access) {
+      assert(t_oop->is_known_instance_field(), "sanity");
+      return mchain; // don't optimize mismatched accesses
+    }
+  } else { // Phi
+    Compile::AliasType* alias_type = phase->C->alias_type(t_oop);
+    assert(alias_type->index() != Compile::AliasIdxBot, "no bare pointers here");
+    bool is_mismatched_access = (alias_type->basic_type() == T_ILLEGAL);
+    if (is_mismatched_access) {
+      assert(t_oop->is_known_instance_field(), "sanity");
+      return mchain; // don't optimize mismatched accesses
+    }
+  }
   uint instance_id = t_oop->instance_id();
   Node *start_mem = phase->C->start()->proj_out_or_null(TypeFunc::Memory);
   Node *prev = NULL;
@@ -4890,3 +4906,15 @@ bool MergeMemStream::match_memory(Node* mem, const MergeMemNode* mm, int idx) {
   return false;
 }
 #endif // !PRODUCT
+
+template<>
+void GrowableArray<MergeMemNode*>::print() {
+#ifndef PRODUCT
+  for (int i = 0; i < _len; i++) {
+    if (_data[i] != NULL) {
+      tty->print("%5d--> ", i);
+      _data[i]->dump();
+    }
+  }
+#endif
+}

@@ -164,7 +164,8 @@ public:
     ScalarReplaceable = 1,  // Not escaped object could be replaced with scalar
     PointsToUnknown   = 2,  // Has edge to phantom_object
     ArraycopySrc      = 4,  // Has edge from Arraycopy node
-    ArraycopyDst      = 8   // Has edge to Arraycopy node
+    ArraycopyDst      = 8,  // Has edge to Arraycopy node
+    Unique            = 16
   } NodeFlags;
 
 
@@ -205,6 +206,15 @@ public:
       _flags |= ScalarReplaceable;
     else
       _flags &= ~ScalarReplaceable;
+  }
+
+  bool     unique() const { return (_flags & Unique) != 0;}
+  void set_unique(bool v) {
+    if (v) {
+      _flags |= Unique;
+    } else {
+      _flags &= ~Unique;
+    }
   }
 
   int edge_count()              const { return _edges.length(); }
@@ -451,6 +461,8 @@ private:
   // Adjust scalar_replaceable state after Connection Graph is built.
   void adjust_scalar_replaceable_state(JavaObjectNode* jobj);
 
+  void adjust_unique_state(JavaObjectNode* jobj);
+
   // Optimize ideal graph.
   void optimize_ideal_graph(GrowableArray<Node*>& ptr_cmp_worklist,
                             GrowableArray<Node*>& storestore_worklist);
@@ -509,6 +521,8 @@ private:
   // Helper functions
   bool   is_oop_field(Node* n, int offset, bool* unsafe);
   static Node* find_second_addp(Node* addp, Node* n);
+  static void process_addp_node(Node* addp, Node* n, GrowableArray<Node*>& alloc_worklist);
+
   // offset of a field reference
   int address_offset(Node* adr, PhaseTransform *phase);
 

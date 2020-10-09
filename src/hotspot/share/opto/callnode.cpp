@@ -769,8 +769,17 @@ bool CallNode::may_modify(const TypeOopPtr *t_oop, PhaseTransform *phase) {
     return false;
   }
   if (t_oop->is_known_instance()) {
-    // The instance_id is set only for scalar-replaceable allocations which
-    // are not passed as arguments according to Escape Analysis.
+    const TypeTuple* args = tf()->domain();
+    for (uint i = TypeFunc::Parms; i < args->cnt(); i++) {
+      if (args->field_at(i)->isa_oopptr()) {
+        const TypeOopPtr* arg_t = phase->type(in(i))->isa_oopptr();
+        if (arg_t != NULL && arg_t->is_known_instance() &&
+            (arg_t->instance_id() == t_oop->instance_id())) {
+          assert(SplitUniqueTypes == 2, "");
+          return true; // arg escape
+        }
+      }
+    }
     return false;
   }
   if (t_oop->is_ptr_to_boxed_value()) {

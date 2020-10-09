@@ -671,8 +671,14 @@ bool ArrayCopyNode::may_modify(const TypeOopPtr *t_oop, MemBarNode* mb, PhaseTra
   guarantee(c != NULL, "step_over_gc_barrier failed, there must be something to step to.");
   if (c->is_Region()) {
     for (uint i = 1; i < c->req(); i++) {
-      if (c->in(i) != NULL) {
+      if (c->in(i) != NULL && !c->in(i)->is_top()) {
         Node* n = c->in(i)->in(0);
+        while (n->is_If()) {
+          n = n->in(0)->in(0); // skip over ifs
+        }
+        if (n->is_Catch()) {
+          n = n->in(0)->in(0); // skip over slow path catch proj (fallthrough)
+        }
         if (may_modify_helper(t_oop, n, phase, call)) {
           ac = call->isa_ArrayCopy();
           assert(c == mb->in(0), "only for clone");
