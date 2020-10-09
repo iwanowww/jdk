@@ -79,7 +79,7 @@ address JNI_FastGetField::generate_fast_get_int_field0(BasicType type) {
   if (JvmtiExport::can_post_field_access()) {
     // Check to see if a field access watch has been set before we
     // take the fast path.
-    __ cmp32(ExternalAddress((address) JvmtiExport::get_field_access_count_addr()), 0);
+    __ cmp32(ExternalAddress((address) JvmtiExport::get_field_access_count_addr()), 0, noreg);
     __ jcc(Assembler::notZero, slow);
   }
 
@@ -135,7 +135,7 @@ address JNI_FastGetField::generate_fast_get_int_field0(BasicType type) {
     default:        ShouldNotReachHere();
   }
   // tail call
-  __ jump (ExternalAddress(slow_case_addr));
+  __ jump (ExternalAddress(slow_case_addr), noreg);
 
   __ flush ();
 
@@ -200,7 +200,7 @@ address JNI_FastGetField::generate_fast_get_long_field() {
   if (JvmtiExport::can_post_field_access()) {
     // Check to see if a field access watch has been set before we
     // take the fast path.
-    __ cmp32(ExternalAddress((address) JvmtiExport::get_field_access_count_addr()), 0);
+    __ cmp32(ExternalAddress((address) JvmtiExport::get_field_access_count_addr()), 0, noreg);
     __ jcc(Assembler::notZero, slow);
   }
 
@@ -250,7 +250,7 @@ address JNI_FastGetField::generate_fast_get_long_field() {
   __ pop  (rsi);
   address slow_case_addr = jni_GetLongField_addr();;
   // tail call
-  __ jump (ExternalAddress(slow_case_addr));
+  __ jump (ExternalAddress(slow_case_addr), noreg);
 
   __ flush ();
 
@@ -292,7 +292,7 @@ address JNI_FastGetField::generate_fast_get_float_field0(BasicType type) {
   if (JvmtiExport::can_post_field_access()) {
     // Check to see if a field access watch has been set before we
     // take the fast path.
-    __ cmp32(ExternalAddress((address) JvmtiExport::get_field_access_count_addr()), 0);
+    __ cmp32(ExternalAddress((address) JvmtiExport::get_field_access_count_addr()), 0, noreg);
     __ jcc(Assembler::notZero, slow);
   }
 
@@ -354,7 +354,7 @@ address JNI_FastGetField::generate_fast_get_float_field0(BasicType type) {
     default:       ShouldNotReachHere();
   }
   // tail call
-  __ jump (ExternalAddress(slow_case_addr));
+  __ jump (ExternalAddress(slow_case_addr), noreg);
 
   __ flush ();
 
