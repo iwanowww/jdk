@@ -537,6 +537,9 @@
           "Array size (number of elements) limit for scalar replacement")   \
           range(0, max_jint)                                                \
                                                                             \
+  product(bool, OptimizeFinalNonStaticFields, true,                         \
+          "Optimize final instance fields")                                 \
+                                                                            \
   product(bool, OptimizePtrCompare, true,                                   \
           "Use escape analysis to optimize pointers compare")               \
                                                                             \

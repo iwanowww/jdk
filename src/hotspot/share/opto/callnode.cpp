@@ -773,6 +773,22 @@ bool CallNode::may_modify(const TypeOopPtr *t_oop, PhaseTransform *phase) {
     // are not passed as arguments according to Escape Analysis.
     return false;
   }
+  if (t_oop->is_ptr_to_final_instance_field()) {
+    if (is_CallJava() && as_CallJava()->method() != NULL) {
+      ciMethod* m = as_CallJava()->method();
+      if (m->is_initializer()) {
+        Compile::AliasType* atp = phase->C->alias_type(t_oop);
+        ciField* f = atp->field();
+        assert(f != NULL, "");
+        if (f == NULL || m->holder()->is_subclass_of(f->holder())) {
+          return true; // ctor call
+        }
+      }
+      return false; // not a related ctor call
+    } else {
+      return false; // not a java call
+    }
+  }
   if (t_oop->is_ptr_to_boxed_value()) {
     ciKlass* boxing_klass = t_oop->klass();
     if (is_CallStaticJava() && as_CallStaticJava()->is_boxing_method()) {

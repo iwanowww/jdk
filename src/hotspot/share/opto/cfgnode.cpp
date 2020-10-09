@@ -935,14 +935,16 @@ PhiNode* PhiNode::slice_memory(const TypePtr* adr_type) const {
 // Split out an instance type from a bottom phi.
 PhiNode* PhiNode::split_out_instance(const TypePtr* at, PhaseIterGVN *igvn) const {
   const TypeOopPtr *t_oop = at->isa_oopptr();
-  assert(t_oop != NULL && t_oop->is_known_instance(), "expecting instance oopptr");
+  assert(t_oop != NULL && (t_oop->is_known_instance() || t_oop->is_ptr_to_final_instance_field()), "expecting instance oopptr");
   const TypePtr *t = adr_type();
   assert(type() == Type::MEMORY &&
          (t == TypePtr::BOTTOM || t == TypeRawPtr::BOTTOM ||
-          t->isa_oopptr() && !t->is_oopptr()->is_known_instance() &&
-          t->is_oopptr()->cast_to_exactness(true)
-           ->is_oopptr()->cast_to_ptr_type(t_oop->ptr())
-           ->is_oopptr()->cast_to_instance_id(t_oop->instance_id()) == t_oop),
+          (t->isa_oopptr() &&
+          !t->is_oopptr()->is_known_instance() &&
+          !t->is_oopptr()->is_ptr_to_final_instance_field() &&
+           t->is_oopptr()->cast_to_exactness(true)
+            ->is_oopptr()->cast_to_ptr_type(t_oop->ptr())
+            ->is_oopptr()->cast_to_instance_id(t_oop->instance_id()) == t_oop)),
          "bottom or raw memory required");
 
   // Check if an appropriate node already exists.

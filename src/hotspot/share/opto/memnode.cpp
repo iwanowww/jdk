@@ -141,16 +141,21 @@ Node *MemNode::optimize_simple_memory_chain(Node *mchain, const TypeOopPtr *t_oo
   bool is_boxed_value_load = t_oop->is_ptr_to_boxed_value() &&
                              (load != NULL) && load->is_Load() &&
                              (phase->is_IterGVN() != NULL);
-  if (!(is_instance || is_boxed_value_load))
+  bool is_instance_final_field_load = t_oop->is_ptr_to_final_instance_field() &&
+                             (load == NULL || load->is_Load()) && // Load or Phi
+                             (phase->is_IterGVN() != NULL);
+  if (!is_instance && !is_boxed_value_load && !is_instance_final_field_load) {
     return mchain;  // don't try to optimize non-instance types
+  }
   uint instance_id = t_oop->instance_id();
   Node *start_mem = phase->C->start()->proj_out_or_null(TypeFunc::Memory);
   Node *prev = NULL;
   Node *result = mchain;
   while (prev != result) {
     prev = result;
-    if (result == start_mem)
+    if (result == start_mem) {
       break;  // hit one of our sentinels
+    }
     // skip over a call which does not affect this memory slice
     if (result->is_Proj() && result->as_Proj()->_con == TypeFunc::Memory) {
       Node *proj_in = result->in(0);
@@ -206,17 +211,20 @@ Node *MemNode::optimize_memory_chain(Node *mchain, const TypePtr *t_adr, Node *l
   if (t_oop == NULL)
     return mchain;  // don't try to optimize non-oop types
   Node* result = optimize_simple_memory_chain(mchain, t_oop, load, phase);
-  bool is_instance = t_oop->is_known_instance_field();
   PhaseIterGVN *igvn = phase->is_IterGVN();
-  if (is_instance && igvn != NULL && result->is_Phi()) {
+  if (igvn != NULL && result->is_Phi() &&
+      (t_oop->is_known_instance_field() ||
+       t_oop->is_ptr_to_final_instance_field())) {
     PhiNode *mphi = result->as_Phi();
     assert(mphi->bottom_type() == Type::MEMORY, "memory phi required");
     const TypePtr *t = mphi->adr_type();
     if (t == TypePtr::BOTTOM || t == TypeRawPtr::BOTTOM ||
-        (t->isa_oopptr() && !t->is_oopptr()->is_known_instance() &&
-         t->is_oopptr()->cast_to_exactness(true)
+        (t->isa_oopptr() && !t->is_oopptr()->is_known_instance() && !t->is_oopptr()->is_ptr_to_final_instance_field() &&
+         (t_oop->ptr() != TypePtr::Constant || t->is_oopptr()->ptr() == t_oop->ptr()) && // FIXME: TypePtr::cast_to_ptr_type(PTR) can't handle Constant case
+         (t->is_oopptr()->cast_to_exactness(true)
            ->is_oopptr()->cast_to_ptr_type(t_oop->ptr())
-            ->is_oopptr()->cast_to_instance_id(t_oop->instance_id()) == t_oop)) {
+           ->is_oopptr()->cast_to_instance_id(t_oop->instance_id()) == t_oop))) {
+      assert(t != t_oop, "sanity");
       // clone the Phi with our address type
       result = mphi->split_out_instance(t_adr, igvn);
     } else {
@@ -1404,7 +1412,8 @@ Node *LoadNode::split_through_phi(PhaseGVN *phase) {
 
   assert((t_oop != NULL) &&
          (t_oop->is_known_instance_field() ||
-          t_oop->is_ptr_to_boxed_value()), "invalide conditions");
+          t_oop->is_ptr_to_boxed_value() ||
+          t_oop->is_ptr_to_final_instance_field()), "invalide conditions");
 
   Compile* C = phase->C;
   intptr_t ignore = 0;
@@ -1658,7 +1667,8 @@ Node *LoadNode::Ideal(PhaseGVN *phase, bool can_reshape) {
     const TypeOopPtr *t_oop = addr_t->isa_oopptr();
     if ((t_oop != NULL) &&
         (t_oop->is_known_instance_field() ||
-         t_oop->is_ptr_to_boxed_value())) {
+         t_oop->is_ptr_to_boxed_value() ||
+         t_oop->is_ptr_to_final_instance_field())) {
       PhaseIterGVN *igvn = phase->is_IterGVN();
       if (igvn != NULL && igvn->_worklist.member(opt_mem)) {
         // Delay this transformation until memory Phi is processed.
@@ -1672,6 +1682,8 @@ Node *LoadNode::Ideal(PhaseGVN *phase, bool can_reshape) {
       if (t_oop->is_ptr_to_boxed_value()) {
         Node* result = eliminate_autobox(phase);
         if (result != NULL) return result;
+      } else if (t_oop->is_ptr_to_final_instance_field()) {
+        // FIXME: needed?
       }
     }
   }

@@ -2994,6 +2994,7 @@ TypeOopPtr::TypeOopPtr(TYPES t, PTR ptr, ciKlass* k, bool xk, ciObject* o, int o
     _is_ptr_to_narrowoop(false),
     _is_ptr_to_narrowklass(false),
     _is_ptr_to_boxed_value(false),
+    _is_ptr_to_final_instance_field(false),
     _instance_id(instance_id) {
   if (Compile::current()->eliminate_boxing() && (t == InstPtr) &&
       (offset > 0) && xk && (k != 0) && k->is_instance_klass()) {
@@ -3046,6 +3047,11 @@ TypeOopPtr::TypeOopPtr(TYPES t, PTR ptr, ciKlass* k, bool xk, ciObject* o, int o
           if (field != NULL) {
             BasicType basic_elem_type = field->layout_type();
             _is_ptr_to_narrowoop = UseCompressedOops && is_reference_type(basic_elem_type);
+            _is_ptr_to_final_instance_field = OptimizeFinalNonStaticFields &&
+                                              true && // !field->is_static()
+                                              field->is_constant() &&
+                                              // FIXME: only stable fields with non-default values can be optimized
+                                              (!FoldStableValues || !field->is_stable() || (field->is_final() && !field->has_initialized_final_update())); // see ciField::initialize_from()
           } else if (klass()->equals(ciEnv::current()->Object_klass())) {
             // Compile::find_alias_type() cast exactness on all types to verify
             // that it does not affect alias type.
