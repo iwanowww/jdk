@@ -5248,7 +5248,7 @@ InstanceKlass* ClassFileParser::create_instance_klass(bool changed_by_loadhook,
   InstanceKlass* const ik =
     InstanceKlass::allocate_instance_klass(*this, CHECK_NULL);
 
-  if (is_hidden()) {
+  if (is_hidden() && !UseNewCode) {
     mangle_hidden_class_name(ik);
   }
 
@@ -5847,7 +5847,9 @@ void ClassFileParser::parse_stream(const ClassFileStream* const stream,
   _orig_cp_size = cp_size;
   if (is_hidden()) { // Add a slot for hidden class name.
     assert(_max_num_patched_klasses == 0, "Sanity check");
-    cp_size++;
+    if (!UseNewCode) {
+      cp_size++;
+    }
   } else {
     if (int(cp_size) + _max_num_patched_klasses > 0xffff) {
       THROW_MSG(vmSymbols::java_lang_InternalError(), "not enough space for patched classes");

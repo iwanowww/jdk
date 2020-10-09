@@ -1341,6 +1341,8 @@ static void kill_dead_code( Node *dead, PhaseIterGVN *igvn ) {
   // Con's are a popular node to re-hit in the hash table again.
   if( dead->is_Con() ) return;
 
+  Node* idead = dead;
+
   ResourceMark rm;
   Node_List nstack;
 
@@ -1394,6 +1396,9 @@ static void kill_dead_code( Node *dead, PhaseIterGVN *igvn ) {
         k = dead->last_outs(kmin);
       }
     } else { // (dead->outcnt() == 0)
+      if (TraceIterativeGVN) {
+        tty->print("dead %d => ", idead->_idx); dead->dump();
+      }
       // Done with outputs.
       igvn->hash_delete(dead);
       igvn->_worklist.remove(dead);

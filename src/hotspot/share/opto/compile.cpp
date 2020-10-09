@@ -415,6 +415,49 @@ void Compile::remove_useless_nodes(Unique_Node_List &useful) {
   debug_only(verify_graph_edges(true/*check for no_dead_code*/);)
 }
 
+void Compile::remove_useless_nodes(PhaseIterGVN &igvn) {
+  for_igvn()->clear();
+  initial_gvn()->replace_with(&igvn);
+  {
+    ResourceMark rm;
+    PhaseRemoveUseless pru(initial_gvn(), for_igvn());
+  }
+  {
+    igvn = PhaseIterGVN(initial_gvn());
+    igvn.optimize();
+  }
+  Unique_Node_List useful_nodes;
+  C->identify_useful_nodes(useful_nodes);
+  useful_nodes.dump();
+}
+
+void Compile::dump_cfg() {
+  Unique_Node_List useful;
+
+  int estimated_worklist_size = live_nodes();
+  useful.map(estimated_worklist_size, NULL);  // preallocate space
+
+  // Initialize worklist
+  if (start() != NULL) {
+    useful.push(start());
+  }
+
+  // Push all useful nodes onto the list, breadthfirst
+  for( uint next = 0; next < useful.size(); ++next ) {
+    assert( next < unique(), "Unique useful nodes < total nodes");
+    Node* n = useful.at(next);
+    assert(n->is_Start() || n->is_CFG(), "not a cfg node: %s", n->Name());
+    for (DUIterator_Fast imax, i = n->fast_outs(imax); i < imax; i++) {
+      Node* u = n->fast_out(i);
+      if (u->is_CFG()) {
+        useful.push(u);
+      }
+    }
+  }
+
+  useful.dump();
+}
+
 // ============================================================================
 //------------------------------CompileWrapper---------------------------------
 class CompileWrapper : public StackObj {
@@ -1966,6 +2009,9 @@ void Compile::inline_incrementally(PhaseIterGVN& igvn) {
   assert( igvn._worklist.size() == 0, "should be done with igvn" );
 
   if (_string_late_inlines.length() > 0) {
+    if (UseNewCode2) {
+      PhaseIdealLoop::optimize(igvn, LoopOptsNone);
+    }
     assert(has_stringbuilder(), "inconsistent");
     for_igvn()->clear();
     initial_gvn()->replace_with(&igvn);

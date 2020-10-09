@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 #include "jvm.h"
+#include "ci/ciReplay.hpp"
 #include "classfile/classFileStream.hpp"
 #include "classfile/classLoader.hpp"
 #include "classfile/classLoaderData.hpp"
@@ -99,6 +100,7 @@
 #endif
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
+#include "ci/ciReplay.hpp"
 #endif
 
 #include <errno.h>
@@ -1093,6 +1095,9 @@ static jclass jvm_lookup_define_class(jclass lookup, const char *name,
                                   ik->external_name(),
                                   host_class->external_name(),
                                   ik->is_hidden() ? "is hidden" : "is not hidden");
+    }
+    if (ReplayCompiles) {
+      ciReplay::on_load_klass(ik);
     }
   }
   assert(Reflection::is_same_class_package(lookup_k, defined_k),

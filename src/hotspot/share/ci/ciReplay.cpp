@@ -31,6 +31,8 @@
 #include "ci/ciUtilities.inline.hpp"
 #include "classfile/symbolTable.hpp"
 #include "compiler/compileBroker.hpp"
+#include "interpreter/bytecode.hpp"
+#include "interpreter/linkResolver.hpp"
 #include "memory/allocation.inline.hpp"
 #include "memory/oopFactory.hpp"
 #include "memory/resourceArea.hpp"
@@ -92,6 +94,8 @@ typedef struct _ciInlineRecord {
 
 class  CompileReplay;
 static CompileReplay* replay_state;
+
+static GrowableArray<InstanceKlass*>* dynamically_loaded_klasses;
 
 class CompileReplay : public StackObj {
  private:
@@ -353,7 +357,19 @@ class CompileReplay : public StackObj {
       if (_iklass != NULL) {
         k = (Klass*)_iklass->find_klass(ciSymbol::make(klass_name->as_C_string()))->constant_encoding();
       } else {
-        k = SystemDictionary::resolve_or_fail(klass_name, _loader, _protection_domain, true, THREAD);
+        k = SystemDictionary::resolve_or_fail(klass_name, _loader, _protection_domain, false, THREAD);
+      }
+      if (k == NULL && HAS_PENDING_EXCEPTION && PENDING_EXCEPTION->is_a(SystemDictionary::ClassNotFoundException_klass())) {
+        // Try one more time with dynamically loaded classes
+        for (int i = 0; i < dynamically_loaded_klasses->length(); i++) {
+          InstanceKlass* ik = dynamically_loaded_klasses->at(i);
+          const char* ik_name  = ik->name()->as_utf8();
+          if (strcmp(ik_name, str) == 0) {
+            CLEAR_PENDING_EXCEPTION;
+            _error_message = NULL;
+            return ik;
+          }
+        }
       }
       if (HAS_PENDING_EXCEPTION) {
         oop throwable = PENDING_EXCEPTION;
@@ -462,6 +478,10 @@ class CompileReplay : public StackObj {
     } else if (strcmp("JvmtiExport", cmd) == 0) {
       process_JvmtiExport(CHECK);
 #endif // INCLUDE_JVMTI
+    } else if (strcmp("break", cmd) == 0) {
+      os::breakpoint();
+    } else if (strcmp("resolve", cmd) == 0) {
+      process_resolve(CHECK);
     } else {
       report_error("unknown command");
     }
@@ -570,11 +590,23 @@ class CompileReplay : public StackObj {
         if (had_error()) {
           break;
         }
-        Method* inl_method = parse_method(CHECK);
-        if (had_error()) {
-          break;
-        }
-        new_ciInlineRecord(inl_method, bci, depth);
+//        Method* inl_method = parse_method(CHECK);
+//        if (had_error()) {
+//          break;
+//        }
+//        new_ciInlineRecord(inl_method, bci, depth);
+        Symbol* klass_name = parse_symbol(CHECK);
+        Symbol* method_name = parse_symbol(CHECK);
+        Symbol* method_signature = parse_symbol(CHECK);
+
+        // Create and initialize a record for a ciInlineRecord
+        ciInlineRecord* rec = NEW_RESOURCE_OBJ(ciInlineRecord);
+        rec->_klass_name =  klass_name->as_utf8();
+        rec->_method_name = method_name->as_utf8();
+        rec->_signature = method_signature->as_utf8();
+        rec->_inline_bci = bci;
+        rec->_inline_depth = depth;
+        _ci_inline_records->append(rec);
       }
     }
     if (_imethod != NULL) {
@@ -715,7 +747,9 @@ class CompileReplay : public StackObj {
         tty->cr();
         if (ReplayIgnoreInitErrors) {
           CLEAR_PENDING_EXCEPTION;
-          k->set_init_state(InstanceKlass::fully_initialized);
+          if (!k->is_initialized() && !k->is_in_error_state()) {
+            k->set_init_state(InstanceKlass::fully_initialized);
+          }
         } else {
           return;
         }
@@ -921,6 +955,46 @@ class CompileReplay : public StackObj {
   }
 #endif // INCLUDE_JVMTI
 
+  void process_resolve(TRAPS) {
+    Method* method = parse_method(CHECK);
+    if (had_error()) return;
+    int bci = parse_int("bci");
+
+    // Resolve call site
+    Bytecode_invoke bytecode(methodHandle(THREAD, method), bci);
+    Bytecodes::Code bc = bytecode.invoke_code();
+
+    CallInfo info;
+    constantPoolHandle pool(THREAD, method->constants());
+    int index = bytecode.index();
+    LinkResolver::resolve_invoke(info, Handle(), pool, index, bc, CHECK);
+    switch (bc) {
+      case Bytecodes::_invokestatic: {
+        assert(info.call_kind() == CallInfo::direct_call, "");
+        int cache_index = ConstantPool::decode_cpcache_index(index, false);
+        ConstantPoolCacheEntry* cp_cache_entry = pool->cache()->entry_at(cache_index);
+        methodHandle resolved_method(THREAD, info.resolved_method());
+        InstanceKlass* sender = method->method_holder();
+        sender = sender->is_unsafe_anonymous() ? sender->unsafe_anonymous_host() : sender;
+        cp_cache_entry->set_direct_call(bc, resolved_method, sender->is_interface());
+        break;
+      }
+      case Bytecodes::_invokehandle: {
+        int cache_index = ConstantPool::decode_cpcache_index(index, true);
+        assert(cache_index >= 0 && cache_index < pool->cache()->length(), "unexpected cache index");
+        ConstantPoolCacheEntry* cp_cache_entry = pool->cache()->entry_at(cache_index);
+        cp_cache_entry->set_method_handle(pool, info);
+        break;
+      }
+      case Bytecodes::_invokedynamic: {
+        ConstantPoolCacheEntry* cp_cache_entry = pool->invokedynamic_cp_cache_entry_at(index);
+        cp_cache_entry->set_dynamic_call(pool, info);
+        break;
+      }
+      default: fatal("unexpected bytecode");
+    }
+  }
+
   // Create and initialize a record for a ciMethod
   ciMethodRecord* new_ciMethod(Method* method) {
     ciMethodRecord* rec = NEW_RESOURCE_OBJ(ciMethodRecord);
@@ -1003,9 +1077,9 @@ class CompileReplay : public StackObj {
         ciInlineRecord* rec = records->at(i);
         if ((rec->_inline_bci == bci) &&
             (rec->_inline_depth == depth) &&
-            (strcmp(rec->_klass_name, klass_name) == 0) &&
-            (strcmp(rec->_method_name, method_name) == 0) &&
-            (strcmp(rec->_signature, signature) == 0)) {
+            ((strcmp(rec->_klass_name,  "*") == 0 || strcmp(rec->_klass_name,  klass_name)  == 0)) &&
+            ((strcmp(rec->_method_name, "*") == 0 || strcmp(rec->_method_name, method_name) == 0)) &&
+            ((strcmp(rec->_signature,   "*") == 0 || strcmp(rec->_signature,   signature)   == 0))) {
           return rec;
         }
       }
@@ -1112,6 +1186,8 @@ void* ciReplay::load_inline_data(ciMethod* method, int entry_bci, int comp_level
 int ciReplay::replay_impl(TRAPS) {
   HandleMark hm(THREAD);
   ResourceMark rm(THREAD);
+
+  dynamically_loaded_klasses = new GrowableArray<InstanceKlass*>(2048);
 
   if (ReplaySuppressInitializers > 2) {
     // ReplaySuppressInitializers > 2 means that we want to allow
@@ -1281,5 +1357,9 @@ bool ciReplay::is_loaded(Method* method) {
 
   ciMethodRecord* rec = replay_state->find_ciMethodRecord(method);
   return rec != NULL;
+}
+
+void ciReplay::on_load_klass(InstanceKlass* ik) {
+  dynamically_loaded_klasses->append(ik);
 }
 #endif // PRODUCT

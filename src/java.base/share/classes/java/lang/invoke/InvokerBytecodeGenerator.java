@@ -124,7 +124,7 @@ class InvokerBytecodeGenerator {
             className = invokerName.substring(0, p);
             invokerName = invokerName.substring(p + 1);
         }
-        if (DUMP_CLASS_FILES) {
+        if (DUMP_CLASS_FILES || DEBUG_METHOD_HANDLE_NAMES) {
             className = makeDumpableClassName(className);
         }
         this.className  = className;
@@ -188,6 +188,9 @@ class InvokerBytecodeGenerator {
             } catch (Exception e) {
                 throw newInternalError(e);
             }
+        } else if (DEBUG_METHOD_HANDLE_NAMES) {
+            DUMP_CLASS_FILES_COUNTERS = new HashMap<>();
+            DUMP_CLASS_FILES_DIR = null;
         } else {
             DUMP_CLASS_FILES_COUNTERS = null;
             DUMP_CLASS_FILES_DIR = null;
@@ -749,6 +752,10 @@ class InvokerBytecodeGenerator {
             case DIRECT_INVOKE_STATIC:      // fall-through
             case DIRECT_INVOKE_STATIC_INIT: // fall-through
             case DIRECT_INVOKE_VIRTUAL:     return resolveFrom(name, invokerType, DirectMethodHandle.Holder.class);
+        }
+        if (TRACE_RESOLVE) {
+            System.out.println("[LF_RESOLVE] " + form.kind + " " + name + " " +
+                    shortenSignature(basicTypeSignature(invokerType)) + " (fail)");
         }
         return null;
     }

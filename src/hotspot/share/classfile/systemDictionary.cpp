@@ -1067,6 +1067,21 @@ InstanceKlass* SystemDictionary::parse_stream(Symbol* class_name,
       // deoptimizations.
       add_to_hierarchy(k, CHECK_NULL); // No exception, but can block
       // But, do not add to dictionary.
+
+//      if (UseNewCode2) {
+//        // Add to systemDictionary - so other classes can see it.
+//        // Grabs and releases SystemDictionary_lock.
+//        HandleMark hm(THREAD);
+//        ClassLoaderData* loader_data = k->class_loader_data();
+//        Handle class_loader_h(THREAD, loader_data->class_loader());
+//
+//        Symbol* name_h = k->name();
+//        Dictionary* dictionary = loader_data->dictionary();
+//        unsigned int d_hash = dictionary->compute_hash(name_h);
+//        unsigned int p_hash = placeholders()->compute_hash(name_h);
+//        int p_index = placeholders()->hash_to_index(p_hash);
+//        update_dictionary(d_hash, p_index, p_hash, k, class_loader_h, THREAD);
+//      }
     }
 
     // Rewrite and patch constant pool here.

@@ -912,6 +912,9 @@ class Compile : public Phase {
   // record_for_igvn as needed.
   void gvn_replace_by(Node* n, Node* nn);
 
+  void              dump_cfg();
+
+  void              remove_useless_nodes(PhaseIterGVN &igvn);
 
   void              identify_useful_nodes(Unique_Node_List &useful);
   void              update_dead_node_list(Unique_Node_List &useful);
