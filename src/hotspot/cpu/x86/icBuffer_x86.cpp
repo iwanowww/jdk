@@ -52,14 +52,14 @@ int InlineCacheBuffer::ic_stub_code_size() {
 void InlineCacheBuffer::assemble_ic_buffer_code(address code_begin, void* cached_value, address entry_point) {
   ResourceMark rm;
   CodeBuffer      code(code_begin, ic_stub_code_size());
-  MacroAssembler* masm            = new MacroAssembler(&code);
+  MacroAssembler* masm = new MacroAssembler(&code);
   // note: even though the code contains an embedded value, we do not need reloc info
   // because
   // (1) the value is old (i.e., doesn't matter for scavenges)
   // (2) these ICStubs are removed *before* a GC happens, so the roots disappear
   // assert(cached_value == NULL || cached_oop->is_perm(), "must be perm oop");
   masm->lea(rax, AddressLiteral((address) cached_value, relocInfo::metadata_type));
-  masm->jump(ExternalAddress(entry_point));
+  masm->jump(ExternalAddress(entry_point), rscratch1);
 }
 
 
