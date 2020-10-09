@@ -496,7 +496,7 @@ class StubGenerator: public StubCodeGenerator {
     // complete return to VM
     assert(StubRoutines::_call_stub_return_address != NULL,
            "_call_stub_return_address must have been generated before");
-    __ jump(RuntimeAddress(StubRoutines::_call_stub_return_address), rscratch1);
+    __ jump(RuntimeAddress(StubRoutines::_call_stub_return_address), noreg /*rscratch*/); // stub
 
     return start;
   }
@@ -1181,10 +1181,10 @@ class StubGenerator: public StubCodeGenerator {
     __ cmpptr(to, from);
     __ lea(end_from, Address(from, count, sf, 0));
     if (NOLp == NULL) {
-      ExternalAddress no_overlap(no_overlap_target);
-      __ jump_cc(Assembler::belowEqual, no_overlap, rscratch1);
+      ExternalAddress no_overlap(no_overlap_target); // stub
+      __ jump_cc(Assembler::belowEqual, no_overlap, noreg /*rscratch*/);
       __ cmpptr(to, end_from);
-      __ jump_cc(Assembler::aboveEqual, no_overlap, rscratch1);
+      __ jump_cc(Assembler::aboveEqual, no_overlap, noreg /*rscratch*/);
     } else {
       __ jcc(Assembler::belowEqual, (*NOLp));
       __ cmpptr(to, end_from);
@@ -3028,19 +3028,19 @@ class StubGenerator: public StubCodeGenerator {
     __ jccb(Assembler::zero, L_int_aligned);
 
     __ testb(bits, BytesPerShort-1);
-    __ jump_cc(Assembler::notZero, RuntimeAddress(byte_copy_entry), rscratch1);
+    __ jump_cc(Assembler::notZero, RuntimeAddress(byte_copy_entry), noreg /*rscratch*/); // stub
 
     __ BIND(L_short_aligned);
     __ shrptr(size, LogBytesPerShort); // size => short_count
-    __ jump(RuntimeAddress(short_copy_entry), rscratch1);
+    __ jump(RuntimeAddress(short_copy_entry), noreg /*rscratch*/); // stub
 
     __ BIND(L_int_aligned);
     __ shrptr(size, LogBytesPerInt); // size => int_count
-    __ jump(RuntimeAddress(int_copy_entry), rscratch1);
+    __ jump(RuntimeAddress(int_copy_entry), noreg /*rscratch*/); // stub
 
     __ BIND(L_long_aligned);
     __ shrptr(size, LogBytesPerLong); // size => qword_count
-    __ jump(RuntimeAddress(long_copy_entry), rscratch1);
+    __ jump(RuntimeAddress(long_copy_entry), noreg /*rscratch*/); // stub
 
     return start;
   }
@@ -3284,7 +3284,7 @@ class StubGenerator: public StubCodeGenerator {
     __ lea(from, Address(src, src_pos, Address::times_1, 0));// src_addr
     __ lea(to,   Address(dst, dst_pos, Address::times_1, 0));// dst_addr
     __ movl2ptr(count, r11_length); // length
-    __ jump(RuntimeAddress(byte_copy_entry), rscratch1);
+    __ jump(RuntimeAddress(byte_copy_entry), noreg /*rscratch*/); // stub
 
   __ BIND(L_copy_shorts);
     __ cmpl(rax_elsize, LogBytesPerShort);
@@ -3292,7 +3292,7 @@ class StubGenerator: public StubCodeGenerator {
     __ lea(from, Address(src, src_pos, Address::times_2, 0));// src_addr
     __ lea(to,   Address(dst, dst_pos, Address::times_2, 0));// dst_addr
     __ movl2ptr(count, r11_length); // length
-    __ jump(RuntimeAddress(short_copy_entry), rscratch1);
+    __ jump(RuntimeAddress(short_copy_entry), noreg /*rscratch*/); // stub
 
   __ BIND(L_copy_ints);
     __ cmpl(rax_elsize, LogBytesPerInt);
@@ -3300,7 +3300,7 @@ class StubGenerator: public StubCodeGenerator {
     __ lea(from, Address(src, src_pos, Address::times_4, 0));// src_addr
     __ lea(to,   Address(dst, dst_pos, Address::times_4, 0));// dst_addr
     __ movl2ptr(count, r11_length); // length
-    __ jump(RuntimeAddress(int_copy_entry), rscratch1);
+    __ jump(RuntimeAddress(int_copy_entry), noreg /*rscratch*/); // stub
 
   __ BIND(L_copy_longs);
 #ifdef ASSERT
@@ -3317,7 +3317,7 @@ class StubGenerator: public StubCodeGenerator {
     __ lea(from, Address(src, src_pos, Address::times_8, 0));// src_addr
     __ lea(to,   Address(dst, dst_pos, Address::times_8, 0));// dst_addr
     __ movl2ptr(count, r11_length); // length
-    __ jump(RuntimeAddress(long_copy_entry), rscratch1);
+    __ jump(RuntimeAddress(long_copy_entry), noreg /*rscratch*/); // strub
 
     // ObjArrayKlass
   __ BIND(L_objArray);
@@ -3342,7 +3342,7 @@ class StubGenerator: public StubCodeGenerator {
 #ifdef _WIN64
     __ pop(rklass_tmp); // Restore callee-save rdi
 #endif
-    __ jump(RuntimeAddress(oop_copy_entry), rscratch1);
+    __ jump(RuntimeAddress(oop_copy_entry), noreg /*rscratch*/); // stub
 
   __ BIND(L_checkcast_copy);
     // live at this point:  r10_src_klass, r11_length, rax (dst_klass)
@@ -3390,7 +3390,7 @@ class StubGenerator: public StubCodeGenerator {
       // Set up arguments for checkcast_copy_entry.
       setup_arg_regs(4);
       __ movptr(r8, r11_dst_klass);  // dst.klass.element_klass, r8 is c_rarg4 on Linux/Solaris
-      __ jump(RuntimeAddress(checkcast_copy_entry), rscratch1);
+      __ jump(RuntimeAddress(checkcast_copy_entry), noreg /*rscratch*/); // stub
     }
 
   __ BIND(L_failed);
@@ -3566,12 +3566,12 @@ class StubGenerator: public StubCodeGenerator {
 
   // Utility routine for loading a 128-bit key word in little endian format
   // can optionally specify that the shuffle mask is already in an xmmregister
-  void load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask = NULL) {
+  void load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask=NULL) {
     __ movdqu(xmmdst, Address(key, offset));
     if (xmm_shuf_mask != NULL) {
       __ pshufb(xmmdst, xmm_shuf_mask);
     } else {
-      __ pshufb(xmmdst, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), rscratch1);
+      __ pshufb(xmmdst, __ as_Address(ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()))); // stub
     }
   }
 
@@ -3619,7 +3619,7 @@ class StubGenerator: public StubCodeGenerator {
     // keylen could be only {11, 13, 15} * 4 = {44, 52, 60}
     __ movl(keylen, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
 
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), rscratch1);
+    __ movdqu(xmm_key_shuf_mask, __ as_Address(ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()))); // stub
     __ movdqu(xmm_result, Address(from, 0));  // get 16 bytes of input
 
     // For encryption, the java expanded key ordering is just what we need
@@ -3713,7 +3713,7 @@ class StubGenerator: public StubCodeGenerator {
     // keylen could be only {11, 13, 15} * 4 = {44, 52, 60}
     __ movl(keylen, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
 
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), rscratch1);
+    __ movdqu(xmm_key_shuf_mask, __ as_Address(ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr())));
     __ movdqu(xmm_result, Address(from, 0));
 
     // for decryption java expanded key ordering is rotated one position from what we want
@@ -3830,7 +3830,7 @@ class StubGenerator: public StubCodeGenerator {
 #endif
 
     const XMMRegister xmm_key_shuf_mask = xmm_temp;  // used temporarily to swap key bytes up front
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), rscratch1);
+    __ movdqu(xmm_key_shuf_mask, __ as_Address(ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr())));
     // load up xmm regs xmm2 thru xmm12 with key 0x00 - 0xa0
     for (int rnum = XMM_REG_NUM_KEY_FIRST, offset = 0x00; rnum <= XMM_REG_NUM_KEY_FIRST+10; rnum++) {
       load_key(as_XMMRegister(rnum), key, offset, xmm_key_shuf_mask);
@@ -3985,7 +3985,7 @@ class StubGenerator: public StubCodeGenerator {
     // the java expanded key ordering is rotated one position from what we want
     // so we start from 0x10 here and hit 0x00 last
     const XMMRegister xmm_key_shuf_mask = xmm1;  // used temporarily to swap key bytes up front
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), rscratch1);
+    __ movdqu(xmm_key_shuf_mask, __ as_Address(ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr())));
     // load up xmm regs 5 thru 15 with key 0x10 - 0xa0 - 0x00
     for (int rnum = XMM_REG_NUM_KEY_FIRST, offset = 0x10; rnum < XMM_REG_NUM_KEY_LAST; rnum++) {
       load_key(as_XMMRegister(rnum), key, offset, xmm_key_shuf_mask);
@@ -4979,7 +4979,7 @@ void roundDeclast(XMMRegister xmm_reg) {
     if (xmm_shuf_mask != NULL) {
       __ pshufb(xmmdst, xmm_shuf_mask);
     } else {
-      __ pshufb(xmmdst, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), rscratch1);
+      __ pshufb(xmmdst, __ as_Address(ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr())));
     }
     __ evshufi64x2(xmmdst, xmmdst, xmmdst, 0x0, Assembler::AVX_512bit);
 
@@ -5019,7 +5019,7 @@ address generate_cipherBlockChaining_decryptVectorAESCrypt() {
 
     // Temporary variable declaration for swapping key bytes
     const XMMRegister xmm_key_shuf_mask = xmm1;
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), rscratch1);
+    __ movdqu(xmm_key_shuf_mask, __ as_Address(ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr())));
 
     // Calculate number of rounds from key size: 44 for 10-rounds, 52 for 12-rounds, 60 for 14-rounds
     const Register rounds = rbx;
@@ -5344,7 +5344,7 @@ address generate_avx_ghash_processBlocks() {
 
     __ enter();
 
-    __ movdqu(xmm_temp10, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), rscratch1);
+    __ movdqu(xmm_temp10, __ as_Address(ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr())));
 
     __ movdqu(xmm_temp0, Address(state, 0));
     __ pshufb(xmm_temp0, xmm_temp10);
@@ -5352,7 +5352,7 @@ address generate_avx_ghash_processBlocks() {
 
     __ BIND(L_ghash_loop);
     __ movdqu(xmm_temp2, Address(data, 0));
-    __ pshufb(xmm_temp2, ExternalAddress(StubRoutines::x86::ghash_byte_swap_mask_addr()), rscratch1);
+    __ pshufb(xmm_temp2, __ as_Address(ExternalAddress(StubRoutines::x86::ghash_byte_swap_mask_addr())));
 
     __ movdqu(xmm_temp1, Address(subkeyH, 0));
     __ pshufb(xmm_temp1, xmm_temp10);
@@ -7847,7 +7847,7 @@ address generate_avx_ghash_processBlocks() {
     __ should_not_reach_here();
     __ bind(L);
 #endif // ASSERT
-    __ jump(RuntimeAddress(StubRoutines::forward_exception_entry()), rscratch1);
+    __ jump(RuntimeAddress(StubRoutines::forward_exception_entry()), noreg /*rscratch*/); // stub
 
 
     // codeBlob framesize is in words (not VMRegImpl::slot_size)
