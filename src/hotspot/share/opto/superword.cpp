@@ -2379,6 +2379,13 @@ void SuperWord::remove_and_insert(MemNode *current, MemNode *prev, MemNode *lip,
       assert(use->in(MemNode::Memory) == insert_pt, "must be");
       _igvn.replace_input_of(use, MemNode::Memory, current);
       --i; //deleted this edge; rescan position
+    } else if (!sched_up && use->is_MergeMem()) { // FIXME: drop sched_up check?
+      uint pos; //lip (lower insert point) must be the last one in the memory slice
+      for (pos=1; pos < use->req(); pos++) {
+        if (use->in(pos) == insert_pt) break;
+      }
+      _igvn.replace_input_of(use, pos, current);
+      --i;
     } else if (!sched_up && use->is_Phi() && use->bottom_type() == Type::MEMORY) {
       uint pos; //lip (lower insert point) must be the last one in the memory slice
       for (pos=1; pos < use->req(); pos++) {
