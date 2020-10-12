@@ -1,0 +1,80 @@
+***************
+*** 144,149 ****
+  #ifdef ASSERT
+    Thread* _thread;
+    ResourceMark* _previous_resource_mark;
+  #endif //ASSERT
+  
+    void initialize(Thread *thread) {
+--- 165,171 ----
+  #ifdef ASSERT
+    Thread* _thread;
+    ResourceMark* _previous_resource_mark;
++   source_location _location;
+  #endif //ASSERT
+  
+    void initialize(Thread *thread) {
+***************
+*** 168,179 ****
+      initialize(thread);
+    }
+  #else
+-   ResourceMark(Thread *thread);
+  #endif // ASSERT
+  
+-   ResourceMark()               { initialize(Thread::current()); }
+  
+-   ResourceMark( ResourceArea *r ) :
+      _area(r), _chunk(r->_chunk), _hwm(r->_hwm), _max(r->_max) {
+      _size_in_bytes = r->_size_in_bytes;
+      debug_only(_area->_nesting++;)
+--- 190,204 ----
+      initialize(thread);
+    }
+  #else
++   ResourceMark(Thread *thread, const source_location& location = source_location::current());
+  #endif // ASSERT
+  
++   ResourceMark(DEBUG_ONLY( const source_location& location = source_location::current() )) {
++     initialize(Thread::current());
++     DEBUG_ONLY( _location = location; )
++   }
+  
++   ResourceMark( ResourceArea *r DEBUG_ONLY( COMMA const source_location& location = source_location::current() )) :
+      _area(r), _chunk(r->_chunk), _hwm(r->_hwm), _max(r->_max) {
+      _size_in_bytes = r->_size_in_bytes;
+      debug_only(_area->_nesting++;)
+***************
+*** 188,193 ****
+        _thread = NULL;
+        _previous_resource_mark = NULL;
+      }
+  #endif // ASSERT
+    }
+  
+--- 213,219 ----
+        _thread = NULL;
+        _previous_resource_mark = NULL;
+      }
++     _location = location;
+  #endif // ASSERT
+    }
+  
+***************
+*** 222,227 ****
+  #endif // ASSERT
+    }
+  
+  
+   private:
+    void free_malloced_objects()                                         PRODUCT_RETURN;
+--- 248,256 ----
+  #endif // ASSERT
+    }
+  
++ #ifdef ASSERT
++   void dump_on(outputStream* out = tty);
++ #endif // ASSERT
+  
+   private:
+    void free_malloced_objects()                                         PRODUCT_RETURN;

@@ -1,0 +1,41 @@
+***************
+*** 62,76 ****
+  }
+  
+  #ifdef ASSERT
+- ResourceMark::ResourceMark(Thread *thread) {
+    assert(thread == Thread::current(), "not the current thread");
+    initialize(thread);
+  }
+  
+  DeoptResourceMark::DeoptResourceMark(Thread *thread) {
+    assert(thread == Thread::current(), "not the current thread");
+    initialize(thread);
+  }
+  #endif
+  
+  
+--- 62,84 ----
+  }
+  
+  #ifdef ASSERT
++ ResourceMark::ResourceMark(Thread *thread, const source_location& location) {
+    assert(thread == Thread::current(), "not the current thread");
+    initialize(thread);
++   _location = location;
+  }
+  
+  DeoptResourceMark::DeoptResourceMark(Thread *thread) {
+    assert(thread == Thread::current(), "not the current thread");
+    initialize(thread);
+  }
++ 
++ void ResourceMark::dump_on(outputStream* out) {
++   ResourceMark* rm = this;
++   for (int i = 0; rm != NULL; i++, rm = rm->_previous_resource_mark) {
++     out->print_cr("%d: %s:" SIZE_FORMAT", i, rm->_location.file_name(), rm->_location.line_number());
++   }
++ }
+  #endif
+  
+  
