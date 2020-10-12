@@ -214,7 +214,7 @@ Node *PhaseIdealLoop::get_early_ctrl_for_expensive(Node *n, Node* earliest) {
         if (nb_ctl_proj > 1) {
           break;
         }
-        assert(parent_ctl->is_Start() || parent_ctl->is_MemBar() || parent_ctl->is_Call() ||
+        assert(parent_ctl->is_Start() || parent_ctl->is_MemBar() || parent_ctl->is_Call() || parent_ctl->is_SafePoint() ||
                BarrierSet::barrier_set()->barrier_set_c2()->is_gc_barrier_node(parent_ctl), "unexpected node");
         assert(idom(ctl) == parent_ctl, "strange");
         next = idom(parent_ctl);
@@ -837,11 +837,11 @@ bool PhaseIdealLoop::is_counted_loop(Node* x, IdealLoopTree*& loop) {
   }
   set_subtree_ctrl(adjusted_limit);
 
-  if (LoopStripMiningIter == 0) {
+  if (LoopStripMiningIter == 0 /*&& !UseNewCode3*/) { // FIXME
     // Check for SafePoint on backedge and remove
     Node *sfpt = x->in(LoopNode::LoopBackControl);
-    if (sfpt->Opcode() == Op_SafePoint && is_deleteable_safept(sfpt)) {
-      lazy_replace( sfpt, iftrue );
+    if (sfpt->Opcode() == Op_SafePoint && is_deleteable_safepoint(sfpt)) {
+      remove_safepoint(sfpt, iftrue);
       if (loop->_safepts != NULL) {
         loop->_safepts->yank(sfpt);
       }
@@ -921,10 +921,13 @@ bool PhaseIdealLoop::is_counted_loop(Node* x, IdealLoopTree*& loop) {
   lazy_replace( iff, le ); // fix 'get_ctrl'
 
   Node *sfpt2 = le->in(0);
+  if (UseNewCode3 && sfpt2->is_Proj() && sfpt2->in(0)->Opcode() == Op_SafePoint) {
+    sfpt2 = sfpt2->in(0);
+  }
 
   Node* entry_control = init_control;
   bool strip_mine_loop = LoopStripMiningIter > 1 && loop->_child == NULL &&
-    sfpt2->Opcode() == Op_SafePoint && !loop->_has_call;
+                         sfpt2->Opcode() == Op_SafePoint && !loop->_has_call;
   IdealLoopTree* outer_ilt = NULL;
   if (strip_mine_loop) {
     outer_ilt = create_outer_strip_mined_loop(test, cmp, init_control, loop,
@@ -949,18 +952,40 @@ bool PhaseIdealLoop::is_counted_loop(Node* x, IdealLoopTree*& loop) {
 
   if (LoopStripMiningIter == 0 || strip_mine_loop) {
     // Check for immediately preceding SafePoint and remove
-    if (sfpt2->Opcode() == Op_SafePoint && (LoopStripMiningIter != 0 || is_deleteable_safept(sfpt2))) {
+    if (sfpt2->Opcode() == Op_SafePoint && (LoopStripMiningIter != 0 || is_deleteable_safepoint(sfpt2)) /*&& !UseNewCode3*/) {
       if (strip_mine_loop) {
-        Node* outer_le = outer_ilt->_tail->in(0);
-        Node* sfpt = sfpt2->clone();
-        sfpt->set_req(0, iffalse);
-        outer_le->set_req(0, sfpt);
-        // When this code runs, loop bodies have not yet been populated.
-        const bool body_populated = false;
-        register_control(sfpt, outer_ilt, iffalse, body_populated);
-        set_idom(outer_le, sfpt, dom_depth(sfpt));
+        if (UseNewCode3) {
+          assert(!UseNewCode3, "broken");
+          Node* outer_le = outer_ilt->_tail->in(0);
+          Node* sfpt = sfpt2->clone();
+          sfpt->set_req(0, iffalse);
+
+          Node* sfpt_ctrl = new ProjNode(sfpt, 0);
+          outer_le->set_req(0, sfpt_ctrl);
+
+          Node* sfpt2_mem = sfpt2->as_SafePoint()->proj_out(1 /*Memory*/);
+          Node* sfpt_mem = sfpt2_mem->clone();
+          sfpt_mem->set_req(0, sfpt);
+          _igvn.register_new_node_with_optimizer(sfpt_mem);
+          _igvn.replace_node(sfpt2_mem, sfpt_mem);
+
+          // When this code runs, loop bodies have not yet been populated.
+          const bool body_populated = false;
+          register_control(sfpt,      outer_ilt, iffalse, body_populated);
+          register_control(sfpt_ctrl, outer_ilt,    sfpt, body_populated);
+          set_idom(outer_le, sfpt_ctrl, dom_depth(sfpt_ctrl));
+        } else {
+          Node* outer_le = outer_ilt->_tail->in(0);
+          Node* sfpt = sfpt2->clone();
+          sfpt->set_req(0, iffalse);
+          outer_le->set_req(0, sfpt);
+          // When this code runs, loop bodies have not yet been populated.
+          const bool body_populated = false;
+          register_control(sfpt, outer_ilt, iffalse, body_populated);
+          set_idom(outer_le, sfpt, dom_depth(sfpt));
+        }
       }
-      lazy_replace( sfpt2, sfpt2->in(TypeFunc::Control));
+      remove_safepoint(sfpt2, sfpt2->in(TypeFunc::Control));
       if (loop->_safepts != NULL) {
         loop->_safepts->yank(sfpt2);
       }
@@ -1070,6 +1095,9 @@ void LoopNode::verify_strip_mined(int expect_skeleton) const {
     Node* outer_le = outer_tail->in(0);
     assert(outer_le->Opcode() == Op_OuterStripMinedLoopEnd, "tail of outer loop should be an If");
     Node* sfpt = outer_le->in(0);
+    if (UseNewCode3) {
+      sfpt = sfpt->as_Proj()->in(0);
+    }
     assert(sfpt->Opcode() == Op_SafePoint, "where's the safepoint?");
     Node* inner_out = sfpt->in(0);
     if (inner_out->outcnt() != 1) {
@@ -1128,7 +1156,9 @@ void LoopNode::verify_strip_mined(int expect_skeleton) const {
       }
       assert(outer->outcnt() >= phis + 2 && outer->outcnt() <= phis + 2 + stores + 1, "only phis");
     }
-    assert(sfpt->outcnt() == 1, "no data node");
+    assert( UseNewCode3 || sfpt->outcnt() == 1, "no data node");
+    assert(!UseNewCode3 || sfpt->outcnt() <= 2, "2 projections at most");
+
     assert(outer_tail->outcnt() == 1 || !has_skeleton, "no data node");
   }
 }
@@ -1423,6 +1453,9 @@ SafePointNode* OuterStripMinedLoopNode::outer_safepoint() const {
   Node* c = le->in(0);
   if (c == NULL || c->is_top()) {
     return NULL;
+  }
+  if (UseNewCode3) {
+    c = c->as_Proj()->in(0);
   }
   assert(c->Opcode() == Op_SafePoint, "broken outer loop");
   return c->as_SafePoint();
@@ -2389,9 +2422,9 @@ void IdealLoopTree::check_safepts(VectorSet &visited, Node_List &stack) {
   }
 }
 
-//---------------------------is_deleteable_safept----------------------------
+//---------------------------is_deleteable_safepoint----------------------------
 // Is safept not required by an outer loop?
-bool PhaseIdealLoop::is_deleteable_safept(Node* sfpt) {
+bool PhaseIdealLoop::is_deleteable_safepoint(Node* sfpt) {
   assert(sfpt->Opcode() == Op_SafePoint, "");
   IdealLoopTree* lp = get_loop(sfpt)->_parent;
   while (lp != NULL) {
@@ -2405,6 +2438,30 @@ bool PhaseIdealLoop::is_deleteable_safept(Node* sfpt) {
     lp = lp->_parent;
   }
   return true;
+}
+
+bool PhaseIdealLoop::remove_safepoint(Node* sfpt, Node* new_ctrl) {
+  if (UseNewCode3) {
+    Node* ctrl_out = sfpt->as_SafePoint()->proj_out(0);
+    Node*  mem_out = sfpt->as_SafePoint()->proj_out_or_null(1);
+    _igvn.replace_node(ctrl_out, new_ctrl);
+    if (mem_out != NULL) {
+      _igvn.replace_node(mem_out,  sfpt->in(TypeFunc::Memory)); // FIXME?
+    }
+    assert(sfpt->outcnt() == 0, "not dead yet?");
+    // _deadlist.push(sfpt); // Needed?
+
+    lazy_update(sfpt,     new_ctrl);
+    lazy_update(ctrl_out, new_ctrl);
+    if (mem_out != NULL) {
+      lazy_update(mem_out,  new_ctrl);
+    }
+
+    return true;
+  } else {
+    lazy_replace(sfpt, new_ctrl);
+    return true;
+  }
 }
 
 //---------------------------replace_parallel_iv-------------------------------
@@ -2516,13 +2573,13 @@ void IdealLoopTree::remove_safepoints(PhaseIdealLoop* phase, bool keep_one) {
 
   // Delete other safepoints in this loop.
   Node_List* sfpts = _safepts;
-  if (prune && sfpts != NULL) {
+  if (prune && sfpts != NULL /*&& !UseNewCode3*/) {
     assert(keep == NULL || keep->Opcode() == Op_SafePoint, "not safepoint");
     for (uint i = 0; i < sfpts->size(); i++) {
       Node* n = sfpts->at(i);
       assert(phase->get_loop(n) == this, "");
-      if (n != keep && phase->is_deleteable_safept(n)) {
-        phase->lazy_replace(n, n->in(TypeFunc::Control));
+      if (n != keep && phase->is_deleteable_safepoint(n)) {
+        phase->remove_safepoint(n, n->in(TypeFunc::Control));
       }
     }
   }
@@ -3922,10 +3979,14 @@ void PhaseIdealLoop::build_loop_early( VectorSet &visited, Node_List &worklist, 
     uint  nstack_top_i = 0;
 //while_nstack_nonempty:
     while (true) {
+
       // Get parent node and next input's index from stack's top.
       Node  *n = nstack_top_n;
       uint   i = nstack_top_i;
       uint cnt = n->req(); // Count of inputs
+
+      bool done = true;       // Assume all n's inputs will be processed
+
       if (i == 0) {        // Pre-process the node.
         if( has_node(n) &&            // Have either loop or control already?
             !has_ctrl(n) ) {          // Have loop picked out already?
@@ -3947,28 +4008,53 @@ void PhaseIdealLoop::build_loop_early( VectorSet &visited, Node_List &worklist, 
           // first one, even though the 1st did not dominate in the loop body
           // and thus could be avoided indefinitely)
           if( !_verify_only && !_verify_me && ilt->_has_sfpt && n->Opcode() == Op_SafePoint &&
-              is_deleteable_safept(n)) {
-            Node *in = n->in(TypeFunc::Control);
-            lazy_replace(n,in);       // Pull safepoint now
+              is_deleteable_safepoint(n) /*&& !UseNewCode3*/) {
+            // FIXME: find out the right way to remove the safepoint so the memory doesn't go dead
+            Node* in_c = n->in(TypeFunc::Control);
+            Node* in_m = n->in(TypeFunc::Memory);
+            remove_safepoint(n, in_c); // Pull safepoint now
             if (ilt->_safepts != NULL) {
               ilt->_safepts->yank(n);
             }
             // Carry on with the recursion "as if" we are walking
             // only the control input
-            if( !visited.test_set( in->_idx ) ) {
-              worklist.push(in);      // Visit this guy later, using worklist
+            if (!visited.test_set(in_c->_idx)) {
+              worklist.push(in_c);      // Visit this guy later, using worklist
             }
             // Get next node from nstack:
             // - skip n's inputs processing by setting i > cnt;
             // - we also will not call set_early_ctrl(n) since
             //   has_node(n) == true (see the condition above).
             i = cnt + 1;
+
+            if (UseNewCode3) {
+              // Visit memory input.
+              if (in_m->pinned() && !in_m->is_CFG()) {
+                set_ctrl(in_m, in_m->in(0));
+              }
+              bool is_visited = visited.test_set(in_m->_idx);
+              if (!has_node(in_m)) {  // No controlling input yet?
+                assert(!in_m->is_CFG(), "CFG Node with no controlling input?" );
+                assert(!is_visited, "visit only once" );
+                nstack.push(n, cnt+1);  // Save parent node and next input's index.
+                nstack_top_n = in_m;    // Process current input now.
+                nstack_top_i = 0;
+                done = false;       // Not all n's inputs processed.
+                //break; // continue while_nstack_nonempty;
+              } else if (!is_visited) {
+                // This guy has a location picked out for him, but has not yet
+                // been visited.  Happens to all CFG nodes, for instance.
+                // Visit him using the worklist instead of recursion, to break
+                // cycles.  Since he has a location already we do not need to
+                // find his location before proceeding with the current Node.
+                worklist.push(in_m);  // Visit this guy later, using worklist
+              }
+            }
           }
         }
       } // if (i == 0)
 
       // Visit all inputs
-      bool done = true;       // Assume all n's inputs will be processed
       while (i < cnt) {
         Node *in = n->in(i);
         ++i;
@@ -4377,6 +4463,7 @@ void PhaseIdealLoop::build_loop_late( VectorSet &visited, Node_List &worklist, N
         } else {
           // Do not visit around the backedge of loops via data edges.
           // push dead code onto a worklist
+          assert(use != C->root(), "");
           _deadlist.push(use);
         }
       } else {
@@ -4519,6 +4606,7 @@ void PhaseIdealLoop::build_loop_late_post_work(Node *n, bool pinned) {
     }
 #endif
     _nodes.map(n->_idx, 0);     // This node is useless
+    assert(n != C->root(), "");
     _deadlist.push(n);
     return;
   }

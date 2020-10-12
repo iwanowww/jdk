@@ -1005,7 +1005,8 @@ public:
   void recompute_dom_depth();
 
   // Is safept not required by an outer loop?
-  bool is_deleteable_safept(Node* sfpt);
+  bool is_deleteable_safepoint(Node* sfpt);
+  bool remove_safepoint(Node* sfpt, Node* new_ctrl);
 
   // Replace parallel induction variable (parallel to trip counter)
   void replace_parallel_iv(IdealLoopTree *loop);

@@ -1914,15 +1914,27 @@ void PhaseIdealLoop::clone_outer_loop(LoopNode* head, CloneLoopMode mode, IdealL
     CountedLoopEndNode* new_cle = new_cl->as_CountedLoop()->loopexit_or_null();
     Node* cle_out = cle->proj_out(false);
 
+    Node* sfpt_ctrl = NULL;
+    Node* sfpt_mem  = NULL;
+
     Node* new_sfpt = NULL;
+    Node* new_sfpt_ctrl = NULL;
+    Node* new_sfpt_mem  = NULL;
     Node* new_cle_out = cle_out->clone();
     old_new.map(cle_out->_idx, new_cle_out);
     if (mode == CloneIncludesStripMined) {
+      assert(!UseNewCode3, "broken");
       // clone outer loop body
       Node* new_l = l->clone();
       Node* new_tail = tail->clone();
       IfNode* new_le = le->clone()->as_If();
       new_sfpt = sfpt->clone();
+      if (UseNewCode3) {
+        sfpt_ctrl     = sfpt->as_SafePoint()->proj_out(0);
+        sfpt_mem      = sfpt->as_SafePoint()->proj_out(1);
+        new_sfpt_ctrl = new ProjNode(new_sfpt, 0);
+        new_sfpt_mem  = new ProjNode(new_sfpt, 1);
+      }
 
       set_loop(new_l, outer_loop->_parent);
       set_idom(new_l, new_l->in(LoopNode::EntryControl), dd);
@@ -1930,8 +1942,18 @@ void PhaseIdealLoop::clone_outer_loop(LoopNode* head, CloneLoopMode mode, IdealL
       set_idom(new_cle_out, new_cle, dd);
       set_loop(new_sfpt, outer_loop->_parent);
       set_idom(new_sfpt, new_cle_out, dd);
+      if (UseNewCode3) {
+        set_loop(new_sfpt_ctrl, outer_loop->_parent);
+        set_idom(new_sfpt_ctrl, new_sfpt, dd);
+        set_loop(new_sfpt_mem,  outer_loop->_parent);
+        set_idom(new_sfpt_mem,  new_sfpt, dd);
+      }
       set_loop(new_le, outer_loop->_parent);
-      set_idom(new_le, new_sfpt, dd);
+      if (UseNewCode3) {
+        set_idom(new_le, new_sfpt_ctrl, dd);
+      } else {
+        set_idom(new_le, new_sfpt, dd);
+      }
       set_loop(new_tail, outer_loop->_parent);
       set_idom(new_tail, new_le, dd);
       set_idom(new_cl, new_l, dd);
@@ -1940,11 +1962,18 @@ void PhaseIdealLoop::clone_outer_loop(LoopNode* head, CloneLoopMode mode, IdealL
       old_new.map(tail->_idx, new_tail);
       old_new.map(le->_idx, new_le);
       old_new.map(sfpt->_idx, new_sfpt);
-
+      if (UseNewCode3) {
+        old_new.map(sfpt_ctrl->_idx, new_sfpt_ctrl);
+        old_new.map(sfpt_mem->_idx, new_sfpt_mem);
+      }
       new_l->set_req(LoopNode::LoopBackControl, new_tail);
       new_l->set_req(0, new_l);
       new_tail->set_req(0, new_le);
-      new_le->set_req(0, new_sfpt);
+      if (UseNewCode3) {
+        new_le->set_req(0, new_sfpt_ctrl);
+      } else {
+        new_le->set_req(0, new_sfpt);
+      }
       new_sfpt->set_req(0, new_cle_out);
       new_cle_out->set_req(0, new_cle);
       new_cl->set_req(LoopNode::EntryControl, new_l);
@@ -2002,6 +2031,10 @@ void PhaseIdealLoop::clone_outer_loop(LoopNode* head, CloneLoopMode mode, IdealL
     }
     if (mode == CloneIncludesStripMined) {
       _igvn.register_new_node_with_optimizer(new_sfpt);
+      if (UseNewCode3) {
+        _igvn.register_new_node_with_optimizer(new_sfpt_ctrl);
+        _igvn.register_new_node_with_optimizer(new_sfpt_mem);
+      }
       _igvn.register_new_node_with_optimizer(new_cle_out);
     }
     // Some other transformation may have pessimistically assign some

@@ -324,9 +324,16 @@ class SafePointNode : public MultiNode {
   virtual uint           size_of() const;       // Size is bigger
 
 public:
-  SafePointNode(uint edges, JVMState* jvms,
-                // A plain safepoint advertises no memory effects (NULL):
-                const TypePtr* adr_type = NULL)
+  SafePointNode(uint edges, JVMState* jvms)
+    : MultiNode( edges ),
+      _oop_map(NULL),
+      _jvms(jvms),
+      _adr_type(TypePtr::BOTTOM)
+  {
+    init_class_id(Class_SafePoint);
+  }
+
+  SafePointNode(uint edges, JVMState* jvms, const TypePtr* adr_type)
     : MultiNode( edges ),
       _jvms(jvms),
       _adr_type(adr_type)
@@ -463,7 +470,13 @@ public:
   virtual int            Opcode() const;
   virtual bool           pinned() const { return true; }
   virtual const Type*    Value(PhaseGVN* phase) const;
-  virtual const Type    *bottom_type() const { return Type::CONTROL; }
+  virtual const Type    *bottom_type() const {
+    if (UseNewCode3) {
+      return TypeTuple::SAFEPOINT;
+    } else {
+      return Type::CONTROL;
+    }
+  }
   virtual const TypePtr *adr_type() const { return _adr_type; }
   virtual Node          *Ideal(PhaseGVN *phase, bool can_reshape);
   virtual Node*          Identity(PhaseGVN* phase);

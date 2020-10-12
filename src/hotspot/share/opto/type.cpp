@@ -526,6 +526,14 @@ void Type::Initialize_shared(Compile* current) {
   fsc[1] = Type::MEMORY;
   TypeTuple::STORECONDITIONAL = TypeTuple::make(2, fsc);
 
+  if (UseNewCode3) {
+    const Type **fsc = (const Type**)shared_type_arena->Amalloc_4(2*sizeof(Type*));
+    fsc[0] = TypeInt::CONTROL;
+    fsc[1] = Type::MEMORY;
+    TypeTuple::SAFEPOINT = TypeTuple::make(2, fsc);
+  } else {
+    TypeTuple::SAFEPOINT = NULL;
+  }
   TypeInstPtr::NOTNULL = TypeInstPtr::make(TypePtr::NotNull, current->env()->Object_klass());
   TypeInstPtr::BOTTOM  = TypeInstPtr::make(TypePtr::BotPTR,  current->env()->Object_klass());
   TypeInstPtr::MIRROR  = TypeInstPtr::make(TypePtr::NotNull, current->env()->Class_klass());
@@ -1885,6 +1893,7 @@ const TypeTuple *TypeTuple::IFNEITHER;
 const TypeTuple *TypeTuple::LOOPBODY;
 const TypeTuple *TypeTuple::MEMBAR;
 const TypeTuple *TypeTuple::STORECONDITIONAL;
+const TypeTuple *TypeTuple::SAFEPOINT;
 const TypeTuple *TypeTuple::START_I2C;
 const TypeTuple *TypeTuple::INT_PAIR;
 const TypeTuple *TypeTuple::LONG_PAIR;

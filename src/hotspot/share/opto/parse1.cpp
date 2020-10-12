@@ -2307,7 +2307,14 @@ void Parse::add_safepoint() {
   // Fix up the JVM State edges
   add_safepoint_edges(sfpnt);
   Node *transformed_sfpnt = _gvn.transform(sfpnt);
-  set_control(transformed_sfpnt);
+
+  if (UseNewCode3) {
+    set_control(_gvn.transform(new ProjNode(transformed_sfpnt, TypeFunc::Control)));
+    Node* newmem = _gvn.transform( new ProjNode(transformed_sfpnt, 1 /*TypeFunc::Memory*/, false /*separate_io_proj*/) );
+    set_all_memory(newmem);
+  } else {
+    set_control(transformed_sfpnt);
+  }
 
   // Provide an edge from root to safepoint.  This makes the safepoint
   // appear useful until the parse has completed.

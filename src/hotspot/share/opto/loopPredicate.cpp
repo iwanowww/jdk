@@ -57,7 +57,7 @@
 
 //-------------------------------register_control-------------------------
 void PhaseIdealLoop::register_control(Node* n, IdealLoopTree *loop, Node* pred, bool update_body) {
-  assert(n->is_CFG(), "msust be control node");
+  assert(n->is_CFG(), "must be control node");
   _igvn.register_new_node_with_optimizer(n);
   if (update_body) {
     loop->_body.push(n);

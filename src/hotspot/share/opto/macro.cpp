@@ -262,7 +262,8 @@ static Node *scan_mem_chain(Node *mem, int alias_idx, int offset, Node *start_me
       return mem;  // hit one of our sentinels
     } else if (mem->is_MergeMem()) {
       mem = mem->as_MergeMem()->memory_at(alias_idx);
-    } else if (mem->is_Proj() && mem->as_Proj()->_con == TypeFunc::Memory) {
+    } else if ((mem->is_Proj() && mem->as_Proj()->_con == TypeFunc::Memory) ||
+               (UseNewCode3 && mem->is_Proj() && mem->as_Proj()->_con == 1 && mem->in(0)->Opcode() == Op_SafePoint)) {
       Node *in = mem->in(0);
       // we can safely skip over safepoints, calls, locks and membars because we
       // already know that the object is safe to eliminate.
@@ -284,6 +285,8 @@ static Node *scan_mem_chain(Node *mem, int alias_idx, int offset, Node *start_me
           return ac;
         }
         mem = in->in(TypeFunc::Memory);
+      } else if (in->Opcode() == Op_SafePoint) {
+        mem = in->in(TypeFunc::Memory); // FIXME
       } else {
         assert(false, "unexpected projection");
       }

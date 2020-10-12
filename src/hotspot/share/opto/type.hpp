@@ -682,6 +682,7 @@ public:
   static const TypeTuple *LOOPBODY;
   static const TypeTuple *MEMBAR;
   static const TypeTuple *STORECONDITIONAL;
+  static const TypeTuple *SAFEPOINT;
   static const TypeTuple *START_I2C;
   static const TypeTuple *INT_PAIR;
   static const TypeTuple *LONG_PAIR;

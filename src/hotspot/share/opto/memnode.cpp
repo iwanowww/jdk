@@ -187,6 +187,11 @@ Node *MemNode::optimize_simple_memory_chain(Node *mchain, const TypeOopPtr *t_oo
       } else {
         assert(false, "unexpected projection");
       }
+    } else if (result->is_Proj() &&
+               result->in(0)->Opcode() == Op_SafePoint &&
+               result->as_Proj()->_con == 1 /*TypeFunc::Memory*/) {
+      assert(UseNewCode3, "");
+      result = result->in(0)->in(TypeFunc::Memory);
     } else if (result->is_ClearArray()) {
       if (!is_instance || !ClearArrayNode::step_through(&result, instance_id, phase)) {
         // Can not bypass initialization of the instance
@@ -704,6 +709,10 @@ Node* MemNode::find_previous_store(PhaseTransform* phase) {
         return mem;         // let caller handle steps (c), (d)
       }
 
+    } else if (mem->is_Proj() && mem->in(0)->Opcode() == Op_SafePoint) {
+      mem = mem->in(0)->in(TypeFunc::Memory);
+      continue; // (a) advance through safepoints since they don't have any interesting memory effects (yet)
+
     } else if (find_previous_arraycopy(phase, alloc, mem, false) != NULL) {
       if (prev != mem) {
         // Found an arraycopy but it doesn't affect that load
@@ -1038,6 +1047,7 @@ Node* MemNode::can_see_stored_value(Node* st, PhaseTransform* phase) const {
     // a synchronized region.
     while (current->is_Proj()) {
       int opc = current->in(0)->Opcode();
+      assert(UseNewCode3 || opc != Op_SafePoint, "");
       if ((final && (opc == Op_MemBarAcquire ||
                      opc == Op_MemBarAcquireLock ||
                      opc == Op_LoadFence)) ||
@@ -1045,7 +1055,8 @@ Node* MemNode::can_see_stored_value(Node* st, PhaseTransform* phase) const {
           opc == Op_StoreFence ||
           opc == Op_MemBarReleaseLock ||
           opc == Op_MemBarStoreStore ||
-          opc == Op_MemBarCPUOrder) {
+          opc == Op_MemBarCPUOrder ||
+          opc == Op_SafePoint) {
         Node* mem = current->in(0)->in(TypeFunc::Memory);
         if (mem->is_MergeMem()) {
           MergeMemNode* merge = mem->as_MergeMem();
@@ -1620,11 +1631,21 @@ Node *LoadNode::Ideal(PhaseGVN *phase, bool can_reshape) {
 
   // Skip up past a SafePoint control.  Cannot do this for Stores because
   // pointer stores & cardmarks must stay on the same side of a SafePoint.
-  if( ctrl != NULL && ctrl->Opcode() == Op_SafePoint &&
+  if (ctrl != NULL && ctrl->Opcode() == Op_SafePoint &&
       phase->C->get_alias_index(phase->type(address)->is_ptr()) != Compile::AliasIdxRaw  &&
       !addr_mark &&
       (depends_only_on_test() || has_unknown_control_dependency())) {
+    assert(!UseNewCode3, "");
     ctrl = ctrl->in(0);
+    set_req(MemNode::Control,ctrl);
+    progress = true;
+  }
+  if (ctrl != NULL && ctrl->is_Proj() && ctrl->in(0)->Opcode() == Op_SafePoint &&
+      phase->C->get_alias_index(phase->type(address)->is_ptr()) != Compile::AliasIdxRaw  &&
+      !addr_mark &&
+      (depends_only_on_test() || has_unknown_control_dependency())) {
+    assert(UseNewCode3, "");
+    ctrl = ctrl->in(0)->in(0);
     set_req(MemNode::Control,ctrl);
     progress = true;
   }

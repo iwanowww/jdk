@@ -1148,35 +1148,61 @@ SafePointNode* SafePointNode::next_exception() const {
 //------------------------------Ideal------------------------------------------
 // Skip over any collapsed Regions
 Node *SafePointNode::Ideal(PhaseGVN *phase, bool can_reshape) {
-  return remove_dead_region(phase, can_reshape) ? this : NULL;
+  if (remove_dead_region(phase, can_reshape)) {
+    return this;
+  }
+  if (UseNewCode3 && !is_Call()) { // == Op_SafePoint
+    if (in(0)->is_Proj()) {
+      Node* n0 = in(0)->in(0);
+      // If you have back to back safepoints, remove one
+      if (n0->is_SafePoint()) {
+        return TupleNode::make(TypeTuple::SAFEPOINT, in(TypeFunc::Control), in(TypeFunc::Memory));
+      }
+      // Check if he is a call projection (except Leaf Call)
+      if( n0->is_Catch() ) {
+        n0 = n0->in(0)->in(0);
+        assert( n0->is_Call(), "expect a call here" );
+      }
+      if( n0->is_Call() && n0->as_Call()->guaranteed_safepoint() ) {
+        // Don't remove a safepoint belonging to an OuterStripMinedLoopEndNode.
+        // If the loop dies, they will be removed together.
+        if (has_out_with(Op_OuterStripMinedLoopEnd)) {
+          return this;
+        }
+        // Useless Safepoint, so remove it
+        return TupleNode::make(TypeTuple::SAFEPOINT, in(TypeFunc::Control), in(TypeFunc::Memory));
+      }
+    }
+  }
+  return NULL;
 }
 
 //------------------------------Identity---------------------------------------
 // Remove obviously duplicate safepoints
 Node* SafePointNode::Identity(PhaseGVN* phase) {
-
-  // If you have back to back safepoints, remove one
-  if( in(TypeFunc::Control)->is_SafePoint() )
-    return in(TypeFunc::Control);
-
-  if( in(0)->is_Proj() ) {
-    Node *n0 = in(0)->in(0);
-    // Check if he is a call projection (except Leaf Call)
-    if( n0->is_Catch() ) {
-      n0 = n0->in(0)->in(0);
-      assert( n0->is_Call(), "expect a call here" );
-    }
-    if( n0->is_Call() && n0->as_Call()->guaranteed_safepoint() ) {
-      // Don't remove a safepoint belonging to an OuterStripMinedLoopEndNode.
-      // If the loop dies, they will be removed together.
-      if (has_out_with(Op_OuterStripMinedLoopEnd)) {
-        return this;
-      }
-      // Useless Safepoint, so remove it
+  if (!UseNewCode3) {
+    // If you have back to back safepoints, remove one
+    if (in(TypeFunc::Control)->is_SafePoint()) {
       return in(TypeFunc::Control);
     }
+    if( in(0)->is_Proj() ) {
+      Node *n0 = in(0)->in(0);
+      // Check if he is a call projection (except Leaf Call)
+      if( n0->is_Catch() ) {
+        n0 = n0->in(0)->in(0);
+        assert( n0->is_Call(), "expect a call here" );
+      }
+      if( n0->is_Call() && n0->as_Call()->guaranteed_safepoint() ) {
+        // Don't remove a safepoint belonging to an OuterStripMinedLoopEndNode.
+        // If the loop dies, they will be removed together.
+        if (has_out_with(Op_OuterStripMinedLoopEnd)) {
+          return this;
+        }
+        // Useless Safepoint, so remove it
+        return in(TypeFunc::Control);
+      }
+    }
   }
-
   return this;
 }
 
@@ -1184,7 +1210,7 @@ Node* SafePointNode::Identity(PhaseGVN* phase) {
 const Type* SafePointNode::Value(PhaseGVN* phase) const {
   if( phase->type(in(0)) == Type::TOP ) return Type::TOP;
   if( phase->eqv( in(0), this ) ) return Type::TOP; // Dead infinite loop
-  return Type::CONTROL;
+  return (UseNewCode3 ? TypeTuple::SAFEPOINT : Type::CONTROL);
 }
 
 #ifndef PRODUCT

@@ -512,6 +512,20 @@ void CompilerConfig::ergo_initialize() {
     // blind guess
     LoopStripMiningIterShortLoop = LoopStripMiningIter / 10;
   }
+  if (UseNewCode3) {
+    if (LoopStripMiningIter > 1) {
+      if (!FLAG_IS_DEFAULT(LoopStripMiningIter)) {
+        warning("Loop strip mining is not supported");
+      }
+      LoopStripMiningIter = 0;
+    }
+    if (LoopStripMiningIterShortLoop > 0) {
+      if (!FLAG_IS_DEFAULT(LoopStripMiningIterShortLoop)) {
+        warning("Loop strip mining is not supported");
+      }
+      LoopStripMiningIterShortLoop = 0;
+    }
+  }
 #endif // COMPILER2
 }
 

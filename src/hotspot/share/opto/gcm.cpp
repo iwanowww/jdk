@@ -705,8 +705,9 @@ Block* PhaseCFG::insert_anti_dependences(Block* LCA, Node* load, bool verify) {
         // Same for SafePoints: they read/write Raw but only read otherwise.
         // This is basically a workaround for SafePoints only defining control
         // instead of control + memory.
-        if (mstore->ideal_Opcode() == Op_SafePoint)
+        if (mstore->ideal_Opcode() == Op_SafePoint && !UseNewCode3) {
           continue;
+        }
       } else {
         // Some raw memory, such as the load of "top" at an allocation,
         // can be control dependent on the previous safepoint. See
@@ -715,8 +716,9 @@ Block* PhaseCFG::insert_anti_dependences(Block* LCA, Node* load, bool verify) {
         // creates a cycle, and will cause a subsequent failure in
         // local scheduling.  (BugId 4919904)
         // (%%% How can a control input be a safepoint and not a projection??)
-        if (mstore->ideal_Opcode() == Op_SafePoint && load->in(0) == mstore)
+        if (mstore->ideal_Opcode() == Op_SafePoint && load->in(0) == mstore && !UseNewCode3) {
           continue;
+        }
       }
     }
 

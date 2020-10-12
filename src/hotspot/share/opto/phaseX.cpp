@@ -1306,16 +1306,16 @@ const Type* PhaseIterGVN::saturate(const Type* new_type, const Type* old_type,
 //------------------------------remove_globally_dead_node----------------------
 // Kill a globally dead Node.  All uses are also globally dead and are
 // aggressively trimmed.
-void PhaseIterGVN::remove_globally_dead_node( Node *dead ) {
+void PhaseIterGVN::remove_globally_dead_node( Node *n ) {
   enum DeleteProgress {
     PROCESS_INPUTS,
     PROCESS_OUTPUTS
   };
   assert(_stack.is_empty(), "not empty");
-  _stack.push(dead, PROCESS_INPUTS);
+  _stack.push(n, PROCESS_INPUTS);
 
   while (_stack.is_nonempty()) {
-    dead = _stack.node();
+    Node* dead = _stack.node();
     if (dead->Opcode() == Op_SafePoint) {
       dead->as_SafePoint()->disconnect_from_root(this);
     }
