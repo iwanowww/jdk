@@ -155,11 +155,15 @@ public:
 // Perform reduction of a vector
 class ReductionNode : public Node {
  public:
-  ReductionNode(Node *ctrl, Node* in1, Node* in2) : Node(ctrl, in1, in2) {}
+  ReductionNode(Node *ctrl, Node* in1, Node* in2) : Node(ctrl, in1, in2) {
+    init_flags(Flag_is_reduction);
+  }
 
   static ReductionNode* make(int opc, Node *ctrl, Node* in1, Node* in2, BasicType bt);
   static int  opcode(int opc, BasicType bt);
   static bool implemented(int opc, uint vlen, BasicType bt);
+
+  virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
 
   virtual const Type* bottom_type() const {
     BasicType vbt = in(2)->bottom_type()->is_vect()->element_basic_type();
@@ -796,6 +800,20 @@ class ReplicateDNode : public VectorNode {
  public:
   ReplicateDNode(Node* in1, const TypeVect* vt) : VectorNode(in1, vt) {}
   virtual int Opcode() const;
+};
+
+//------------------------------VectorInsertNode-------------------------------
+class VectorInsertNode : public VectorNode {
+ public:
+  VectorInsertNode(Node* vsrc, Node* new_val, ConINode* pos, const TypeVect* vt) : VectorNode(vsrc, new_val, (Node*)pos, vt) {
+   assert(pos->get_int() >= 0, "positive constants");
+   assert(pos->get_int() < (int)vt->length(), "index must be less than vector length");
+   assert(Type::cmp(vt, vsrc->bottom_type()) == 0, "input and output must be same type");
+  }
+  virtual int Opcode() const;
+  uint pos() const { return in(3)->get_int(); }
+
+  static Node* make(PhaseGVN& gvn, Node* vec, Node* new_val, uint position);
 };
 
 //========================Pack_Scalars_into_a_Vector===========================

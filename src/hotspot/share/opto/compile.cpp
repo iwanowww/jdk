@@ -2251,6 +2251,7 @@ void Compile::Optimize() {
 
   if (C->max_vector_size() > 0) {
     C->optimize_logic_cones(igvn);
+    C->optimize_vector_reductions(igvn);
     igvn.optimize();
   }
 
@@ -2590,6 +2591,176 @@ void Compile::optimize_logic_cones(PhaseIterGVN &igvn) {
       }
     }
   }
+}
+
+static int red_opcode(Node* n) {
+  int opc = n->Opcode();
+  switch (opc) {
+    case Op_AddReductionVI: return Op_AddI;
+    case Op_AddReductionVL: return Op_AddL;
+    case Op_MulReductionVI: return Op_MulI;
+    case Op_MulReductionVL: return Op_MulL;
+    case Op_AndReductionV:  return Op_AndI;
+//    case Op_MinV:  return Op_MinF; // FIXME
+//    case Op_MaxV:  return Op_MaxF; // FIXME
+    case Op_OrReductionV:   return Op_OrI;
+    case Op_XorReductionV:  return Op_XorI;
+
+    default: {
+      return opc;
+    }
+  }
+}
+
+static Node* red_init_value(PhaseIterGVN& igvn, int opc) {
+   switch (opc) {
+    case Op_AddI: return igvn.intcon(0);
+    case Op_AddL: return igvn.longcon(0);
+    case Op_MulI: return igvn.intcon(1);
+    case Op_MulL: return igvn.longcon(1);
+      //    case Op_MinV:  return Op_MinV; // FIXME
+      //    case Op_MaxV:  return Op_MaxV; // FIXME
+    case Op_AndI: return igvn.intcon(0); // FIXME
+    case Op_OrI:  return igvn.intcon(0); // FIXME
+    case Op_XorI: return igvn.intcon(0); // FIXME
+
+    default:
+    {
+      assert(false, "not supported: %s", NodeClassNames[opc]);
+      return NULL;
+    }
+  }
+}
+
+static Node* red_init(PhaseIterGVN& igvn, int opc, const TypeVect* vt) {
+  Node* s = red_init_value(igvn, opc);
+  switch (opc) {
+    case Op_AddI: return new ReplicateINode(s, vt);
+    case Op_AddL: return new ReplicateLNode(s, vt);
+    case Op_MulI: return new ReplicateINode(s, vt);
+    case Op_MulL: return new ReplicateLNode(s, vt);
+      //    case Op_MinV:  return Op_MinV; // FIXME
+      //    case Op_MaxV:  return Op_MaxV; // FIXME
+    case Op_AndI: return new ReplicateINode(s, vt); // FIXME
+    case Op_OrI:  return new ReplicateINode(s, vt); // FIXME
+    case Op_XorI: return new ReplicateINode(s, vt); // FIXME
+
+    default:
+    {
+      assert(false, "not supported: %s", NodeClassNames[opc]);
+      return NULL;
+    }
+  }
+}
+
+static bool is_reduction_loop(Node* phi) {
+  if (!phi->in(0)->is_CountedLoop()) {
+    return false;
+  }
+  Node* n = phi->in(2);
+  // FIXME
+//  int vopc = n->Opcode();
+//  while (n->is_reduction() && n->Opcode() == vopc) {
+//    n = n->in(1);
+//  }
+//  return n == phi;
+  if (n->is_reduction() && n->in(2)->bottom_type()->isa_vect()) {
+    const TypeVect* vt = n->in(2)->bottom_type()->is_vect();
+    BasicType vbt = vt->element_basic_type();
+    if (vbt == T_FLOAT || vbt == T_DOUBLE) {
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+static Node* scalar2vector(Node* s, uint vlen, BasicType elem_bt) {
+  const TypeVect* vt = TypeVect::make(elem_bt, vlen);
+  switch (elem_bt) {
+    case T_BOOLEAN: // fall-through
+    case T_BYTE:    return new ReplicateBNode(s, vt);
+    case T_CHAR:    // fall-through
+    case T_SHORT:   return new ReplicateSNode(s, vt);
+    case T_INT:     return new ReplicateINode(s, vt);
+    case T_LONG:    return new ReplicateLNode(s, vt);
+    case T_FLOAT:   return new ReplicateFNode(s, vt);
+    case T_DOUBLE:  return new ReplicateDNode(s, vt);
+
+    default: assert(false, "%s", type2name(elem_bt)); return NULL;
+  }
+}
+
+// FIXME: needs loop info
+static Node* promote_to_vector(PhaseIterGVN& igvn, Node* n, Node* vphi, uint vlen, BasicType elem_bt) {
+  if (n->isa_Phi()) {
+    return vphi;
+  }
+  if (n->is_Vector()) {
+    return n;
+  } else if (n->is_reduction() || n->is_Add() || n->is_Mul()) {
+    int opc = red_opcode(n);
+    assert(VectorNode::opcode(opc, elem_bt) > 0, "not supported");
+    Node* v1 = promote_to_vector(igvn, n->in(1), vphi, vlen, elem_bt);
+    Node* v2 = promote_to_vector(igvn, n->in(2), vphi, vlen, elem_bt);
+    return igvn.transform(VectorNode::make(opc, v1, v2, vlen, elem_bt));
+//  } else {
+//    unary, loop invariant, etc
+  } else {
+    return scalar2vector(n, vlen, elem_bt);
+  }
+}
+
+void Compile::optimize_vector_reductions(PhaseIterGVN& igvn) {
+  ResourceMark rm;
+  Unique_Node_List useful_nodes;
+  C->identify_useful_nodes(useful_nodes);
+
+  if (!UseNewCode) {
+    return;
+  }
+
+  Unique_Node_List reduction_phis;
+  for (uint i = 0; i < useful_nodes.size(); i++) {
+    Node* n = useful_nodes.at(i);
+    Node* phi = n->isa_Phi();
+    if (phi != NULL && is_reduction_loop(phi) && phi->outcnt() == 1) {
+      reduction_phis.push(phi);
+    }
+  }
+
+  igvn.set_delay_transform(true);
+
+  while (reduction_phis.size() > 0) {
+    PhiNode* phi = reduction_phis.pop()->as_Phi();
+    Node* r    = phi->in(0);
+    Node* init = phi->in(1);
+    Node* red  = phi->in(2);
+
+    int opc = red_opcode(red);
+    const TypeVect* vt = red->in(2)->bottom_type()->is_vect();
+
+    // ReductionV init (AddVI (Phi vinit #y) v)#y
+
+    // Phi (CountedLoop ...) vinit y
+    Node* vphi = igvn.transform(PhiNode::make_blank(r, red->in(2) /*vt*/));
+
+    Node* vinit = igvn.transform(red_init(igvn, opc, vt));
+    vinit = igvn.transform(VectorInsertNode::make(igvn, vinit, init, 0));
+    Node* y = promote_to_vector(igvn, red, vphi, vt->length(), vt->element_basic_type());
+
+    vphi->set_req(1, vinit);
+    vphi->set_req(2, y); // finish the vector loop
+
+    // ReductionV 0 (AddVI (Phi vinit #y) v)#y
+
+    Node* post_init = red_init_value(igvn, opc);
+    Node* post_red = igvn.transform(ReductionNode::make(opc, NULL, post_init, y, vt->element_basic_type()));
+
+    igvn.replace_node(red, post_red); // also kills old scalar phi
+  }
+
+  igvn.set_delay_transform(false);
 }
 
 //------------------------------Code_Gen---------------------------------------

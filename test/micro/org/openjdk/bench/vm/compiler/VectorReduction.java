@@ -132,5 +132,13 @@ public abstract class VectorReduction {
     public static class NoSuperword extends VectorReduction {
     }
 
+    @Benchmark
+    public int testConstMulAdd() {
+        int red = 1;
+        for (int i = 0; i < COUNT; i++) {
+            red = 37 * red + 5 * intsA[i];
+        }
+        return red;
+    }
 }
 

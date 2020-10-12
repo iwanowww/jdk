@@ -38,6 +38,7 @@
 #include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
 #include "oops/oop.inline.hpp"
+#include "opto/node.hpp"
 #include "runtime/arguments.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/flags/flagSetting.hpp"
@@ -689,6 +690,21 @@ extern "C" void pns2() { // print native stack
   }
 }
 
+extern "C" void dump_array_node(GrowableArray<Node*>* arr) {
+  tty->print("{ ");
+  for (int i = 0; i < arr->length(); i++) {
+    tty->print("%d: ", i); arr->at(i)->dump(); tty->cr();
+  }
+  tty->print_cr("}");
+}
+
+extern "C" void dump_array_int(GrowableArray<int>* arr) {
+  tty->print("{ ");
+  for (int i = 0; i <  arr->length(); i++) {
+    tty->print("%d:%d ", i, arr->at(i));
+  }
+  tty->print_cr("}");
+}
 #endif // !PRODUCT
 
 //////////////////////////////////////////////////////////////////////////////

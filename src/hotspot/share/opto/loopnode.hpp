@@ -1156,7 +1156,7 @@ public:
   // Find a good location to insert a predicate
   static ProjNode* find_predicate_insertion_point(Node* start_c, Deoptimization::DeoptReason reason);
   // Find a predicate
-  static Node* find_predicate(Node* entry);
+  static ProjNode* find_predicate(Node* entry);
   // Construct a range check for a predicate if
   BoolNode* rc_predicate(IdealLoopTree *loop, Node* ctrl,
                          int scale, Node* offset,

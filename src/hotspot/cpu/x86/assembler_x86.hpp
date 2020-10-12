@@ -148,6 +148,32 @@ REGISTER_DECLARATION(Register, r15_thread, r15); // callee-saved
 // or compiled lambda forms. We indicate that by setting rbp_mh_SP_save to noreg.
 REGISTER_DECLARATION(Register, rbp_mh_SP_save, noreg);
 
+// A union type for code which has to assemble both Register and
+// XMMRegister operands, when the distinction cannot be made
+// statically.
+class RegisterOrXMMRegister {
+ private:
+  Register    _reg;
+  XMMRegister _xmm;
+
+#ifdef ASSERT
+  bool is_valid() const {
+    return (_reg == noreg) || (_xmm == xnoreg);
+  }
+#endif // ASSERT
+
+ public:
+  RegisterOrXMMRegister()               : _reg(noreg), _xmm(xnoreg) {}
+  RegisterOrXMMRegister(Register reg)   : _reg(reg),   _xmm(xnoreg) {}
+  RegisterOrXMMRegister(XMMRegister xmm): _reg(noreg), _xmm(xmm)    {}
+
+  Register    as_Register()    const { assert(is_Register(),    ""); return _reg; }
+  XMMRegister as_XMMRegister() const { assert(is_XMMRegister(), ""); return _xmm; }
+
+  bool is_Register()    const { assert(is_valid(), ""); return _reg != noreg;  }
+  bool is_XMMRegister() const { assert(is_valid(), ""); return _xmm != xnoreg; }
+};
+
 // Address is an abstraction used to represent a memory location
 // using any of the amd64 addressing modes with one object.
 //
@@ -1676,12 +1702,24 @@ private:
   // SSE 4.1 insert
   void pinsrd(XMMRegister dst, Register src, int imm8);
   void pinsrq(XMMRegister dst, Register src, int imm8);
+  void pinsrb(XMMRegister dst, Register src, int imm8);
   void pinsrd(XMMRegister dst, Address src, int imm8);
   void pinsrq(XMMRegister dst, Address src, int imm8);
   void pinsrb(XMMRegister dst, Address src, int imm8);
+
+  void insertps(XMMRegister dst, XMMRegister src, int imm8);
+
   // SSE 2 insert
   void pinsrw(XMMRegister dst, Register src, int imm8);
   void pinsrw(XMMRegister dst, Address src, int imm8);
+
+  // AVX insert
+  void vpinsrb(XMMRegister dst, XMMRegister nds, Register src, int imm8);
+  void vpinsrw(XMMRegister dst, XMMRegister nds, Register src, int imm8);
+  void vpinsrd(XMMRegister dst, XMMRegister nds, Register src, int imm8);
+  void vpinsrq(XMMRegister dst, XMMRegister nds, Register src, int imm8);
+
+  void vinsertps(XMMRegister dst, XMMRegister nds, XMMRegister src, int imm8);
 
   // SSE4.1 packed move
   void pmovzxbw(XMMRegister dst, XMMRegister src);

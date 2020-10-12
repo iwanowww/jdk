@@ -1266,6 +1266,70 @@ void C2_MacroAssembler::reduce8D(int opcode, XMMRegister dst, XMMRegister src, X
 
 //-------------------------------------------------------------------------------------------
 
+void C2_MacroAssembler::insert_element_into_lane(XMMRegister dst, RegisterOrXMMRegister val, uint idx, BasicType elem_bt) {
+  uint elem_per_lane = 16 / type2aelembytes(elem_bt);
+  assert(idx < elem_per_lane, "out of bounds"); // 16-byte lanes
+  switch (elem_bt) {
+    case T_BYTE:   pinsrb(dst, val.as_Register(), idx); break; // SSE4.1
+    case T_SHORT:  pinsrw(dst, val.as_Register(), idx); break; // SSE2
+    case T_INT:    pinsrd(dst, val.as_Register(), idx); break; // SSE4.1
+    case T_LONG:   pinsrq(dst, val.as_Register(), idx); break; // SSE4.1
+    case T_DOUBLE: pinsrq(dst, val.as_Register(), idx); break; // SSE4.1
+
+//    case T_FLOAT:  insertps(dst, val.as_XMMRegister(), idx); break; // SSE4.1
+
+    default: assert(false, "not supported: %s", type2name(elem_bt));
+  }
+}
+
+void C2_MacroAssembler::insert_element_into_lane(XMMRegister dst, XMMRegister src, RegisterOrXMMRegister val, uint idx, BasicType elem_bt) {
+  uint elem_per_lane = 16 / type2aelembytes(elem_bt);
+  assert(idx < elem_per_lane, "out of bounds"); // 16-byte lanes
+  switch (elem_bt) {
+    case T_BYTE:   vpinsrb(dst, src, val.as_Register(), idx); break; // VEX.128 AVX; EVEX.128 AVX512BW
+    case T_SHORT:  vpinsrw(dst, src, val.as_Register(), idx); break; // VEX.128 AVX; EVEX.128 AVX512BW
+    case T_INT:    vpinsrd(dst, src, val.as_Register(), idx); break; // VEX.128 AVX; EVEX.128 AVX512DQ
+    case T_LONG:   vpinsrq(dst, src, val.as_Register(), idx); break; // VEX.128 AVX; EVEX.128 AVX512DQ
+    case T_DOUBLE: vpinsrq(dst, src, val.as_Register(), idx); break; // VEX.128 AVX; EVEX.128 AVX512DQ
+
+    case T_FLOAT:  vinsertps(dst, src, val.as_XMMRegister(), idx); break; // VEX.128 AVX; EVEX.128 AVX512F
+
+    default: assert(false, "not supported: %s", type2name(elem_bt));
+  }
+}
+
+void C2_MacroAssembler::vector_insert_element(XMMRegister dst, XMMRegister src, RegisterOrXMMRegister val, uint idx, XMMRegister tmp,
+                                              BasicType elem_bt, uint vlen_in_bytes) {
+  assert(vlen_in_bytes % type2aelembytes(elem_bt) == 0, "sanity");
+  uint vlen = vlen_in_bytes / type2aelembytes(elem_bt);
+  assert(idx < vlen, "out of bounds");
+
+  int elem_per_lane = 16 / type2aelembytes(elem_bt);
+  int log2epr = log2(elem_per_lane);
+  int num_of_lanes = vlen_in_bytes / 16;
+  int log2lanes = log2(num_of_lanes);
+
+  uint x_idx = (idx >>       0) & right_n_bits(log2epr);
+  uint y_idx = (idx >> log2epr) & right_n_bits(log2lanes);
+
+  if (vlen_in_bytes < 32) {
+    assert(src == xnoreg || dst == src, "not used");
+    assert(tmp == xnoreg, "not used");
+    insert_element_into_lane(dst, val, idx, elem_bt);
+  } else if (vlen_in_bytes == 32) {
+    vextracti128(tmp, src, y_idx);
+    insert_element_into_lane(tmp, tmp, val, x_idx, elem_bt);
+    vinserti128(dst, src, tmp, y_idx);
+  } else {
+    assert(vlen_in_bytes == 64, "sanity");
+    vextracti32x4(tmp, src, y_idx);
+    insert_element_into_lane(tmp, tmp, val, x_idx, elem_bt);
+    vinserti32x4(dst, src, tmp, y_idx);
+  }
+}
+
+//-------------------------------------------------------------------------------------------
+
 // IndexOf for constant substrings with size >= 8 chars
 // which don't need to be loaded through stack.
 void C2_MacroAssembler::string_indexofC8(Register str1, Register str2,

@@ -68,6 +68,7 @@ SuperWord::SuperWord(PhaseIdealLoop* phase) :
   _n_idx_list(arena(), 8),                // scratch list of (node,index) pairs
   _nlist(arena(), 8, 0, NULL),            // scratch list of nodes
   _stk(arena(), 8, 0, NULL),              // scratch stack of nodes
+  _predicate_insertion_point(NULL),
   _lpt(NULL),                             // loop tree node
   _lp(NULL),                              // LoopNode
   _bb(NULL),                              // basic block
@@ -146,12 +147,16 @@ void SuperWord::transform_loop(IdealLoopTree* lpt, bool do_optimization) {
     return;
   }
 
+  if (do_optimization && cl->is_vectorized_loop()) {
+    optimize_vector_reductions(cl);
+  }
+
   // Skip any loops already optimized by slp
   if (cl->is_vectorized_loop()) return;
 
   if (cl->is_unroll_only()) return;
 
-  if (cl->is_main_loop()) {
+  if (cl->is_main_loop() && !cl->is_main_no_pre_loop()) {
     // Check for pre-loop ending with CountedLoopEnd(Bool(Cmp(x,Opaque1(limit))))
     CountedLoopEndNode* pre_end = get_pre_loop_end(cl);
     if (pre_end == NULL) return;
@@ -184,6 +189,191 @@ void SuperWord::transform_loop(IdealLoopTree* lpt, bool do_optimization) {
       }
     }
   }
+}
+
+static int red_opcode(Node* n) {
+  int opc = n->Opcode();
+  switch (opc) {
+    case Op_AddReductionVI: return Op_AddI;
+    case Op_AddReductionVL: return Op_AddL;
+    case Op_MulReductionVI: return Op_MulI;
+    case Op_MulReductionVL: return Op_MulL;
+    case Op_AndReductionV:  return Op_AndI;
+//    case Op_MinV:  return Op_MinF; // FIXME
+//    case Op_MaxV:  return Op_MaxF; // FIXME
+    case Op_OrReductionV:   return Op_OrI;
+    case Op_XorReductionV:  return Op_XorI;
+
+    default: {
+      return opc;
+    }
+  }
+}
+
+static Node* red_init_value(PhaseIterGVN& igvn, int opc) {
+   switch (opc) {
+    case Op_AddI: return igvn.intcon(0);
+    case Op_AddL: return igvn.longcon(0);
+    case Op_MulI: return igvn.intcon(1);
+    case Op_MulL: return igvn.longcon(1);
+      //    case Op_MinV:  return Op_MinV; // FIXME
+      //    case Op_MaxV:  return Op_MaxV; // FIXME
+    case Op_AndI: return igvn.intcon(0); // FIXME
+    case Op_OrI:  return igvn.intcon(0); // FIXME
+    case Op_XorI: return igvn.intcon(0); // FIXME
+
+    default:
+    {
+      assert(false, "not supported: %s", NodeClassNames[opc]);
+      return NULL;
+    }
+  }
+}
+
+static Node* red_init(PhaseIterGVN& igvn, int opc, const TypeVect* vt) {
+  Node* s = red_init_value(igvn, opc);
+  switch (opc) {
+    case Op_AddI: return new ReplicateINode(s, vt);
+    case Op_AddL: return new ReplicateLNode(s, vt);
+    case Op_MulI: return new ReplicateINode(s, vt);
+    case Op_MulL: return new ReplicateLNode(s, vt);
+      //    case Op_MinV:  return Op_MinV; // FIXME
+      //    case Op_MaxV:  return Op_MaxV; // FIXME
+    case Op_AndI: return new ReplicateINode(s, vt); // FIXME
+    case Op_OrI:  return new ReplicateINode(s, vt); // FIXME
+    case Op_XorI: return new ReplicateINode(s, vt); // FIXME
+
+    default:
+    {
+      assert(false, "not supported: %s", NodeClassNames[opc]);
+      return NULL;
+    }
+  }
+}
+
+
+static Node* scalar2vector(Node* s, uint vlen, BasicType elem_bt) {
+  const TypeVect* vt = TypeVect::make(elem_bt, vlen);
+  switch (elem_bt) {
+    case T_BOOLEAN: // fall-through
+    case T_BYTE:    return new ReplicateBNode(s, vt);
+    case T_CHAR:    // fall-through
+    case T_SHORT:   return new ReplicateSNode(s, vt);
+    case T_INT:     return new ReplicateINode(s, vt);
+    case T_LONG:    return new ReplicateLNode(s, vt);
+    case T_FLOAT:   return new ReplicateFNode(s, vt);
+    case T_DOUBLE:  return new ReplicateDNode(s, vt);
+
+    default: assert(false, "%s", type2name(elem_bt)); return NULL;
+  }
+}
+
+Node* SuperWord::promote_to_vector(Node* n, Node* sphi, Node* vphi, uint vlen, BasicType elem_bt) {
+  if (n == sphi) {
+    return vphi;
+  }
+  if (n->is_Vector()) {
+    return n;
+  } else if (n->is_reduction() || n->is_Add() || n->is_Mul()) {
+    int opc = red_opcode(n);
+    assert(VectorNode::opcode(opc, elem_bt) > 0, "not supported");
+    Node* v1 = promote_to_vector(n->in(1), sphi, vphi, vlen, elem_bt);
+    Node* v2 = promote_to_vector(n->in(2), sphi, vphi, vlen, elem_bt);
+    return _igvn.transform(VectorNode::make(opc, v1, v2, vlen, elem_bt));
+//  } else {
+//    TODO: unary?
+  } else {
+    return _igvn.transform(scalar2vector(n, vlen, elem_bt));
+  }
+}
+
+static bool is_reduction_phi(PhiNode* phi) {
+  Node* n = phi->in(2); // ReductionV scalar vector
+  if (n != NULL && n->is_reduction() && n->in(2)->bottom_type()->isa_vect()) {
+    const TypeVect* vt = n->in(2)->bottom_type()->is_vect();
+    BasicType vbt = vt->element_basic_type();
+    if (vbt != T_FLOAT && vbt != T_DOUBLE) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// FIXME: Reduction.testConstMulAdd is 1,5-2x faster w/ -XX:-UseNewCode
+
+// -XX:-UseNewCode -XX:-UseNewCode2 -XX:-UseNewCode3
+//    Reduction.testConstMulAdd      1024  thrpt    5  904061.727 ± 13943.789  ops/s
+//    Reduction.testConstMulAdd     65536  thrpt    5   14030.022 ±   102.581  ops/s
+//    Reduction.testConstMulAdd  67108864  thrpt    5      13.194 ±     0.420  ops/s
+
+// -XX:-UseNewCode -XX:+UseNewCode2 -XX:+UseNewCode3
+//    Reduction.testConstMulAdd      1024  thrpt    5  3810122.556 ± 93580.410  ops/s
+//    Reduction.testConstMulAdd     65536  thrpt    5    59737.300 ±   954.994  ops/s
+//    Reduction.testConstMulAdd  67108864  thrpt    5       45.628 ±     2.061  ops/s
+
+// -XX:+UseNewCode -XX:+UseNewCode2 -XX:+UseNewCode3
+//    Reduction.testConstMulAdd      1024  thrpt    5  2276678.145 ± 47260.997  ops/s
+//    Reduction.testConstMulAdd     65536  thrpt    5    34760.034 ±   568.346  ops/s
+//    Reduction.testConstMulAdd  67108864  thrpt    5       32.850 ±     1.042  ops/s
+
+// But iteration separation helps a lot:
+// -XX:+UseNewCode -XX:+UseNewCode2 -XX:+UseNewCode3 -XX:+UseNewCode4:
+//    Reduction.testConstMulAdd      1024  thrpt    5  6413080.616 ± 288116.355  ops/s
+//    Reduction.testConstMulAdd     65536  thrpt    5   110950.817 ±   1509.933  ops/s
+//    Reduction.testConstMulAdd  67108864  thrpt    5       52.515 ±      0.760  ops/s
+
+// -XX:-UseNewCode -XX:+UseNewCode2 -XX:+UseNewCode3 -XX:+UseNewCode4:
+//    Reduction.testConstMulAdd      1024  thrpt    5  3695068.697 ± 78326.723  ops/s
+//    Reduction.testConstMulAdd     65536  thrpt    5    60321.825 ±   719.963  ops/s
+//    Reduction.testConstMulAdd  67108864  thrpt    5       46.913 ±     1.968  ops/s
+
+void SuperWord::optimize_vector_reductions(CountedLoopNode* cl) {
+  ResourceMark rm;
+  if (!UseNewCode || !cl->is_vectorized_loop() || !cl->is_reduction_loop()) {
+    return;
+  }
+  Unique_Node_List reduction_phis;
+  for (DUIterator_Fast kmax, k = cl->fast_outs(kmax); k < kmax; k++) {
+    PhiNode* phi = cl->fast_out(k)->isa_Phi();
+    if (phi != NULL && is_reduction_phi(phi) && phi->outcnt() == 1) {
+      reduction_phis.push(phi);
+    }
+  }
+
+  _igvn.set_delay_transform(true);
+
+  while (reduction_phis.size() > 0) {
+    PhiNode* phi = reduction_phis.pop()->as_Phi();
+
+    Node* r    = phi->in(0);
+    Node* init = phi->in(1);
+    Node* red  = phi->in(2);
+
+    int opc = red_opcode(red);
+    const TypeVect* vt = red->in(2)->bottom_type()->is_vect();
+
+    // ReductionV init (AddVI (Phi vinit #y) v)#y
+
+    // Phi (CountedLoop ...) vinit y
+    Node* vphi = _igvn.transform(PhiNode::make_blank(r, red->in(2) /*vt*/));
+
+    Node* vinit = _igvn.transform(red_init(_igvn, opc, vt));
+    vinit = _igvn.transform(VectorInsertNode::make(_igvn, vinit, init, 0));
+
+    Node* y = promote_to_vector(red, phi, vphi, vt->length(), vt->element_basic_type());
+
+    vphi->set_req(1, vinit);
+    vphi->set_req(2, y); // finish the vector loop
+
+    // ReductionV 0 (AddVI (Phi vinit #y) v)#y
+
+    Node* post_init = red_init_value(_igvn, opc);
+    Node* post_red = _igvn.transform(ReductionNode::make(opc, NULL, post_init, y, vt->element_basic_type()));
+
+    _igvn.replace_node(red, post_red); // also kills old scalar phi
+  }
+
+  _igvn.set_delay_transform(false);
 }
 
 //------------------------------early unrolling analysis------------------------------
@@ -562,6 +752,8 @@ void SuperWord::SLP_extract() {
   }
 
   output();
+
+  optimize_vector_reductions(cl);
 }
 
 //------------------------------find_adjacent_refs---------------------------
@@ -642,6 +834,28 @@ void SuperWord::find_adjacent_refs() {
           }
         }
       }
+      for (uint i = 0; i < align_to_refs.size(); i++) {
+        MemNode* mr = align_to_refs.at(i)->as_Mem();
+        if (mr == mem_ref) {
+          // Skip when we are looking at same memory operation.
+          continue;
+        }
+        if (mem_ref->is_Load() && mr->is_Load()) {
+          continue; // no problematic aliasing on loads
+        }
+        SWPointer p(mr, this, NULL, false);
+        if (align_to_ref_p.cmp(p) != SWPointer::Equal) { // not equal or not comparable
+          if (align_to_ref_p.base() != p.base()) {
+            assert(align_to_ref_p.valid(), "");
+            assert(p.valid(), "");
+            OrderedPair pp(align_to_ref_p.base(), p.base());
+            if (_disjoint_ptrs.contains(pp)) {
+              continue; // don't alias
+            }
+          }
+          create_pack = false; // possible aliasing issues
+        }
+      }
     } else {
       if (same_velt_type(mem_ref, best_align_to_mem_ref)) {
         // Can't allow vectorization of unaligned memory accesses with the
@@ -662,8 +876,9 @@ void SuperWord::find_adjacent_refs() {
               continue;
             }
             if (same_velt_type(mr, mem_ref) &&
-                memory_alignment(mr, iv_adjustment) != 0)
+                memory_alignment(mr, iv_adjustment) != 0) {
               create_pack = false;
+            }
           }
         }
       }
@@ -1086,12 +1301,22 @@ void SuperWord::dependence_graph() {
         SWPointer p2(s2->as_Mem(), this, NULL, false);
 
         int cmp = p1.cmp(p2);
-        if (SuperWordRTDepCheck &&
-            p1.base() != p2.base() && p1.valid() && p2.valid()) {
-          // Create a runtime check to disambiguate
-          OrderedPair pp(p1.base(), p2.base());
-          _disjoint_ptrs.append_if_missing(pp);
-        } else if (!SWPointer::not_equal(cmp)) {
+        if (SuperWordRTDepCheck && // _do_vector_loop &&
+            _predicate_insertion_point != NULL &&
+            p1.valid() && p2.valid()) {
+          if (p1.base() != p2.base()) {
+            // Create a runtime check to disambiguate
+            OrderedPair pp(p1.base(), p2.base());
+            _disjoint_ptrs.append_if_missing(pp);
+            continue;
+          } else if (p1.invar() != p2.invar()) {
+            // Create a runtime check to disambiguate
+            OrderedPair pp(p1.invar(), p2.invar());
+            _disjoint_ptrs.append_if_missing(pp);
+            continue;
+          }
+        }
+        if (!SWPointer::not_equal(cmp)) {
           // Possibly same address
           _dg.make_edge(s1, s2);
           sink_dependent = false;
@@ -1474,7 +1699,7 @@ bool SuperWord::follow_def_uses(Node_List* p) {
       Node* t2 = s2->fast_out(j);
       if (!in_bb(t2)) continue;
       if (t2->Opcode() == Op_AddI && t2 == _lp->as_CountedLoop()->incr()) continue; // don't mess with the iv
-      if (!opnd_positions_match(s1, t1, s2, t2))
+      if (!opnd_positions_match(p, s1, t1, s2, t2))
         continue;
       if (stmts_can_pack(t1, t2, align)) {
         int my_savings = est_savings(t1, t2);
@@ -1534,7 +1759,7 @@ void SuperWord::order_def_uses(Node_List* p) {
       for (uint j = 1; j < p->size(); j++) {
         Node* d1 = p->at(j);
         Node* u1 = p2->at(j);
-        opnd_positions_match(s1, t1, d1, u1);
+        opnd_positions_match(p, s1, t1, d1, u1);
       }
     }
   }
@@ -1542,19 +1767,23 @@ void SuperWord::order_def_uses(Node_List* p) {
 
 //---------------------------opnd_positions_match-------------------------
 // Is the use of d1 in u1 at the same operand position as d2 in u2?
-bool SuperWord::opnd_positions_match(Node* d1, Node* u1, Node* d2, Node* u2) {
+bool SuperWord::opnd_positions_match(Node_List* p, Node* d1, Node* u1, Node* d2, Node* u2) {
   // check reductions to see if they are marshalled to represent the reduction
   // operator in a specified opnd
   if (u1->is_reduction() && u2->is_reduction()) {
-    // ensure reductions have phis and reduction definitions feeding the 1st operand
-    Node* first = u1->in(2);
-    if (first->is_Phi() || first->is_reduction()) {
-      u1->swap_edges(1, 2);
+    { // ensure reductions have phis and reduction definitions feeding the 1st operand
+      Node* fst = u1->in(1);
+      Node* snd = u1->in(2);
+      if (snd->is_Phi() || snd->is_reduction() || p->contains(fst)) {
+        u1->swap_edges(1, 2);
+      }
     }
-    // ensure reductions have phis and reduction definitions feeding the 1st operand
-    first = u2->in(2);
-    if (first->is_Phi() || first->is_reduction()) {
-      u2->swap_edges(1, 2);
+    { // ensure reductions have phis and reduction definitions feeding the 1st operand
+      Node* fst = u2->in(1);
+      Node* snd = u2->in(2);
+      if (snd->is_Phi() || snd->is_reduction() || p->contains(fst)) {
+        u2->swap_edges(1, 2);
+      }
     }
     return true;
   }
@@ -1679,6 +1908,10 @@ void SuperWord::combine_packs() {
       assert(is_power_of_2(max_vlen), "sanity");
       uint psize = p1->size();
       if (!is_power_of_2(psize)) {
+        if (is_power_of_2(psize + 1)) {
+          // Try to fill in one element?
+          tty->print("!!!BINGO!!!");
+        }
         // Skip pack which can't be vector.
         // case1: for(...) { a[i] = i; }    elements values are different (i+x)
         // case2: for(...) { a[i] = b[i+1]; }  can't align both, load and store
@@ -2044,12 +2277,14 @@ bool SuperWord::profitable(Node_List* p) {
   if (p0->is_reduction()) {
     Node* second_in = p0->in(2);
     Node_List* second_pk = my_pack(second_in);
-    if ((second_pk == NULL) || (_num_work_vecs == _num_reductions)) {
+//    if ((second_pk == NULL) || (_num_work_vecs == _num_reductions)) {
+//    if (second_pk == NULL) { // red += a[i]
       // Remove reduction flag if no parent pack or if not enough work
       // to cover reduction expansion overhead
-      p0->remove_flag(Node::Flag_is_reduction);
-      return false;
-    } else if (second_pk->size() != p->size()) {
+//      p0->remove_flag(Node::Flag_is_reduction);
+//      return false;
+//    } else if (second_pk->size() != p->size()) {
+    if (second_pk != NULL && second_pk->size() != p->size()) {
       return false;
     }
   }
@@ -2715,6 +2950,48 @@ void SuperWord::output() {
   if (do_reserve_copy()) {
     make_reversable.use_new();
   }
+
+  for (int i = 0; i < _disjoint_ptrs.length(); i++) {
+    assert(_do_vector_loop, "");
+    assert(_predicate_insertion_point != NULL, "");
+
+    Node* p1 = _disjoint_ptrs.at(i)._p1;
+    Node* p2 = _disjoint_ptrs.at(i)._p2;
+
+    // TODO: ensure that p1/p2 dominate _predicate_insertion_point
+
+    Node* cmp = NULL;
+    Node* bol = NULL;
+    if (p1->bottom_type()->isa_ptr() && p2->bottom_type()->isa_ptr()) {
+      cmp = _igvn.register_new_node_with_optimizer(new CmpPNode(p1, p2));
+      bol = _igvn.register_new_node_with_optimizer(new BoolNode(cmp, BoolTest::ne));
+    } else if (p1->bottom_type()->isa_int() && p2->bottom_type()->isa_int()) {
+      // FIXME: same base, but different offsets
+      continue;
+    }
+
+    Node* new_predicate_proj = _phase->create_new_if_for_predicate(_predicate_insertion_point, NULL,
+                                                                   Deoptimization::Reason_aliasing,
+                                                                   Op_If);
+    Node* iff = new_predicate_proj->in(0);
+
+    assert(iff->Opcode()               == Op_If,      "bad graph shape");
+    assert(iff->in(1)->Opcode()        == Op_Conv2B,  "bad graph shape");
+    assert(iff->in(1)->in(1)->Opcode() == Op_Opaque1, "bad graph shape");
+
+    _phase->set_subtree_ctrl(bol);
+    _igvn.replace_input_of(iff, 1, bol);
+
+#ifndef PRODUCT
+    // report that the loop predication has been actually performed
+    // for this loop
+    if (TraceSuperWord) {
+      tty->print_cr("Predicate for disjoint pair (%d,%d) is inserted", p1->_idx, p2->_idx);
+      debug_only( bol->dump(2); )
+    }
+#endif
+  }
+
   NOT_PRODUCT(if(is_trace_loop_reverse()) {tty->print_cr("\n Final loop after SuperWord"); print_loop(true);})
   return;
 }
@@ -2906,7 +3183,13 @@ bool SuperWord::is_vector_use(Node* use, int u_idx) {
     // check for scalar promotion
     Node* n = u_pk->at(0)->in(u_idx);
     for (uint i = 1; i < u_pk->size(); i++) {
-      if (u_pk->at(i)->in(u_idx) != n) return false;
+      if (u_pk->at(i)->in(u_idx) == n) {
+        continue; // scalar promotion
+      }
+      if (!in_bb(n) &&
+          !in_bb(u_pk->at(i)->in(u_idx))) {
+        continue; // loop invariant
+      }
     }
     return true;
   }
@@ -3644,7 +3927,11 @@ void SuperWord::print_packset() {
   for (int i = 0; i < _packset.length(); i++) {
     tty->print_cr("Pack: %d", i);
     Node_List* p = _packset.at(i);
-    print_pack(p);
+    if (p != NULL) {
+      print_pack(p);
+    } else {
+      tty->print_cr(" NULL");
+    }
   }
 #endif
 }
@@ -3675,6 +3962,31 @@ void SuperWord::print_stmt(Node* s) {
 #ifndef PRODUCT
   tty->print(" align: %d \t", alignment(s));
   s->dump();
+#endif
+}
+
+//------------------------------print_node_info----------------------
+void SuperWord::print_node_info() {
+#ifndef PRODUCT
+  ResourceMark rm;
+  tty->print_cr("node_info");
+  for (int i = 0; i < _node_info.length(); i++) {
+    SWNodeInfo info = _node_info.at(i);
+    if (info._depth != 0 || info._alignment != -1 || info._velt_type != NULL || info._my_pack != NULL) {
+      tty->print_cr("%2d: depth=%d alignment=%d type=%s " INTPTR_FORMAT,
+                    i, info._depth, info._alignment,
+                    (info._velt_type != NULL ? Type::str(info._velt_type) : "NULL"),
+                    p2i(info._my_pack));
+      Node* n = _block.at(i);
+      if (n != NULL) {
+        n->dump();
+      }
+      if (info._my_pack != NULL) {
+        info._my_pack->dump();
+      }
+      tty->cr();
+    }
+  }
 #endif
 }
 
@@ -3771,6 +4083,10 @@ SWPointer::SWPointer(SWPointer* p) :
   #endif
 {}
 
+bool SuperWord::invariant(Node* n) {
+  Node* n_c = phase()->get_ctrl(n);
+  return !lpt()->is_member(phase()->get_loop(n_c));
+}
 
 bool SWPointer::invariant(Node* n) {
   NOT_PRODUCT(Tracer::Depth dd;)
@@ -3929,21 +4245,46 @@ bool SWPointer::offset_plus_k(Node* n, bool negate) {
     _nstack->push(n, _stack_idx++);
   }
   if (opc == Op_AddI) {
-    if (n->in(2)->is_Con() && invariant(n->in(1))) {
-      _negate_invar = negate;
-      _invar = n->in(1);
-      _offset += negate ? -(n->in(2)->get_int()) : n->in(2)->get_int();
-      NOT_PRODUCT(_tracer.offset_plus_k_6(n, _invar, _negate_invar, _offset);)
-      return true;
-    } else if (n->in(1)->is_Con() && invariant(n->in(2))) {
-      _offset += negate ? -(n->in(1)->get_int()) : n->in(1)->get_int();
-      _negate_invar = negate;
-      _invar = n->in(2);
-      NOT_PRODUCT(_tracer.offset_plus_k_7(n, _invar, _negate_invar, _offset);)
-      return true;
+    if (n->in(2)->is_Con()) {
+      if (invariant(n->in(1)) && (_invar == NULL || _invar == n->in(1))) {
+        _negate_invar = negate;
+        _invar = n->in(1);
+        _offset += negate ? -(n->in(2)->get_int()) : n->in(2)->get_int();
+        NOT_PRODUCT(_tracer.offset_plus_k_6(n, _invar, _negate_invar, _offset);)
+        return true;
+      } else if (/*UseNewCode*/ false &&
+                 !has_iv() && _invar == NULL &&
+                 scaled_iv_plus_offset(n->in(1))) {
+        //assert(_scale > 0, "");
+        _offset += (negate ? -(n->in(2)->get_int()) : n->in(2)->get_int());
+        return true;
+//        int opc = n->in(1)->Opcode();
+//        if (opc == Op_AddI) {
+//          if (n->in(1)->in(1) == iv() && offset_plus_k(n->in(1)->in(2))) {
+//            _scale = 1;
+//            _offset += (negate ? -(n->in(2)->get_int()) : n->in(2)->get_int());
+////            NOT_PRODUCT(_tracer.scaled_iv_plus_offset_4(n);)
+//            return true;
+//          }
+//          if (n->in(1)->in(2) == iv() && offset_plus_k(n->in(1)->in(1))) {
+//            _scale = 1;
+//            _offset += (negate ? -(n->in(2)->get_int()) : n->in(2)->get_int());
+////            NOT_PRODUCT(_tracer.scaled_iv_plus_offset_5(n);)
+//            return true;
+//          }
+//        }
+      }
+    } else if (n->in(1)->is_Con()) {
+      if (invariant(n->in(2))) {
+        _offset += negate ? -(n->in(1)->get_int()) : n->in(1)->get_int();
+        _negate_invar = negate;
+        _invar = n->in(2);
+        NOT_PRODUCT(_tracer.offset_plus_k_7(n, _invar, _negate_invar, _offset);)
+        return true;
+      }
     }
-  }
-  if (opc == Op_SubI) {
+  } else if (opc == Op_SubI) {
+    // FIXME
     if (n->in(2)->is_Con() && invariant(n->in(1))) {
       _negate_invar = negate;
       _invar = n->in(1);

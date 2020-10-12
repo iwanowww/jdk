@@ -2308,6 +2308,13 @@ void Matcher::find_shared_post_visit(Node* n, uint opcode) {
       n->del_req(3);
       break;
     }
+    case Op_VectorInsert: {
+      Node* pair = new BinaryNode(n->in(1), n->in(2));
+      n->set_req(1, pair);
+      n->set_req(2, n->in(3));
+      n->del_req(3);
+      break;
+    }
     default:
       break;
   }

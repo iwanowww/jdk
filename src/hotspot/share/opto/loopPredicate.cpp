@@ -109,7 +109,7 @@ void PhaseIdealLoop::register_control(Node* n, IdealLoopTree *loop, Node* pred, 
 ProjNode* PhaseIdealLoop::create_new_if_for_predicate(ProjNode* cont_proj, Node* new_entry,
                                                       Deoptimization::DeoptReason reason,
                                                       int opcode, bool if_cont_is_true_proj) {
-  assert(cont_proj->is_uncommon_trap_if_pattern(reason), "must be a uct if pattern!");
+//  assert(cont_proj->is_uncommon_trap_if_pattern(reason), "must be a uct if pattern!");
   IfNode* iff = cont_proj->in(0)->as_If();
 
   ProjNode *uncommon_proj = iff->proj_out(1 - cont_proj->_con);
@@ -144,7 +144,7 @@ ProjNode* PhaseIdealLoop::create_new_if_for_predicate(ProjNode* cont_proj, Node*
 
   Node* entry = iff->in(0);
   if (new_entry != NULL) {
-    // Clonning the predicate to new location.
+    // Cloning the predicate to new location.
     entry = new_entry;
   }
   // Create new_iff
@@ -398,8 +398,9 @@ Node* PhaseIdealLoop::skip_all_loop_predicates(Node* entry) {
 //--------------------------find_predicate_insertion_point-------------------
 // Find a good location to insert a predicate
 ProjNode* PhaseIdealLoop::find_predicate_insertion_point(Node* start_c, Deoptimization::DeoptReason reason) {
-  if (start_c == NULL || !start_c->is_Proj())
+  if (start_c == NULL || !start_c->is_Proj()) {
     return NULL;
+  }
   if (start_c->as_Proj()->is_uncommon_trap_if_pattern(reason)) {
     return start_c->as_Proj();
   }
@@ -408,22 +409,22 @@ ProjNode* PhaseIdealLoop::find_predicate_insertion_point(Node* start_c, Deoptimi
 
 //--------------------------find_predicate------------------------------------
 // Find a predicate
-Node* PhaseIdealLoop::find_predicate(Node* entry) {
-  Node* predicate = NULL;
+ProjNode* PhaseIdealLoop::find_predicate(Node* entry) {
+  ProjNode* predicate = NULL;
   predicate = find_predicate_insertion_point(entry, Deoptimization::Reason_loop_limit_check);
   if (predicate != NULL) { // right pattern that can be used by loop predication
-    return entry;
+    return predicate; // entry
   }
   if (UseLoopPredicate) {
     predicate = find_predicate_insertion_point(entry, Deoptimization::Reason_predicate);
     if (predicate != NULL) { // right pattern that can be used by loop predication
-      return entry;
+      return predicate; // entry
     }
   }
   if (UseProfiledLoopPredicate) {
     predicate = find_predicate_insertion_point(entry, Deoptimization::Reason_profile_predicate);
     if (predicate != NULL) { // right pattern that can be used by loop predication
-      return entry;
+      return predicate; // entry
     }
   }
   return NULL;

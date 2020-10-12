@@ -223,10 +223,9 @@ class CMoveKit {
 //------------------------------OrderedPair---------------------------
 // Ordered pair of Node*.
 class OrderedPair {
- protected:
+ public:
   Node* _p1;
   Node* _p2;
- public:
   OrderedPair() : _p1(NULL), _p2(NULL) {}
   OrderedPair(Node* p1, Node* p2) {
     if (p1->_idx < p2->_idx) {
@@ -296,6 +295,12 @@ class SuperWord : public ResourceObj {
   PhiNode* iv()                    { return _iv; }
 
   bool early_return()              { return _early_return; }
+
+  ProjNode* _predicate_insertion_point;
+
+  bool invariant(Node* n);
+  Node* promote_to_vector(Node* n, Node* sphi, Node* vphi, uint vlen, BasicType elem_bt);
+  void optimize_vector_reductions(CountedLoopNode* cl);
 
 #ifndef PRODUCT
   bool     is_debug()              { return _vector_loop_debug > 0; }
@@ -533,7 +538,7 @@ class SuperWord : public ResourceObj {
   // Find pre loop end from main loop.  Returns null if none.
   CountedLoopEndNode* get_pre_loop_end(CountedLoopNode *cl);
   // Is the use of d1 in u1 at the same operand position as d2 in u2?
-  bool opnd_positions_match(Node* d1, Node* u1, Node* d2, Node* u2);
+  bool opnd_positions_match(Node_List* p, Node* d1, Node* u1, Node* d2, Node* u2);
   void init();
   // clean up some basic structures - used if the ideal graph was rebuilt
   void restart();
@@ -543,6 +548,7 @@ class SuperWord : public ResourceObj {
   void print_pack(Node_List* p);
   void print_bb();
   void print_stmt(Node* s);
+  void print_node_info();
   char* blank(uint depth);
 
   void packset_sort(int n);

@@ -2195,6 +2195,9 @@ const intx ObjectAlignmentInBytes = 8;
   product(bool, UseNewCode3, false, DIAGNOSTIC,                             \
           "Testing Only: Use the new version while testing")                \
                                                                             \
+  diagnostic(bool, UseNewCode4, false,                                      \
+          "Testing Only: Use the new version while testing")                \
+                                                                            \
   /* flags for performance data collection */                               \
                                                                             \
   product(bool, UsePerfData, true,                                          \

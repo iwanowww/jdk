@@ -600,6 +600,12 @@ bool VectorNode::is_vector_bitwise_not_pattern(Node* n) {
   return false;
 }
 
+Node* VectorInsertNode::make(PhaseGVN& gvn, Node* vec, Node* new_val, uint position) {
+  assert(position < vec->bottom_type()->is_vect()->length(), "pos in range");
+  ConINode* pos = gvn.intcon(position);
+  return new VectorInsertNode(vec, new_val, pos, vec->bottom_type()->is_vect());
+}
+
 // Return initial Pack node. Additional operands added with add_opd() calls.
 PackNode* PackNode::make(Node* s, uint vlen, BasicType bt) {
   const TypeVect* vt = TypeVect::make(bt, vlen);
@@ -811,6 +817,10 @@ ReductionNode* ReductionNode::make(int opc, Node *ctrl, Node* n1, Node* n2, Basi
     fatal("Missed vector creation for '%s'", NodeClassNames[vopc]);
     return NULL;
   }
+}
+
+Node* ReductionNode::Ideal(PhaseGVN* phase, bool can_reshape) {
+  return NULL;
 }
 
 bool ReductionNode::implemented(int opc, uint vlen, BasicType bt) {

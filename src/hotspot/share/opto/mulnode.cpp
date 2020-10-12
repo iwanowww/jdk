@@ -121,8 +121,7 @@ Node *MulNode::Ideal(PhaseGVN *phase, bool can_reshape) {
         // Compute new constant; check for overflow
         const Type *tcon01 = mul_ring(t2,t12);
         if( tcon01->singleton() ) {
-
-        // Convert (X+con1)*con0 into X*con0
+          // Convert (X+con1)*con0 into X*con0
           Node *mul = clone();    // mul = ()*con0
           mul->set_req(1,add1->in(1));  // mul = X*con0
           mul = phase->transform(mul);
@@ -130,9 +129,66 @@ Node *MulNode::Ideal(PhaseGVN *phase, bool can_reshape) {
           Node *add2 = add1->clone();
           add2->set_req(1, mul);        // X*con0 + con0*con1
           add2->set_req(2, phase->makecon(tcon01) );
-          progress = add2;
+          return add2;
         }
+      } else if (UseNewCode3) {
+        // Convert ((X + Y) * con0) into ((X * con0) + (Y * con0))
+        Node* mul1 = clone();
+        mul1->set_req(1, add1->in(1)); // X
+        mul1->set_req(2, in(2));       // con0
+        mul1 = phase->transform(mul1); // (X * con0)
+
+        Node* mul2 = clone();
+        mul2->set_req(1, add1->in(2)); // Y
+        mul2->set_req(2, in(2));       // con0
+        mul2 = phase->transform(mul2); // (Y * con0)
+
+        Node *add2 = add1->clone();
+        add2->set_req(1, mul1);        // ((X * con0) + (Y * con0))
+        add2->set_req(2, mul2);
+        return add2;
       }
+//      } else if (UseNewCode3) {
+//        // ((X * con1) + (Y * con2)) * con0 ==> (X * (con0*con1)) + (Y * (con0*con2))
+//        // (X + Y) * con0 ==> ((X * con0) + (Y * (con0))
+//        Node* mul11 = add1->in(1);
+//        Node* mul12 = add1->in(2);
+//
+//        const Type* tcon1 = NULL;
+//        if (mul11->Opcode() == mul_opcode()) {
+//          const Type* t112 = phase->type(mul11->in(2));
+//          if (t112->singleton() && t112 != Type::TOP) {
+//            tcon1 = t112;
+//          }
+//        }
+//        const Type* tcon2 = NULL;
+//        if (mul12->Opcode() == mul_opcode()) {
+//          const Type* t122 = phase->type(mul12->in(2));
+//          if (t122->singleton() && t122 != Type::TOP) {
+//            tcon2 = t122;
+//          }
+//        }
+//        if (tcon1 != NULL || tcon2 != NULL) {
+//          // X * (con0*con1)
+//          const Type* tcon01 = mul_ring((tcon1 != NULL ? tcon1 : mul_id()), t2);
+//          Node* mul01 = clone();
+//          mul01->set_req(1, (tcon1 != NULL ? mul11->in(1) : mul11));
+//          mul01->set_req(2, phase->makecon(tcon01));
+//          mul01 = phase->transform(mul01);
+//
+//          // Y * (con0*con2)
+//          const Type* tcon02 = mul_ring((tcon2 != NULL ? tcon2 : mul_id()), t2);
+//          Node* mul02 = clone();
+//          mul02->set_req(1, (tcon2 != NULL ? mul12->in(1) : mul12));
+//          mul02->set_req(2, phase->makecon(tcon02));
+//          mul02 = phase->transform(mul02);
+//
+//          Node* add0 = add1->clone();
+//          add0->set_req(1, mul01);
+//          add0->set_req(2, mul02);
+//          return add0;
+//        }
+//      }
     } // End of is left input an add
   } // End of is right input a Mul
 
@@ -180,8 +236,10 @@ Node *MulINode::Ideal(PhaseGVN *phase, bool can_reshape) {
   if ((con = in(1)->find_int_con(0)) != 0) {
     swap_edges(1, 2);
     // Finish rest of method to use info in 'con'
-  } else if ((con = in(2)->find_int_con(0)) == 0) {
-    return MulNode::Ideal(phase, can_reshape);
+  }
+  Node* progress = MulNode::Ideal(phase, can_reshape);
+  if (progress != NULL) {
+    return progress;
   }
 
   // Now we have a constant Node on the right and the constant in con
@@ -201,7 +259,7 @@ Node *MulINode::Ideal(PhaseGVN *phase, bool can_reshape) {
   unsigned int bit1 = abs_con & (0-abs_con);       // Extract low bit
   if (bit1 == abs_con) {           // Found a power of 2?
     res = new LShiftINode(in(1), phase->intcon(log2_uint(bit1)));
-  } else {
+  } else if (!UseNewCode2) {
 
     // Check for constant with 2 bits set
     unsigned int bit2 = abs_con-bit1;
@@ -234,6 +292,11 @@ Node *MulINode::Ideal(PhaseGVN *phase, bool can_reshape) {
 const Type *MulINode::mul_ring(const Type *t0, const Type *t1) const {
   const TypeInt *r0 = t0->is_int(); // Handy access
   const TypeInt *r1 = t1->is_int();
+
+  if (r0->singleton() && r1->singleton()) {
+    int32_t r = java_multiply(r0->get_con(), r1->get_con());
+    return TypeInt::make(r);
+  }
 
   // Fetch endpoints of all ranges
   jint lo0 = r0->_lo;

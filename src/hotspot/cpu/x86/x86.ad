@@ -1173,6 +1173,53 @@ public:
   };
 };
 
+static inline uint vector_length(const MachNode* n) {
+  const TypeVect* vt = n->bottom_type()->is_vect();
+  return vt->length();
+}
+
+static inline uint vector_length(const MachNode* use, MachOper* opnd) {
+  uint def_idx = use->operand_index(opnd);
+  Node* def = use->in(def_idx);
+  return def->bottom_type()->is_vect()->length();
+}
+
+static inline uint vector_length_in_bytes(const Node* n) {
+  const TypeVect* vt = n->bottom_type()->is_vect();
+  return vt->length_in_bytes();
+}
+
+static inline uint vector_length_in_bytes(const MachNode* use, MachOper* opnd) {
+  uint def_idx = use->operand_index(opnd);
+  Node* def = use->in(def_idx);
+  return def->bottom_type()->is_vect()->length_in_bytes();
+}
+
+inline BasicType vector_element_basic_type(const Node *n) {
+  return n->bottom_type()->is_vect()->element_basic_type();
+}
+
+inline BasicType vector_element_basic_type(const MachNode *use, MachOper* opnd) {
+  uint def_idx = use->operand_index(opnd);
+  Node* def = use->in(def_idx);
+  return def->bottom_type()->is_vect()->element_basic_type();
+}
+
+static inline Assembler::AvxVectorLen vector_length_encoding(const MachNode* n) {
+  switch(vector_length_in_bytes(n)) {
+    case  4: // fall-through
+    case  8: // fall-through
+    case 16: return Assembler::AVX_128bit;
+    case 32: return Assembler::AVX_256bit;
+    case 64: return Assembler::AVX_512bit;
+
+    default: {
+      ShouldNotReachHere();
+      return Assembler::AVX_NoVec;
+    }
+  }
+}
+
 %} // end source_hpp
 
 source %{
@@ -1326,6 +1373,7 @@ const bool Matcher::match_rule_supported(int opcode) {
       }
       break;
     case Op_MulReductionVI:
+    case Op_VectorInsert:
       if (UseSSE < 4) { // requires at least SSE4
         return false;
       }
@@ -1829,43 +1877,6 @@ bool Matcher::pd_clone_address_expressions(AddPNode* m, Matcher::MStack& mstack,
 }
 
 void Compile::reshape_address(AddPNode* addp) {
-}
-
-static inline uint vector_length(const MachNode* n) {
-  const TypeVect* vt = n->bottom_type()->is_vect();
-  return vt->length();
-}
-
-static inline uint vector_length(const MachNode* use, MachOper* opnd) {
-  uint def_idx = use->operand_index(opnd);
-  Node* def = use->in(def_idx);
-  return def->bottom_type()->is_vect()->length();
-}
-
-static inline uint vector_length_in_bytes(const MachNode* n) {
-  const TypeVect* vt = n->bottom_type()->is_vect();
-  return vt->length_in_bytes();
-}
-
-static inline uint vector_length_in_bytes(const MachNode* use, MachOper* opnd) {
-  uint def_idx = use->operand_index(opnd);
-  Node* def = use->in(def_idx);
-  return def->bottom_type()->is_vect()->length_in_bytes();
-}
-
-static inline Assembler::AvxVectorLen vector_length_encoding(const MachNode* n) {
-  switch(vector_length_in_bytes(n)) {
-    case  4: // fall-through
-    case  8: // fall-through
-    case 16: return Assembler::AVX_128bit;
-    case 32: return Assembler::AVX_256bit;
-    case 64: return Assembler::AVX_512bit;
-
-    default: {
-      ShouldNotReachHere();
-      return Assembler::AVX_NoVec;
-    }
-  }
 }
 
 // Helper methods for MachSpillCopyNode::implementation().
@@ -5440,6 +5451,89 @@ instruct vprorate(vec dst, vec src, vec shift) %{
     int vector_len  = vector_length_encoding(this);
     BasicType etype = this->bottom_type()->is_vect()->element_basic_type();
     __ vprotate_var(opcode, etype, $dst$$XMMRegister, $src$$XMMRegister, $shift$$XMMRegister, vector_len);
+  %}
+  ins_pipe( pipe_slow );
+%}
+
+// --------------------------------- Pack ----------------------------------
+
+instruct vpack4I(vec dst, rRegI src1, rRegI src2, rRegI src3, rRegI src4) %{ // 4 + 4 + 4 + 4 ==> 16
+  //predicate(n->bottom_type()->is_vect()->length() == 2);
+  match(Set dst (PackL (PackI src1 src2) (PackI src3 src4)));
+  format %{ "pack $dst,$src1,$src2\t! pack2I" %}
+  ins_encode %{
+    __ movdl($dst$$XMMRegister, $src1$$Register);
+    __ pinsrd($dst$$XMMRegister, $src2$$Register, 1);
+    __ pinsrd($dst$$XMMRegister, $src3$$Register, 2);
+    __ pinsrd($dst$$XMMRegister, $src4$$Register, 3);
+  %}
+  ins_pipe( fpu_reg_reg );
+
+%}
+
+instruct vpack32(vec dst, vec src) %{ // 16 + 16 ==> 32
+  //predicate(n->bottom_type()->is_vect()->length_in_bytes() == 32);
+  match(Set dst (Pack2L dst src));
+  format %{ "pack $dst,$dst,$src\t! pack32" %}
+  ins_encode %{
+    __ vinserti128_high($dst$$XMMRegister, $src$$XMMRegister);
+  %}
+  ins_pipe( fpu_reg_reg );
+%}
+
+//instruct vpack64(vec dst, vec src) %{ // 32 + 32 ==> 64
+//  predicate(n->bottom_type()->is_vect()->length_in_bytes() == 64);
+//  match(Set dst (Pack4L dst src));
+//  format %{ "pack $dst,$dst,$src\t! pack64" %}
+//  ins_encode %{
+//    assert(UseAVX > 2, "required");
+//    __ vinserti64x4_high($dst$$XMMRegister, $src$$XMMRegister);
+//  %}
+//  ins_pipe( fpu_reg_reg );
+//%}
+
+instruct insert(vec dst, rRegI val, immU8 idx) %{
+  predicate(vector_length_in_bytes(n) < 32);
+  match(Set dst (VectorInsert (Binary dst val) idx));
+  format %{ "vector_insert $dst,$val,$idx" %}
+  ins_encode %{
+    assert(UseSSE >= 4, "required");
+    assert(vector_length_in_bytes(this) >= 8, "required");
+
+    uint vlen_in_bytes = vector_length_in_bytes(this);
+    BasicType elem_bt = vector_element_basic_type(this);
+    __ vector_insert_element($dst$$XMMRegister, $dst$$XMMRegister, $val$$Register, $idx$$constant, xnoreg /*tmp*/,
+                             elem_bt, vlen_in_bytes);
+  %}
+  ins_pipe( pipe_slow );
+%}
+
+instruct insert32(vec dst, vec src, rRegI val, immU8 idx, vec vtmp) %{
+  predicate(vector_length_in_bytes(n) == 32);
+  match(Set dst (VectorInsert (Binary src val) idx));
+  effect(TEMP vtmp);
+  format %{ "vector_insert $dst,$src,$val,$idx\t!using $vtmp as TEMP" %}
+  ins_encode %{
+    uint vlen_in_bytes = vector_length_in_bytes(this);
+    BasicType elem_bt = vector_element_basic_type(this);
+    __ vector_insert_element($dst$$XMMRegister, $src$$XMMRegister, $val$$Register, $idx$$constant, $vtmp$$XMMRegister,
+                             elem_bt, vlen_in_bytes);
+  %}
+  ins_pipe( pipe_slow );
+%}
+
+instruct insert64(vec dst, vec src, rRegI val, immU8 idx, legVec vtmp) %{
+  predicate(vector_length_in_bytes(n) == 64);
+  match(Set dst (VectorInsert (Binary src val) idx));
+  effect(TEMP vtmp);
+  format %{ "vector_insert $dst,$src,$val,$idx\t!using $vtmp as TEMP" %}
+  ins_encode %{
+    assert(UseAVX > 2, "sanity");
+
+    uint vlen_in_bytes = vector_length_in_bytes(this);
+    BasicType elem_bt = vector_element_basic_type(this);
+    __ vector_insert_element($dst$$XMMRegister, $src$$XMMRegister, $val$$Register, $idx$$constant, $vtmp$$XMMRegister,
+                             elem_bt, vlen_in_bytes);
   %}
   ins_pipe( pipe_slow );
 %}

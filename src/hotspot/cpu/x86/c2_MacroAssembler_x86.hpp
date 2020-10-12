@@ -87,6 +87,12 @@ public:
   void vprotate_imm(int opcode, BasicType etype, XMMRegister dst, XMMRegister src, int shift, int vector_len);
   void vprotate_var(int opcode, BasicType etype, XMMRegister dst, XMMRegister src, XMMRegister shift, int vector_len);
 
+  // vector insert
+  void insert_element_into_lane(XMMRegister dst,                  RegisterOrXMMRegister val, uint idx, BasicType bt);
+  void insert_element_into_lane(XMMRegister dst, XMMRegister src, RegisterOrXMMRegister val, uint idx, BasicType bt);
+
+  void vector_insert_element(XMMRegister dst, XMMRegister src, RegisterOrXMMRegister val, uint idx, XMMRegister tmp, BasicType elem_bt, uint vlen_in_bytes);
+
   // Reductions for vectors of ints, longs, floats, and doubles.
 
   // dst = src1 + reduce(op, src2) using vtmp as temps

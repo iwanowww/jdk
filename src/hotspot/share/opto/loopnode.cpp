@@ -59,9 +59,14 @@ bool Node::is_cloop_ind_var() const {
 // Dump special per-node info
 #ifndef PRODUCT
 void LoopNode::dump_spec(outputStream *st) const {
-  if (is_inner_loop()) st->print( "inner " );
-  if (is_partial_peel_loop()) st->print( "partial_peel " );
-  if (partial_peel_has_failed()) st->print( "partial_peel_failed " );
+  if (is_inner_loop())           st->print("inner ");
+  if (range_checks_present())    st->print("has_range_checks ");
+  if (is_multiversioned())       st->print("multiversioned ");
+  if (is_vectorized_loop())      st->print("vectorized ");
+  if (is_partial_peel_loop())    st->print("partial_peel ");
+  if (partial_peel_has_failed()) st->print("partial_peel_failed ");
+  if (is_profile_trip_failed())  st->print("profile_trip_failed ");
+  if (is_subword_loop())         st->print("subword_loop ");
 }
 #endif
 
@@ -466,7 +471,7 @@ Node* PhaseIdealLoop::loop_iv_stride(Node* incr, IdealLoopTree* loop, Node*& xph
 }
 
 PhiNode* PhaseIdealLoop::loop_iv_phi(Node* xphi, Node* phi_incr, Node* x, IdealLoopTree* loop) {
-  if (!xphi->is_Phi()) {
+  if (!xphi->is_Phi()) { // FAIL: i + inv < limit (VectorHashCode::test4)
     return NULL; // Too much math on the trip counter
   }
   if (phi_incr != NULL && phi_incr != xphi) {
@@ -558,7 +563,7 @@ bool PhaseIdealLoop::is_counted_loop(Node* x, IdealLoopTree*& loop) {
   PhiNode* phi = loop_iv_phi(xphi, phi_incr, x, loop);
 
   if (phi == NULL ||
-      (trunc1 == NULL && phi->in(LoopNode::LoopBackControl) != incr) ||
+      (trunc1 == NULL && phi->in(LoopNode::LoopBackControl) != incr) || // FAILS: i + 3 < limit (VectorHashCode::test3)
       (trunc1 != NULL && phi->in(LoopNode::LoopBackControl) != trunc1)) {
     return false;
   }
@@ -1150,10 +1155,17 @@ void CountedLoopNode::dump_spec(outputStream *st) const {
   if (stride_is_con()) {
     st->print("stride: %d ",stride_con());
   }
-  if (is_pre_loop ()) st->print("pre of N%d" , _main_idx);
-  if (is_main_loop()) st->print("main of N%d", _idx);
-  if (is_post_loop()) st->print("post of N%d", _main_idx);
-  if (is_strip_mined()) st->print(" strip mined");
+  if (is_normal_loop())       st->print("normal ");
+  if (is_pre_loop ())         st->print("pre of N%d " , _main_idx);
+  if (is_main_loop())         st->print("main of N%d ", _idx);
+  if (is_post_loop())         st->print("post of N%d ", _main_idx);
+  if (is_strip_mined())       st->print("strip mined ");
+  if (is_reduction_loop())    st->print("reduction ");
+  if (is_main_no_pre_loop())  st->print("main_no_pre_loop");
+  if (has_atomic_post_loop()) st->print("has_atomic_post_loop ");
+  if (was_slp_analyzed())     st->print("was_slp_analyzed ");
+  if (has_passed_slp())       st->print("has_passed_slp ");
+  if (is_unroll_only())       st->print("unroll_only ");
 }
 #endif
 
@@ -3252,17 +3264,6 @@ void PhaseIdealLoop::build_and_optimize(LoopOptsMode mode) {
     C->set_major_progress();
   }
 
-  // Keep loop predicates and perform optimizations with them
-  // until no more loop optimizations could be done.
-  // After that switch predicates off and do more loop optimizations.
-  if (!C->major_progress() && (C->predicate_count() > 0)) {
-     C->cleanup_loop_predicates(_igvn);
-     if (TraceLoopOpts) {
-       tty->print_cr("PredicatesOff");
-     }
-     C->set_major_progress();
-  }
-
   // Convert scalar to superword operations at the end of all loop opts.
   if (UseSuperWord && C->has_loops() && !C->major_progress()) {
     // SuperWord transform
@@ -3293,11 +3294,30 @@ void PhaseIdealLoop::build_and_optimize(LoopOptsMode mode) {
             }
             sw.transform_loop(lpt, true);
           }
+        } else if (cl->is_vectorized_loop()) {
+          sw.transform_loop(lpt, true);
+        } else if (C->do_vector_loop() && cl->is_pre_loop()) {
+          ProjNode* predicate = PhaseIdealLoop::find_predicate(cl->in(LoopNode::EntryControl));
+          if (predicate != NULL) {
+            sw._predicate_insertion_point = predicate;
+          } else {
+            sw._predicate_insertion_point = NULL; // reset
+          }
         } else if (cl->is_main_loop()) {
           sw.transform_loop(lpt, true);
         }
       }
     }
+  }
+
+  // Keep loop predicates and perform optimizations with them
+  // until no more loop optimizations could be done.
+  if (!C->major_progress() && (C->predicate_count() > 0)) {
+     C->cleanup_loop_predicates(_igvn);
+     if (TraceLoopOpts) {
+       tty->print_cr("PredicatesOff");
+     }
+     C->set_major_progress();
   }
 
   // Cleanup any modified bits

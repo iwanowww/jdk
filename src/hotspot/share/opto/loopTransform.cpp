@@ -2151,9 +2151,43 @@ void PhaseIdealLoop::do_unroll(IdealLoopTree *loop, Node_List &old_new, bool adj
       _igvn.hash_delete(phi);
       _igvn.hash_delete(newphi);
 
-      phi   ->set_req(LoopNode::   EntryControl, newphi->in(LoopNode::LoopBackControl));
-      newphi->set_req(LoopNode::LoopBackControl, phi   ->in(LoopNode::LoopBackControl));
-      phi   ->set_req(LoopNode::LoopBackControl, C->top());
+      bool is_reduction_phi = loop_head->is_reduction_loop() &&
+                              (phi->in(LoopNode::EntryControl)->Opcode() == Op_VectorInsert ||
+                               (phi->in(LoopNode::LoopBackControl)->is_reduction() &&
+                                phi->in(LoopNode::LoopBackControl)->in(2)->is_Vector())); // FIXME
+
+      if (UseNewCode4 && is_reduction_phi) { // untangle reduction iterations
+        phi->set_req(0, newphi->in(0));
+
+        Node* result1 = phi   ->in(LoopNode::LoopBackControl);
+        Node* result2 = newphi->in(LoopNode::LoopBackControl);
+
+        Node* merge = NULL;
+        if (result1->Opcode() == Op_AddVI) {
+          const TypeVect* vt = result1->bottom_type()->is_vect();
+          merge = new AddVINode(result1, result2, vt);
+        } else if (result1->Opcode() == Op_AddReductionVI) {
+          merge = new AddINode(result1, result2);
+        } else {
+          assert(false, "%s", result1->Name());
+        }
+        _igvn.register_new_node_with_optimizer(merge);
+
+        for (DUIterator_Fast imax, i = result1->fast_outs(imax); i < imax; i++) {
+          Node* use = result1->fast_out(i);
+          if (use == phi || use == merge) {
+            continue;
+          }
+          _igvn.rehash_node_delayed(use);
+          int num_edges = use->replace_edge(result1, merge);
+          --i; imax -= num_edges;
+        }
+        --j; --jmax; // phi->set_req(0, clone_head);
+      } else {
+        phi   ->set_req(LoopNode::   EntryControl, newphi->in(LoopNode::LoopBackControl));
+        newphi->set_req(LoopNode::LoopBackControl, phi   ->in(LoopNode::LoopBackControl));
+        phi   ->set_req(LoopNode::LoopBackControl, C->top());
+      }
     }
   }
   Node *clone_head = old_new[loop_head->_idx];
@@ -2263,9 +2297,17 @@ void PhaseIdealLoop::mark_reductions(IdealLoopTree *loop) {
               bool ok = false;
               for (unsigned j = 1; j < def_node->req(); j++) {
                 Node* in = def_node->in(j);
-                if (in == phi) {
+                if (in == phi) { // depth #0
                   ok = true;
                   break;
+                } else { // depth #1: one more step
+                  for (uint k = 1; k < in->req(); k++) {
+                    Node* in1 = in->in(k);
+                    if (in1 == phi) {
+                      ok = true;
+                      break;
+                    }
+                  }
                 }
               }
 

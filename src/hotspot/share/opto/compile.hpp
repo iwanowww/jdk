@@ -1095,6 +1095,8 @@ class Compile : public Phase {
   uint eval_macro_logic_op(uint func, uint op1, uint op2, uint op3);
   Node* xform_to_MacroLogicV(PhaseIterGVN &igvn, const TypeVect* vt, Unique_Node_List& partitions, Unique_Node_List& inputs);
 
+  void optimize_vector_reductions(PhaseIterGVN &igvn);
+
  public:
 
   // Note:  Histogram array size is about 1 Kb.
