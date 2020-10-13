@@ -21,10 +21,25 @@
  * questions.
  */
 
+/*
+ * @test
+ *
+ * @modules java.base/jdk.internal.org.objectweb.asm:+open java.base/jdk.internal.org.objectweb.asm.util:+open
+ * @library /vmTestbase /test/lib
+ *
+ * @comment build retransform.jar in current dir
+ * @run driver vm.runtime.defmeth.shared.BuildJar
+ *
+ * @run driver jdk.test.lib.FileInstaller . .
+ * @run main/othervm/native
+ *      -agentlib:redefineClasses
+ *      -javaagent:retransform.jar
+ *      vm.runtime.defmeth.DefaultVsAbstractTest
+ */
 package vm.runtime.defmeth;
 
-import nsk.share.test.TestBase;
 import vm.runtime.defmeth.shared.DefMethTest;
+import vm.runtime.defmeth.shared.ExecutionMode;
 import vm.runtime.defmeth.shared.data.*;
 import vm.runtime.defmeth.shared.data.method.param.NewInstanceParam;
 import vm.runtime.defmeth.shared.builder.TestBuilder;
@@ -46,7 +61,7 @@ import static vm.runtime.defmeth.shared.data.method.body.CallMethod.IndexbyteOp.
 public class DefaultVsAbstractTest extends DefMethTest {
 
     public static void main(String[] args) {
-        TestBase.runTest(new DefaultVsAbstractTest(), args);
+        DefMethTest.runTest(DefaultVsAbstractTest.class, args);
     }
 
     /*
@@ -394,7 +409,7 @@ public class DefaultVsAbstractTest extends DefMethTest {
 
         ConcreteClass B = b.clazz("B").extend(A).implement(J).build();
 
-        String exeMode = factory.getExecutionMode();
+        ExecutionMode exeMode = factory.getExecutionMode();
 
         // the test passes in the reflection mode because there's no way to
         // express invokeinterface on a class using Reflection API
@@ -406,8 +421,8 @@ public class DefaultVsAbstractTest extends DefMethTest {
         // during method resolution in JVMS-5.4.3.3 Method Resolution
         // "If method lookup succeeds and the method is abstract, but C is not
         // abstract, method resolution throws an AbstractMethodError."
-        if (exeMode.equals("REFLECTION") ||
-            exeMode.equals("INVOKE_WITH_ARGS")) {
+        if (exeMode == REFLECTION ||
+            exeMode == INVOKE_WITH_ARGS) {
             b.test().interfaceCallSite(A, B, "m", "()I")
              .returns(1).done()
              .run();
@@ -455,8 +470,6 @@ public class DefaultVsAbstractTest extends DefMethTest {
 
         ConcreteClass B = b.clazz("B").extend(A).implement(J).build();
 
-        String exeMode = factory.getExecutionMode();
-
         // ICCE in direct mode due to
         // JVMS-5.4.3.4. Interface Method Resolution
         //   When resolving an interface method reference:
@@ -499,8 +512,6 @@ public class DefaultVsAbstractTest extends DefMethTest {
         ConcreteClass A = b.clazz("A").implement(I).build();
 
         ConcreteClass B = b.clazz("B").extend(A).implement(J).build();
-
-        String exeMode = factory.getExecutionMode();
 
         // ICCE in direct mode due to
         // JVMS-5.4.3.4. Interface Method Resolution

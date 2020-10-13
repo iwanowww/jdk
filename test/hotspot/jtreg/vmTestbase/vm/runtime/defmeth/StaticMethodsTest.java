@@ -21,9 +21,24 @@
  * questions.
  */
 
+/*
+ * @test
+ *
+ * @modules java.base/jdk.internal.org.objectweb.asm:+open java.base/jdk.internal.org.objectweb.asm.util:+open
+ * @library /vmTestbase /test/lib
+ *
+ * @comment build retransform.jar in current dir
+ * @run driver vm.runtime.defmeth.shared.BuildJar
+ *
+ * @run driver jdk.test.lib.FileInstaller . .
+ * @run main/othervm/native
+ *      -agentlib:redefineClasses
+ *      -javaagent:retransform.jar
+ *      vm.runtime.defmeth.StaticMethodsTest
+ */
+
 package vm.runtime.defmeth;
 
-import nsk.share.test.TestBase;
 import vm.runtime.defmeth.shared.DefMethTest;
 import vm.runtime.defmeth.shared.data.*;
 import vm.runtime.defmeth.shared.builder.TestBuilder;
@@ -38,7 +53,7 @@ import static vm.runtime.defmeth.shared.ExecutionMode.*;
 public class StaticMethodsTest extends DefMethTest {
 
     public static void main(String[] args) {
-        TestBase.runTest(new StaticMethodsTest(), args);
+        DefMethTest.runTest(StaticMethodsTest.class, args);
     }
 
     // static method in interface

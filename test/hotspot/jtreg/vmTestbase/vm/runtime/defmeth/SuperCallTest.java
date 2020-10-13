@@ -21,9 +21,24 @@
  * questions.
  */
 
+/*
+ * @test
+ *
+ * @modules java.base/jdk.internal.org.objectweb.asm:+open java.base/jdk.internal.org.objectweb.asm.util:+open
+ * @library /vmTestbase /test/lib
+ *
+ * @comment build retransform.jar in current dir
+ * @run driver vm.runtime.defmeth.shared.BuildJar
+ *
+ * @run driver jdk.test.lib.FileInstaller . .
+ * @run main/othervm/native
+ *      -agentlib:redefineClasses
+ *      -javaagent:retransform.jar
+ *      vm.runtime.defmeth.SuperCallTest
+ */
+
 package vm.runtime.defmeth;
 
-import nsk.share.test.TestBase;
 import vm.runtime.defmeth.shared.DefMethTest;
 import vm.runtime.defmeth.shared.annotation.NotApplicableFor;
 import vm.runtime.defmeth.shared.data.*;
@@ -64,7 +79,7 @@ public class SuperCallTest extends DefMethTest {
     }
 
     public static void main(String[] args) {
-        TestBase.runTest(new SuperCallTest(), args);
+        DefMethTest.runTest(SuperCallTest.class, args);
     }
 
     /*

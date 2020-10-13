@@ -21,10 +21,25 @@
  * questions.
  */
 
+/*
+ * @test
+ *
+ * @modules java.base/jdk.internal.org.objectweb.asm:+open java.base/jdk.internal.org.objectweb.asm.util:+open
+ * @library /vmTestbase /test/lib
+ *
+ * @comment build retransform.jar in current dir
+ * @run driver vm.runtime.defmeth.shared.BuildJar
+ *
+ * @run driver jdk.test.lib.FileInstaller . .
+ * @run main/othervm/native
+ *      -agentlib:redefineClasses
+ *      -javaagent:retransform.jar
+ *      vm.runtime.defmeth.BasicTest
+ */
+
 package vm.runtime.defmeth;
 
 import nsk.share.TestFailure;
-import nsk.share.test.TestBase;
 import vm.runtime.defmeth.shared.MemoryClassLoader;
 import vm.runtime.defmeth.shared.annotation.NotApplicableFor;
 import vm.runtime.defmeth.shared.builder.TestBuilder;
@@ -42,7 +57,7 @@ import static vm.runtime.defmeth.shared.ExecutionMode.*;
 public class BasicTest extends DefMethTest {
 
     public static void main(String[] args) {
-        TestBase.runTest(new BasicTest(), args);
+        DefMethTest.runTest(BasicTest.class, args);
     }
 
     /*
@@ -73,9 +88,9 @@ public class BasicTest extends DefMethTest {
         ConcreteClass C = b.clazz("C").build();
 
         Class expectedClass;
-        if (factory.getExecutionMode().equals("REFLECTION")) {
+        if (factory.getExecutionMode() == REFLECTION) {
             expectedClass = IllegalArgumentException.class;
-        } else if (factory.getExecutionMode().equals("INVOKE_WITH_ARGS")) {
+        } else if (factory.getExecutionMode() == INVOKE_WITH_ARGS) {
             // Notes from JDK-8029926 which details reasons behind CCE.
             // The code below demonstrates the use of a MethodHandle
             // of kind REF_invokeInterface pointing to method I.m.
@@ -249,11 +264,11 @@ public class BasicTest extends DefMethTest {
 
         Class expectedClass;
         switch (factory.getExecutionMode()) {
-            case "REFLECTION":
+            case REFLECTION:
                 expectedClass = NoSuchMethodException.class;
                 break;
-            case "INVOKE_EXACT":
-            case "INVOKE_GENERIC":
+            case INVOKE_EXACT:
+            case INVOKE_GENERIC:
                 expectedClass = IllegalAccessError.class;
                 break;
             default:

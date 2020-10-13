@@ -21,6 +21,22 @@
  * questions.
  */
 
+/*
+ * @test
+ *
+ * @modules java.base/jdk.internal.org.objectweb.asm:+open java.base/jdk.internal.org.objectweb.asm.util:+open
+ * @library /vmTestbase /test/lib
+ *
+ * @comment build retransform.jar in current dir
+ * @run driver vm.runtime.defmeth.shared.BuildJar
+ *
+ * @run driver jdk.test.lib.FileInstaller . .
+ * @run main/othervm/native
+ *      -agentlib:redefineClasses
+ *      -javaagent:retransform.jar
+ *      vm.runtime.defmeth.RedefineTest
+ */
+
 package vm.runtime.defmeth;
 
 import java.util.HashMap;
@@ -28,9 +44,9 @@ import java.util.List;
 import java.util.Map;
 import nsk.share.Pair;
 import nsk.share.TestFailure;
-import nsk.share.test.TestBase;
 import vm.runtime.defmeth.shared.DefMethTest;
 import vm.runtime.defmeth.shared.DefMethTestFailure;
+import vm.runtime.defmeth.shared.ExecutionMode;
 import vm.runtime.defmeth.shared.MemoryClassLoader;
 import vm.runtime.defmeth.shared.annotation.NotApplicableFor;
 import vm.runtime.defmeth.shared.builder.TestBuilder;
@@ -47,15 +63,15 @@ import static vm.runtime.defmeth.shared.ExecutionMode.*;
 public class RedefineTest extends DefMethTest {
 
     public static void main(String[] args) {
-        TestBase.runTest(new RedefineTest(), args);
+        DefMethTest.runTest(RedefineTest.class, args);
     }
 
     @Override
     protected void configure() {
         // There are no testers being generated for reflection-based scenarios,
         // so scenarios on class redefinition don't work
-        String mode = factory.getExecutionMode();
-        if ( "REFLECTION".equals(mode) || "INVOKE_WITH_ARGS".equals(mode)) {
+        ExecutionMode mode = factory.getExecutionMode();
+        if ( mode == REFLECTION || mode == INVOKE_WITH_ARGS) {
             throw new TestFailure("RedefineTest isn't applicable to reflection-based execution scenario " +
                     "(REDEFINE & INVOKE_WITH_ARGS).");
         }

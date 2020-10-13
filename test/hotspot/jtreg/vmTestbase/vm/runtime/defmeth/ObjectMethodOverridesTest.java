@@ -21,10 +21,25 @@
  * questions.
  */
 
+/*
+ * @test
+ *
+ * @modules java.base/jdk.internal.org.objectweb.asm:+open java.base/jdk.internal.org.objectweb.asm.util:+open
+ * @library /vmTestbase /test/lib
+ *
+ * @comment build retransform.jar in current dir
+ * @run driver vm.runtime.defmeth.shared.BuildJar
+ *
+ * @run driver jdk.test.lib.FileInstaller . .
+ * @run main/othervm/native
+ *      -agentlib:redefineClasses
+ *      -javaagent:retransform.jar
+ *      vm.runtime.defmeth.ObjectMethodOverridesTest
+ */
+
 package vm.runtime.defmeth;
 
 import nsk.share.TestFailure;
-import nsk.share.test.TestBase;
 import vm.runtime.defmeth.shared.DefMethTest;
 import vm.runtime.defmeth.shared.data.*;
 import static vm.runtime.defmeth.shared.data.method.body.CallMethod.Invoke.*;
@@ -38,7 +53,7 @@ import vm.runtime.defmeth.shared.builder.TestBuilder;
 public class ObjectMethodOverridesTest extends DefMethTest {
 
     public static void main(String[] args) {
-        TestBase.runTest(new ObjectMethodOverridesTest(), args);
+        DefMethTest.runTest(ObjectMethodOverridesTest.class, args);
     }
 
     /* protected Object clone() */
