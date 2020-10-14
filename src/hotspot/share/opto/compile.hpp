@@ -384,9 +384,10 @@ class Compile : public Phase {
 
   GrowableArray<CallGenerator*> _vector_reboxing_late_inlines; // same but for vector reboxing operations
 
+  GrowableArray<CallGenerator*> _virtual_late_inlines; // List of CallGenerators to be revisited after
+
   int                           _late_inlines_pos;    // Where in the queue should the next late inlining candidate go (emulate depth first inlining)
   uint                          _number_of_mh_late_inlines; // number of method handle late inlining still pending
-
 
   // Inlining may not happen in parse order which would make
   // PrintInlining output confusing. Keep track of PrintInlining
@@ -878,12 +879,12 @@ class Compile : public Phase {
   bool should_delay_vector_reboxing_inlining(ciMethod* call_method, JVMState* jvms);
 
   // Helper functions to identify inlining potential at call-site
-  ciMethod* optimize_virtual_call(ciMethod* caller, int bci, ciInstanceKlass* klass,
+  ciMethod* optimize_virtual_call(ciMethod* caller, ciInstanceKlass* klass,
                                   ciKlass* holder, ciMethod* callee,
                                   const TypeOopPtr* receiver_type, bool is_virtual,
                                   bool &call_does_dispatch, int &vtable_index,
                                   bool check_access = true);
-  ciMethod* optimize_inlining(ciMethod* caller, int bci, ciInstanceKlass* klass,
+  ciMethod* optimize_inlining(ciMethod* caller, ciInstanceKlass* klass,
                               ciMethod* callee, const TypeOopPtr* receiver_type,
                               bool check_access = true);
 
@@ -939,6 +940,10 @@ class Compile : public Phase {
     _late_inlines.insert_before(0, cg);
   }
 
+  void              prepend_virtual_late_inline(CallGenerator* cg)    {
+    _virtual_late_inlines.insert_before(0, cg);
+  }
+
   void              add_string_late_inline(CallGenerator* cg) {
     _string_late_inlines.push(cg);
   }
@@ -975,6 +980,8 @@ class Compile : public Phase {
   bool inline_incrementally_one();
   void inline_incrementally_cleanup(PhaseIterGVN& igvn);
   void inline_incrementally(PhaseIterGVN& igvn);
+  void inline_incrementally_virtual(PhaseIterGVN& igvn);
+  bool inline_incrementally_virtual_one();
   void inline_string_calls(bool parse_time);
   void inline_boxing_calls(PhaseIterGVN& igvn);
   bool optimize_loops(PhaseIterGVN& igvn, LoopOptsMode mode);

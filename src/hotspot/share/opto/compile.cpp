@@ -413,6 +413,7 @@ void Compile::remove_useless_nodes(Unique_Node_List &useful) {
   remove_useless_late_inlines(&_string_late_inlines, useful);
   remove_useless_late_inlines(&_boxing_late_inlines, useful);
   remove_useless_late_inlines(&_late_inlines, useful);
+  remove_useless_late_inlines(&_virtual_late_inlines, useful);
   remove_useless_late_inlines(&_vector_reboxing_late_inlines, useful);
   debug_only(verify_graph_edges(true/*check for no_dead_code*/);)
 }
@@ -548,6 +549,7 @@ Compile::Compile( ciEnv* ci_env, ciMethod* target, int osr_bci,
                   _string_late_inlines(comp_arena(), 2, 0, NULL),
                   _boxing_late_inlines(comp_arena(), 2, 0, NULL),
                   _vector_reboxing_late_inlines(comp_arena(), 2, 0, NULL),
+                  _virtual_late_inlines(comp_arena(), 2, 0, NULL),
                   _late_inlines_pos(0),
                   _number_of_mh_late_inlines(0),
                   _print_inlining_stream(NULL),
@@ -1909,6 +1911,8 @@ bool Compile::inline_incrementally_one() {
   _late_inlines.trunc_to(j);
   assert(inlining_progress() || _late_inlines.length() == 0, "");
 
+  print_method(PHASE_INCREMENTAL_INLINE_STEP, 3);
+
   bool needs_cleanup = do_cleanup() || over_inlining_cutoff();
 
   set_inlining_progress(false);
@@ -1927,7 +1931,53 @@ void Compile::inline_incrementally_cleanup(PhaseIterGVN& igvn) {
     igvn = PhaseIterGVN(initial_gvn());
     igvn.optimize();
   }
+  print_method(PHASE_INCREMENTAL_INLINE_CLEANUP, 3);
 }
+
+void Compile::inline_incrementally_virtual(PhaseIterGVN& igvn) {
+  assert(inlining_incrementally(), "required");
+  while (_virtual_late_inlines.length() > 0) {
+    if (live_nodes() > (uint)LiveNodeCountInliningCutoff) {
+      break; // finish
+    }
+
+    for_igvn()->clear();
+    initial_gvn()->replace_with(&igvn);
+
+    while (inline_incrementally_virtual_one()) {
+      assert(!failing(), "inconsistent");
+    }
+    if (failing())  return;
+
+    inline_incrementally_cleanup(igvn);
+  }
+}
+
+bool Compile::inline_incrementally_virtual_one() {
+  assert(inlining_incrementally(), "required");
+  set_inlining_progress(false);
+  set_do_cleanup(false);
+  for (int i = 0; i < _virtual_late_inlines.length(); i++) {
+    CallGenerator* cg = _virtual_late_inlines.at(i);
+    cg->do_late_inline();
+    if (failing()) {
+      return false;
+    } else if (inlining_progress()) {
+      _virtual_late_inlines.remove_at(i);
+      break; // process one call site at a time
+    }
+  }
+  assert(inlining_progress() || _virtual_late_inlines.length() == 0, "");
+
+  print_method(PHASE_INCREMENTAL_INLINE_STEP_VIRTUAL, 3);
+
+  bool needs_cleanup = do_cleanup() || over_inlining_cutoff();
+
+  set_inlining_progress(false);
+  set_do_cleanup(false);
+  return (_virtual_late_inlines.length() > 0) && !needs_cleanup;
+}
+
 
 // Perform incremental inlining until bound on number of live nodes is reached
 void Compile::inline_incrementally(PhaseIterGVN& igvn) {
@@ -1936,7 +1986,7 @@ void Compile::inline_incrementally(PhaseIterGVN& igvn) {
   set_inlining_incrementally(true);
   uint low_live_nodes = 0;
 
-  while (_late_inlines.length() > 0) {
+  while (_late_inlines.length() > 0 || _virtual_late_inlines.length() > 0) {
     if (live_nodes() > (uint)LiveNodeCountInliningCutoff) {
       if (low_live_nodes < (uint)LiveNodeCountInliningCutoff * 8 / 10) {
         TracePhase tp("incrementalInline_ideal", &timers[_t_incrInline_ideal]);
@@ -1968,6 +2018,14 @@ void Compile::inline_incrementally(PhaseIterGVN& igvn) {
     print_method(PHASE_INCREMENTAL_INLINE_STEP, 3);
 
     if (failing())  return;
+
+    inline_incrementally_virtual(igvn);
+
+    if (failing())  return;
+
+    if (_late_inlines.length() == 0) {
+      break; // no more progress
+    }
   }
   assert( igvn._worklist.size() == 0, "should be done with igvn" );
 
@@ -3295,25 +3353,17 @@ void Compile::final_graph_reshaping_main_switch(Node* n, Final_Reshape_Counts& f
   }
 
   case Op_Proj: {
-    if (OptimizeStringConcat) {
-      ProjNode* p = n->as_Proj();
-      if (p->_is_io_use) {
+    if (OptimizeStringConcat || IncrementalInline || IncrementalInlineVirtual) {
+      ProjNode* proj = n->as_Proj();
+      if (proj->_is_io_use) {
+        assert(proj->_con == TypeFunc::I_O || proj->_con == TypeFunc::Memory, "");
         // Separate projections were used for the exception path which
         // are normally removed by a late inline.  If it wasn't inlined
         // then they will hang around and should just be replaced with
-        // the original one.
-        Node* proj = NULL;
-        // Replace with just one
-        for (SimpleDUIterator i(p->in(0)); i.has_next(); i.next()) {
-          Node *use = i.get();
-          if (use->is_Proj() && p != use && use->as_Proj()->_con == p->_con) {
-            proj = use;
-            break;
-          }
-        }
-        assert(proj != NULL || p->_con == TypeFunc::I_O, "io may be dropped at an infinite loop");
-        if (proj != NULL) {
-          p->subsume_by(proj, this);
+        // the original one. Merge them.
+        Node* non_io_proj = proj->in(0)->as_Multi()->proj_out_or_null(proj->_con, false /*is_io_use*/);
+        if (non_io_proj  != NULL) {
+          proj->subsume_by(non_io_proj , this);
         }
       }
     }
@@ -4170,7 +4220,7 @@ Compile::PrintInliningBuffer& Compile::print_inlining_current() {
 
 void Compile::print_inlining_update(CallGenerator* cg) {
   if (print_inlining() || print_intrinsics()) {
-    if (!cg->is_late_inline()) {
+    if (!cg->is_late_inline() && !cg->is_virtual_late_inline()) {
       if (print_inlining_current().cg() != NULL) {
         print_inlining_push();
       }
@@ -4230,6 +4280,14 @@ void Compile::process_print_inlining() {
         }
         log_late_inline_failure(cg, msg);
       }
+    }
+    for (int i = 0; i < _virtual_late_inlines.length(); i++) {
+      CallGenerator* cg = _virtual_late_inlines.at(i);
+        const char* msg = "virtual call";
+        if (do_print_inlining) {
+          cg->print_inlining_late(msg);
+        }
+        log_late_inline_failure(cg, msg);
     }
   }
   if (do_print_inlining) {
