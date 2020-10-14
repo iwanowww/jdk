@@ -1944,6 +1944,8 @@ void Compile::inline_incrementally_virtual(PhaseIterGVN& igvn) {
     for_igvn()->clear();
     initial_gvn()->replace_with(&igvn);
 
+    _late_inlines_pos = _late_inlines.length();
+
     while (inline_incrementally_virtual_one()) {
       assert(!failing(), "inconsistent");
     }
