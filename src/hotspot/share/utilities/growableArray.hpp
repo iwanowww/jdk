@@ -295,6 +295,17 @@ public:
     return min;
   }
 
+  void truncate_to(int idx) {
+    for (int i = 0, j = idx; j < length(); i++, j++) {
+      at_put(i, at(j));
+    }
+    trunc_to(length() - idx);
+  }
+
+  void truncate_from(int idx) {
+    trunc_to(idx);
+  }
+
   void print() {
     tty->print("Growable Array " INTPTR_FORMAT, p2i(this));
     tty->print(": length %d (_max %d) { ", _len, _max);
