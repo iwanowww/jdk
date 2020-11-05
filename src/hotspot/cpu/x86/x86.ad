@@ -7466,6 +7466,91 @@ instruct vstoreMask8B_evex(vec dst, vec src, immI_8 size) %{
   ins_pipe( pipe_slow );
 %}
 
+// ---------------------------------------- VectorReinterpretMask ----------------------------------
+
+instruct reinterpret_mask(vec dst, immI size) %{
+  predicate(vector_length_in_bytes(n) == vector_length_in_bytes(n->in(1)->in(1))); // dst == src
+  match(Set dst (VectorStoreMask (VectorLoadMask dst) size));
+  ins_cost(125);
+  format %{ "mask_reinterpret $dst\t!" %}
+  ins_encode %{
+    // empty
+  %}
+  ins_pipe( pipe_slow );
+%}
+
+instruct reinterpret_mask_expand(vec dst, vec src, immI size, rRegP scratch) %{
+  predicate(UseAVX == 0 &&
+            (vector_length_in_bytes(n->in(1)->in(1)) < vector_length_in_bytes(n))); // src < dst
+  match(Set dst (VectorStoreMask (VectorLoadMask src) size));
+  ins_cost(125);
+  effect(TEMP dst, TEMP scratch);
+  format %{ "mask_reinterpret_expand $dst,$src\t! using $scratch as TEMP" %}
+  ins_encode %{
+    assert(vector_length_in_bytes(this)       <= 16, "required");
+    assert(vector_length_in_bytes(this, $src) <=  8, "required");
+
+    int src_vlen_in_bytes = vector_length_in_bytes(this, $src);
+    if (src_vlen_in_bytes == 4) {
+      __ movdqu($dst$$XMMRegister, ExternalAddress(vector_32_bit_mask()), $scratch$$Register);
+    } else {
+      assert(src_vlen_in_bytes == 8, "");
+      __ movdqu($dst$$XMMRegister, ExternalAddress(vector_64_bit_mask()), $scratch$$Register);
+    }
+    __ pand($dst$$XMMRegister, $src$$XMMRegister);
+  %}
+  ins_pipe( pipe_slow );
+%}
+
+instruct vreinterpret_mask_expand4(legVec dst, vec src, immI size, rRegP scratch) %{
+  predicate(UseAVX > 0 &&
+            (vector_length_in_bytes(n->in(1)->in(1)) == 4) && // src
+            (vector_length_in_bytes(n->in(1)->in(1)) < vector_length_in_bytes(n))); // src < dst
+  match(Set dst (VectorStoreMask (VectorLoadMask src) size));
+  ins_cost(125);
+  effect(TEMP scratch);
+  format %{ "mask_reinterpret_expand $dst,$src\t! using $scratch as TEMP" %}
+  ins_encode %{
+    __ vpand($dst$$XMMRegister, $src$$XMMRegister, ExternalAddress(vector_32_bit_mask()), 0, $scratch$$Register);
+  %}
+  ins_pipe( pipe_slow );
+%}
+
+instruct vreinterpret_mask_expand(legVec dst, vec src, immI size) %{
+  predicate(UseAVX > 0 &&
+            (vector_length_in_bytes(n->in(1)->in(1)) > 4) && // src
+            (vector_length_in_bytes(n->in(1)->in(1)) < vector_length_in_bytes(n))); // src < dst
+  match(Set dst (VectorStoreMask (VectorLoadMask src) size));
+  ins_cost(125);
+  format %{ "mask_reinterpret_expand $dst,$src\t!" %}
+  ins_encode %{
+    switch (vector_length_in_bytes(this, $src)) {
+      case  8: __ movq   ($dst$$XMMRegister, $src$$XMMRegister); break;
+      case 16: __ movdqu ($dst$$XMMRegister, $src$$XMMRegister); break;
+      case 32: __ vmovdqu($dst$$XMMRegister, $src$$XMMRegister); break;
+      default: ShouldNotReachHere();
+    }
+  %}
+  ins_pipe( pipe_slow );
+%}
+
+instruct reinterpret_mask_shrink(vec dst, legVec src, immI size) %{
+  predicate(vector_length_in_bytes(n->in(1)->in(1)) > vector_length_in_bytes(n)); // src > dst
+  match(Set dst (VectorStoreMask (VectorLoadMask src) size));
+  ins_cost(125);
+  format %{ "mask_reinterpret_shrink $dst,$src\t!" %}
+  ins_encode %{
+    switch (vector_length_in_bytes(this)) {
+      case  4: __ movflt ($dst$$XMMRegister, $src$$XMMRegister); break;
+      case  8: __ movq   ($dst$$XMMRegister, $src$$XMMRegister); break;
+      case 16: __ movdqu ($dst$$XMMRegister, $src$$XMMRegister); break;
+      case 32: __ vmovdqu($dst$$XMMRegister, $src$$XMMRegister); break;
+      default: ShouldNotReachHere();
+    }
+  %}
+  ins_pipe( pipe_slow );
+%}
+
 //-------------------------------- Load Iota Indices ----------------------------------
 
 instruct loadIotaIndices(vec dst, immI_0 src, rRegP scratch) %{
