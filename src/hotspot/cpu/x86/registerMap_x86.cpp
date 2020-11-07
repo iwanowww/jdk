@@ -31,26 +31,23 @@ address RegisterMap::pd_location(VMReg reg) const {
     int reg_base = reg->value() - ConcreteRegisterImpl::max_fpr;
     int base_reg_enc = (reg_base / XMMRegisterImpl::max_slots_per_register);
     assert(base_reg_enc >= 0 && base_reg_enc < XMMRegisterImpl::number_of_registers, "invalid XMMRegister: %d", base_reg_enc);
-
+    if (base_reg_enc > 15) {
+      return NULL; // ZMM16-31 are stored in full.
+    }
     VMReg base_reg = as_XMMRegister(base_reg_enc)->as_VMReg();
     intptr_t offset_in_bytes = (reg->value() - base_reg->value()) * VMRegImpl::stack_slot_size;
-
-    if (base_reg_enc <= 15) {
-      if (offset_in_bytes == 0 || offset_in_bytes == 16 || offset_in_bytes == 32) {
-        // Reads of the low and high 16 byte parts should be handled by location itself because
-        // they have separate callee saved entries (see RegisterSaver::save_live_registers()).
-        return NULL;
-      }
-      // The upper part of YMM0-15 and ZMM0-15 registers are saved separately in the frame.
-      if (offset_in_bytes >= 32) {
-        base_reg = base_reg->next(8);
-        offset_in_bytes -= 32;
-      } else if (offset_in_bytes >= 16) {
-        base_reg = base_reg->next(4);
-        offset_in_bytes -= 16;
-      }
-    } else {
-      // ZMM16-31 are stored in full.
+    if (offset_in_bytes == 0 || offset_in_bytes == 16 || offset_in_bytes == 32) {
+      // Reads of the low and high 16 byte parts should be handled by location itself because
+      // they have separate callee saved entries (see RegisterSaver::save_live_registers()).
+      return NULL;
+    }
+    // The upper part of YMM0-15 and ZMM0-15 registers are saved separately in the frame.
+    if (offset_in_bytes >= 32) {
+      base_reg = base_reg->next(8);
+      offset_in_bytes -= 32;
+    } else if (offset_in_bytes >= 16) {
+      base_reg = base_reg->next(4);
+      offset_in_bytes -= 16;
     }
     address base_location = location(base_reg);
     if (base_location != NULL) {

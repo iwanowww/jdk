@@ -2598,6 +2598,9 @@ void SharedRuntime::generate_deopt_blob() {
   ResourceMark rm;
   // Setup code generation tools
   int pad = 0;
+  if (UseAVX > 2) {
+    pad += 512;
+  }
 #if INCLUDE_JVMCI
   if (EnableJVMCI || UseAOT) {
     pad += 512; // Increase the buffer size when compiling for JVMCI
@@ -2646,7 +2649,7 @@ void SharedRuntime::generate_deopt_blob() {
 
   // Save everything in sight.
   map = RegisterSaver::save_live_registers(masm, 0, &frame_size_in_words, /*save_vectors*/ true);
-  
+
   // Normal deoptimization.  Save exec mode for unpack_frames.
   __ movl(r14, Deoptimization::Unpack_deopt); // callee-saved
   __ jmp(cont);
