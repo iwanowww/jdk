@@ -154,6 +154,11 @@ public:
   void reduceDoubleMinMax(int opcode, int vlen, bool is_dst_valid,
                           XMMRegister dst, XMMRegister src,
                           XMMRegister tmp, XMMRegister atmp, XMMRegister btmp, XMMRegister xmm_0, XMMRegister xmm_1 = xnoreg);
+
+  // Vector mask support
+  void store_mask(XMMRegister dst, XMMRegister src, XMMRegister tmp, BasicType elem_bt, int vlen_in_bytes);
+  void  load_mask(XMMRegister dst, XMMRegister src, XMMRegister tmp, BasicType elem_bt, int vlen_in_bytes);
+
  private:
   void reduceF(int opcode, int vlen, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
   void reduceD(int opcode, int vlen, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
@@ -201,6 +206,11 @@ public:
   // Base reduction instruction
   void reduce_operation_128(BasicType typ, int opcode, XMMRegister dst, XMMRegister src);
   void reduce_operation_256(BasicType typ, int opcode, XMMRegister dst, XMMRegister src1, XMMRegister src2);
+
+  void store_mask_1B(XMMRegister dst, XMMRegister src,                  int vlen_in_bytes);
+  void store_mask_2B(XMMRegister dst, XMMRegister src,                  int vlen_in_bytes);
+  void store_mask_4B(XMMRegister dst, XMMRegister src,                  int vlen_in_bytes);
+  void store_mask_8B(XMMRegister dst, XMMRegister src, XMMRegister tmp, int vlen_in_bytes);
 
  public:
 

@@ -326,7 +326,7 @@ Node* PhaseVector::expand_vbox_alloc_node(VectorBoxAllocateNode* vbox_alloc,
 
   bool is_mask = is_vector_mask(box_klass);
   if (is_mask && bt != T_BOOLEAN) {
-    value = gvn.transform(VectorStoreMaskNode::make(gvn, value, bt, num_elem));
+    value = gvn.transform(new VectorStoreMaskNode(value, vect_type));
     // Although type of mask depends on its definition, in terms of storage everything is stored in boolean array.
     bt = T_BOOLEAN;
     assert(value->bottom_type()->is_vect()->element_basic_type() == bt,

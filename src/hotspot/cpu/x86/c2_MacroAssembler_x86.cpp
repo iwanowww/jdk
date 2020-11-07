@@ -2131,6 +2131,108 @@ void C2_MacroAssembler::evpblend(BasicType typ, XMMRegister dst, KRegister kmask
   }
 }
 
+void C2_MacroAssembler::store_mask_1B(XMMRegister dst, XMMRegister src, int vlen_in_bytes) {
+  assert(UseSSE >= 3, "required");
+  assert(vlen_in_bytes < 64 || VM_Version::supports_avx512vlbw(), "required");
+  if (vlen_in_bytes <= 16) {
+    pabsb(dst, src);
+  } else {
+    assert(UseAVX >= 2, "required");
+    int vlen_enc = vector_length_encoding(vlen_in_bytes);
+    vpabsb(dst, src, vlen_enc);
+  }
+}
+
+void C2_MacroAssembler::store_mask_2B(XMMRegister dst, XMMRegister src, int vlen_in_bytes) {
+  if (vlen_in_bytes <= 16) {
+    assert(UseSSE >= 3, "required");
+    pabsw(dst, src);
+    packsswb(dst, dst);
+  } else if (vlen_in_bytes == 32 && !VM_Version::supports_avx512bw()) {
+    assert(dst != src, "sanity");
+    vextracti128(dst, src, 0x1);
+    vpacksswb(dst, src, dst, Assembler::AVX_128bit);
+    vpabsb(dst, dst, Assembler::AVX_128bit);
+  } else {
+    assert(VM_Version::supports_avx512bw(), "sanity");
+    int src_vlen_enc = vector_length_encoding(vlen_in_bytes);
+    int dst_vlen_enc = vector_length_encoding(vlen_in_bytes / 2);
+    evpmovwb(dst, src, src_vlen_enc);
+    vpabsb(dst, dst, dst_vlen_enc);
+  }
+}
+
+void C2_MacroAssembler::store_mask_4B(XMMRegister dst, XMMRegister src, int vlen_in_bytes) {
+  if (UseAVX > 2) {
+    int vlen_enc = vector_length_encoding(vlen_in_bytes);
+    if (!VM_Version::supports_avx512vl()) {
+      vlen_enc = Assembler::AVX_512bit;
+    }
+    evpmovdb(dst, src, vlen_enc);
+    vpabsb(dst, dst, Assembler::AVX_128bit);
+  } else {
+    if (vlen_in_bytes <= 16) {
+      assert(UseSSE >= 3, "required");
+      pabsd(dst, src);
+      packssdw(dst, dst);
+      packsswb(dst, dst);
+    } else {
+      assert(vlen_in_bytes == 32, "sanity");
+      assert(dst != src, "sanity");
+      vextracti128(dst, src, 0x1);
+      vpackssdw(dst, src, dst, Assembler::AVX_128bit);
+      vpacksswb(dst, dst, dst, Assembler::AVX_128bit);
+      vpabsb(dst, dst, Assembler::AVX_128bit);
+    }
+  }
+}
+
+void C2_MacroAssembler::store_mask_8B(XMMRegister dst, XMMRegister src, XMMRegister tmp, int vlen_in_bytes) {
+  if (UseAVX > 2) {
+    assert(tmp == xnoreg, "not needed");
+    int vlen_enc = vector_length_encoding(vlen_in_bytes);
+    if (!VM_Version::supports_avx512vl()) {
+      vlen_enc = Assembler::AVX_512bit;
+    }
+    evpmovqb(dst, src, vlen_enc);
+    vpabsb(dst, dst, Assembler::AVX_128bit);
+  } else {
+    if (vlen_in_bytes == 16) {
+      assert(UseSSE >= 3, "required");
+      assert(tmp == xnoreg, "not needed");
+      pshufd(dst, src, 0x8);
+      packssdw(dst, dst);
+      packsswb(dst, dst);
+      pabsb(dst, dst);
+    } else {
+      assert(vlen_in_bytes == 32, "sanity");
+      assert_different_registers(dst, src, tmp);
+      assert(tmp != xnoreg, "required");
+      vpshufps(dst, src, src, 0x88, Assembler::AVX_256bit);
+      vextracti128(tmp, dst, 0x1);
+      vblendps(dst, dst, tmp, 0xC, Assembler::AVX_128bit);
+      vpackssdw(dst, dst, dst, Assembler::AVX_128bit);
+      vpacksswb(dst, dst, dst, Assembler::AVX_128bit);
+      vpabsb(dst, dst, Assembler::AVX_128bit);
+    }
+  }
+}
+
+void C2_MacroAssembler::store_mask(XMMRegister dst, XMMRegister src, XMMRegister tmp, BasicType elem_bt, int vlen_in_bytes) {
+  switch (type2aelembytes(elem_bt)) {
+    case 1: store_mask_1B(dst, src,      vlen_in_bytes); break;
+    case 2: store_mask_2B(dst, src,      vlen_in_bytes); break;
+    case 4: store_mask_4B(dst, src,      vlen_in_bytes); break;
+    case 8: store_mask_8B(dst, src, tmp, vlen_in_bytes); break;
+
+    default: assert(false, "not supported");
+  }
+}
+
+void C2_MacroAssembler::load_mask(XMMRegister dst, XMMRegister src, XMMRegister tmp, BasicType elem_bt, int vlen_in_bytes) {
+
+}
+
 //-------------------------------------------------------------------------------------------
 
 // IndexOf for constant substrings with size >= 8 chars

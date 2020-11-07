@@ -1155,14 +1155,13 @@ class VectorLoadMaskNode : public VectorNode {
 };
 
 class VectorStoreMaskNode : public VectorNode {
- protected:
-  VectorStoreMaskNode(Node* in1, ConINode* in2, const TypeVect* vt) : VectorNode(in1, in2, vt) {}
-
  public:
+  VectorStoreMaskNode(Node* in, const TypeVect* vt) : VectorNode(in, vt) {
+    assert(in->bottom_type()->isa_vect(), "sanity");
+  }
+
   virtual int Opcode() const;
   virtual Node* Identity(PhaseGVN* phase);
-
-  static VectorStoreMaskNode* make(PhaseGVN& gvn, Node* in, BasicType in_type, uint num_elem);
 };
 
 // This is intended for use as a simple reinterpret node that has no cast.
