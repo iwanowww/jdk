@@ -1,0 +1,51 @@
+Basically, the patch does 2 things:
+   (1) turn the original loop into reduction loop;
+   (2) turn reduction loop into vector loop.
+
+* Reductions
+    * Promote reduction loops to vector loops
+        * Move reductions out of loops
+    * Isomorphic code shapes
+        * Non-canonicalized shapes for operations with constants
+            * Multiplications: expanded early (shifts + subs/adds), constants aren’t promoted enough
+        * identity operations are absent in the graph
+
+@Benchmark
+public int testConstMulAdd() {
+    int red = 1;
+    for (int i = 0; i < size; i++) {
+        red = 37 * red + 5 * b[i];
+    }
+    return VALIDATE(red, 8);
+}
+
+Constants are chosen to simplify vectorisation.
+
+UseNewCode: promote reduction loops to vector loops (Compile::optimize_vector_reductions())
+             // (ReductionV (Phi init #y) v)#y ==>  (ReductionV 0 (AddVI (Phi vinit #y) v)#y)
+UseNewCode2: disable expansion of multiplications by a constant (into shift + add/sub)
+UseNewCode3:  ((X + Y) * con0) ==> ((X * con0) + (Y * con0))
+UseNewCode4: separate reduction iterations (each iteration uses its own accumulator);
+    2 modes: (1) reduction loop (-XX:-UseNewCode); and (2) vector loop (-XX:+UseNewCode)
+
+#0: no vectorisation
+    -XX:-UseNewCode -XX:-UseNewCode2 -XX:-UseNewCode3 -XX:-UseNewCode4
+#1: vectorisation + reduction loop (reduction on every iteration)
+    -XX:-UseNewCode -XX:+UseNewCode2 -XX:+UseNewCode3 -XX:-UseNewCode4
+#2: vectorisation + vector loop (loop body promoted to vector operations; reduction happens after the loop)
+    -XX:+UseNewCode -XX:+UseNewCode2 -XX:+UseNewCode3 -XX:-UseNewCode4
+#3: vectorisation + vector loop + separate vector accumulator per iteration
+    -XX:+UseNewCode -XX:+UseNewCode2 -XX:+UseNewCode3 -XX:+UseNewCode4
+#4: vectorisation + reduction loop + separate scalar accumulator per iteration
+    -XX:-UseNewCode -XX:+UseNewCode2 -XX:+UseNewCode3 -XX:+UseNewCode4
+
+               1K                 64K                 64M
+#0  |   904061 ± 13943 |  14030.022 ± 102.581 | 13.194 ±0.420 |
+#1  |  3810122 ± 93580 |  59737.300 ± 954.994 | 45.628 ±2.061 |
+#2  |  2276678 ± 47260 |  34760.034 ± 568.346 | 32.850 ±1.042 |
+#3  |  6413080 ±288116 | 110950.817 ±1509.933 | 52.515 ±0.760 |
+#4  |  3695068 ± 78326 |  60321.825 ± 719.963 | 46.913 ±1.968 |
+
+Observations:
+    * Reduction.testConstMulAdd is 1,5-2x faster w/ -XX:-UseNewCode
+    * But iteration separation helps a lot (-XX:+UseNewCode4). 
