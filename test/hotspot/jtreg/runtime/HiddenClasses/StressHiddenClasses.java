@@ -27,7 +27,7 @@
  * @requires !vm.graal.enabled
  * @library /test/lib
  * @modules jdk.compiler
- * @run main/othervm StressHiddenClasses
+ * @run main/othervm -XX:+IgnoreUnrecognizedVMOptions -XX:-VerifyDependencies StressHiddenClasses
  */
 
 import java.lang.invoke.MethodType;
