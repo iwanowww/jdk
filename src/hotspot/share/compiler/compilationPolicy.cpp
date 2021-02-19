@@ -91,8 +91,10 @@ void CompilationPolicy::compile_if_required(const methodHandle& selected_method,
     // This path is unusual, mostly used by the '-Xcomp' stress test mode.
 
     if (!THREAD->can_call_java() || THREAD->is_Compiler_thread()) {
-      // don't force compilation, resolve was on behalf of compiler
-      return;
+      return; // don't force compilation, resolve was on behalf of compiler
+    }
+    if (CodeCache_lock->owned_by_self()) {
+      return; // don't force compilation during nmethod dependency validation.
     }
     if (selected_method->method_holder()->is_not_initialized()) {
       // 'is_not_initialized' means not only '!is_initialized', but also that

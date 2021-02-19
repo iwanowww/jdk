@@ -132,7 +132,8 @@ class Dependencies: public ResourceObj {
     // context class CX.  M1 must be either inherited in CX or defined
     // in a subtype* of CX.  It asserts that MM(CX, M1) is no greater
     // than {M1}.
-    unique_concrete_method,       // one unique concrete method under CX
+    unique_concrete_method_2, // one unique concrete method under CX
+    unique_concrete_method_4, // one unique concrete method under CX
 
     // This dependency asserts that no instances of class or it's
     // subclasses require finalization registration.
@@ -156,7 +157,7 @@ class Dependencies: public ResourceObj {
     implicit_ctxk_types = 0,
     explicit_ctxk_types = all_types & ~(non_ctxk_types | implicit_ctxk_types),
 
-    max_arg_count = 3,   // current maximum number of arguments (incl. ctxk)
+    max_arg_count = 4,   // current maximum number of arguments (incl. ctxk)
 
     // A "context type" is a class or interface that
     // provides context for evaluating a dependency.
@@ -325,6 +326,7 @@ class Dependencies: public ResourceObj {
 
   void assert_common_1(DepType dept, ciBaseObject* x);
   void assert_common_2(DepType dept, ciBaseObject* x0, ciBaseObject* x1);
+  void assert_common_4(DepType dept, ciKlass* ctxk, ciBaseObject* x1, ciBaseObject* x2, ciBaseObject* x3);
 
  public:
   // Adding assertions to a new dependency set at compile time:
@@ -332,6 +334,7 @@ class Dependencies: public ResourceObj {
   void assert_leaf_type(ciKlass* ctxk);
   void assert_abstract_with_unique_concrete_subtype(ciKlass* ctxk, ciKlass* conck);
   void assert_unique_concrete_method(ciKlass* ctxk, ciMethod* uniqm);
+  void assert_unique_concrete_method(ciKlass* ctxk, ciMethod* uniqm, ciKlass* caller, ciKlass* holder);
   void assert_has_no_finalizable_subclasses(ciKlass* ctxk);
   void assert_call_site_target_value(ciCallSite* call_site, ciMethodHandle* method_handle);
 
@@ -400,6 +403,7 @@ class Dependencies: public ResourceObj {
   static Klass* check_leaf_type(Klass* ctxk);
   static Klass* check_abstract_with_unique_concrete_subtype(Klass* ctxk, Klass* conck, KlassDepChange* changes = NULL);
   static Klass* check_unique_concrete_method(Klass* ctxk, Method* uniqm, KlassDepChange* changes = NULL);
+  static Klass* check_unique_concrete_method(Klass* ctxk, Method* uniqm, Klass* caller, Klass* holder, KlassDepChange* changes = NULL);
   static Klass* check_has_no_finalizable_subclasses(Klass* ctxk, KlassDepChange* changes = NULL);
   static Klass* check_call_site_target_value(oop call_site, oop method_handle, CallSiteDepChange* changes = NULL);
   // A returned Klass* is NULL if the dependency assertion is still
@@ -419,6 +423,7 @@ class Dependencies: public ResourceObj {
   // Detecting possible new assertions:
   static Klass*  find_unique_concrete_subtype(Klass* ctxk);
   static Method* find_unique_concrete_method(Klass* ctxk, Method* m);
+  static Method* find_unique_concrete_method(Klass* ctxk, Method* m, Klass* caller, Klass* holder);
 
   // Create the encoding which will be stored in an nmethod.
   void encode_content_bytes();
@@ -452,7 +457,8 @@ class Dependencies: public ResourceObj {
   void log_dependency(DepType dept,
                       ciBaseObject* x0,
                       ciBaseObject* x1 = NULL,
-                      ciBaseObject* x2 = NULL) {
+                      ciBaseObject* x2 = NULL,
+                      ciBaseObject* x3 = NULL) {
     if (log() == NULL) {
       return;
     }
@@ -467,6 +473,9 @@ class Dependencies: public ResourceObj {
     }
     if (x2 != NULL) {
       ciargs->push(x2);
+    }
+    if (x3 != NULL) {
+      ciargs->push(x3);
     }
     assert(ciargs->length() == dep_args(dept), "");
     log_dependency(dept, ciargs);
