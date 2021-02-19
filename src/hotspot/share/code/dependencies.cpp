@@ -1599,25 +1599,29 @@ Klass* Dependencies::DepStream::check_klass_dependency(KlassDepChange* changes) 
   Dependencies::check_valid_dependency_type(type());
 
   Klass* witness = NULL;
-  switch (type()) {
-  case evol_method:
-    witness = check_evol_method(method_argument(0));
-    break;
-  case leaf_type:
-    witness = check_leaf_type(context_type());
-    break;
-  case abstract_with_unique_concrete_subtype:
-    witness = check_abstract_with_unique_concrete_subtype(context_type(), type_argument(1), changes);
-    break;
-  case unique_concrete_method:
-    witness = check_unique_concrete_method(context_type(), method_argument(1), changes);
-    break;
-  case no_finalizable_subclasses:
-    witness = check_has_no_finalizable_subclasses(context_type(), changes);
-    break;
-  default:
-    witness = NULL;
-    break;
+  if (changes != NULL && changes->new_type()->is_linked()) {
+    // nothing to do: no new types added
+  } else {
+    switch (type()) {
+    case evol_method:
+      witness = check_evol_method(method_argument(0));
+      break;
+    case leaf_type:
+      witness = check_leaf_type(context_type());
+      break;
+    case abstract_with_unique_concrete_subtype:
+      witness = check_abstract_with_unique_concrete_subtype(context_type(), type_argument(1), changes);
+      break;
+    case unique_concrete_method:
+      witness = check_unique_concrete_method(context_type(), method_argument(1), changes);
+      break;
+    case no_finalizable_subclasses:
+      witness = check_has_no_finalizable_subclasses(context_type(), changes);
+      break;
+    default:
+      witness = NULL;
+      break;
+    }
   }
   trace_and_log_witness(witness);
   return witness;
