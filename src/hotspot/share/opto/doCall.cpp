@@ -338,7 +338,7 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
 
           CallGenerator* cg = CallGenerator::for_guarded_call(holder, miss_cg, hit_cg);
           if (hit_cg != NULL && cg != NULL) {
-            dependencies()->assert_unique_concrete_method(declared_interface, cha_monomorphic_target, declared_interface, callee);
+            dependencies()->assert_unique_concrete_method(declared_interface, cha_monomorphic_target, caller->holder(), declared_interface, callee);
             return cg;
           }
         }
@@ -1179,7 +1179,7 @@ ciMethod* Compile::optimize_inlining(ciMethod* caller, ciInstanceKlass* klass, c
       // by dynamic class loading.  Be sure to test the "static" receiver
       // dest_method here, as opposed to the actual receiver, which may
       // falsely lead us to believe that the receiver is final or private.
-      dependencies()->assert_unique_concrete_method(actual_receiver, cha_monomorphic_target, holder, callee);
+      dependencies()->assert_unique_concrete_method(actual_receiver, cha_monomorphic_target, calling_klass, holder, callee);
     }
     return cha_monomorphic_target;
   }
