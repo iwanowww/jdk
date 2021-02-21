@@ -1320,8 +1320,7 @@ class MethodWalker {
     } else {
       // do lookup based on receiver klass using the vtable index
       if (resolved_method->method_holder()->is_interface()) { // default or miranda method
-        return LinkResolver::vtable_index_of_interface_method(resolved_klass,
-                                                              methodHandle(Thread::current(), resolved_method));
+        return LinkResolver::vtable_index_of_interface_method(resolved_klass, resolved_method);
       } else {
         // at this point we are sure that resolved_method is virtual and not
         // a default or miranda method; therefore, it must have a valid vtable index.
