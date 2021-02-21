@@ -1309,46 +1309,42 @@ class MethodWalker {
     }
   }
 
-  void initialize_from_method(Method* m) {
-    assert(m != NULL && m->is_method(), "sanity");
-    assert(_resolved_klass != NULL, "required");
-    _resolved_method = m;
-
-    if (_resolved_klass->is_interface()) {
-      if (_resolved_method->has_vtable_index()) {
-        _index = _resolved_method->vtable_index();
-      } else if (_resolved_method->has_itable_index()) {
-        _index = _resolved_method->itable_index();
+  static int compute_vtable_index(Klass* resolved_klass, Method* resolved_method) {
+    if (resolved_klass->is_interface()) {
+      if (resolved_method->has_itable_index()) {
+        return resolved_method->itable_index();
       } else {
-        fatal("vtable/itable index is missing");
+        assert(resolved_method->has_vtable_index(), "");
+        return resolved_method->vtable_index();
       }
     } else {
       // do lookup based on receiver klass using the vtable index
-      if (_resolved_method->method_holder()->is_interface()) { // default or miranda method
-        _index = LinkResolver::vtable_index_of_interface_method(_resolved_klass,
-                                                                methodHandle(Thread::current(), _resolved_method));
+      if (resolved_method->method_holder()->is_interface()) { // default or miranda method
+        return LinkResolver::vtable_index_of_interface_method(resolved_klass,
+                                                              methodHandle(Thread::current(), resolved_method));
       } else {
         // at this point we are sure that resolved_method is virtual and not
         // a default or miranda method; therefore, it must have a valid vtable index.
-        assert(!_resolved_method->has_itable_index(), "");
-        _index = _resolved_method->vtable_index();
+        assert(!resolved_method->has_itable_index(), "");
+        return resolved_method->vtable_index();
       }
     }
-    assert(_index >= 0, "we should have valid vtable index at this point");
   }
 
  public:
   // The walker is initialized to recognize certain methods and/or types
   // as friendly participants.
-  MethodWalker(Method* uniqm, Klass* resolved_klass, Method* resolved_method) {
+  MethodWalker(Klass* resolved_klass, Method* resolved_method, Method* uniqm = NULL) {
     _resolved_klass = resolved_klass;
-    initialize_from_method(resolved_method);
-    initialize(uniqm->method_holder(), uniqm);
-  }
-  MethodWalker(Method* resolved_method, Klass* resolved_klass) {
-    _resolved_klass = resolved_klass;
-    initialize_from_method(resolved_method);
-    initialize(NULL /* participant */, NULL /* method */);
+    _resolved_method = resolved_method;
+    _index = compute_vtable_index(resolved_klass, resolved_method);
+    assert(_index >= 0, "invalid vtable index");
+
+    if (uniqm != NULL) {
+      initialize(uniqm->method_holder(), uniqm);
+    } else {
+      initialize(NULL /* participant */, NULL /* method */);
+    }
   }
 
   int num_participants() { return _num_participants; }
@@ -1882,7 +1878,7 @@ Klass* Dependencies::check_unique_concrete_method(Klass*  ctxk,
   // we don't really need to search beneath it for overrides.
   // This is probably not important, since we don't use dependencies
   // to track final methods.  (They can't be "definalized".)
-  MethodWalker wf(uniqm, resolved_klass, resolved_method);
+  MethodWalker wf(resolved_klass, resolved_method, uniqm);
   return wf.find_witness_definer(ctxk, changes);
 }
 
@@ -1908,7 +1904,7 @@ Method* Dependencies::find_unique_concrete_method(Klass* ctxk, Method* m, Klass*
   if (m->is_old()) {
     return NULL;
   }
-  MethodWalker wf(resolved_method, resolved_klass);
+  MethodWalker wf(resolved_klass, resolved_method);
   assert(wf.check_method_context(ctxk, m), "proper context");
   wf.record_witnesses(1);
   Klass* wit = wf.find_witness_definer(ctxk);
