@@ -712,7 +712,6 @@ ciMethod* ciMethod::find_monomorphic_target(ciInstanceKlass* caller,
     MutexLocker locker(Compile_lock);
     target = methodHandle(THREAD, Dependencies::find_unique_concrete_method(actual_recv->get_Klass(),
                                                                             root_m->get_Method(),
-                                                                            caller->get_Klass(),
                                                                             callee_holder->get_Klass(),
                                                                             this->get_Method()));
     assert(target() == NULL || !target()->is_abstract(), "not allowed");
