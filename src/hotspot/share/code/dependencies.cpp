@@ -1510,7 +1510,8 @@ class MethodWalker {
       if (selected_method->is_static()) {
         selected_method = NULL; // private static Unsafe::throwIllegalAccessError
       }
-      assert(!selected_method->is_private(), "%s", selected_method->print_value_string());
+      assert(selected_method == NULL || !selected_method->is_private(),
+             "%s", selected_method->print_value_string());
     }
 #ifdef ASSERT
     Method* m = lookup_method(resolved_klass, resolved_method, recv_klass, caller);
