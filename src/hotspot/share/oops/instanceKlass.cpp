@@ -3158,7 +3158,7 @@ jint InstanceKlass::jvmti_class_status() const {
   return result;
 }
 
-Method* InstanceKlass::method_at_itable(Klass* holder, int index, TRAPS) {
+Method* InstanceKlass::method_at_itable(InstanceKlass* holder, int index, TRAPS) {
   itableOffsetEntry* ioe = (itableOffsetEntry*)start_of_itable();
   int method_table_offset_in_words = ioe->offset()/wordSize;
   int nof_interfaces = (method_table_offset_in_words - itable_offset_in_words())
@@ -3193,6 +3193,18 @@ Method* InstanceKlass::method_at_itable(Klass* holder, int index, TRAPS) {
   return m;
 }
 
+Method* InstanceKlass::method_at_itable_or_null(InstanceKlass* holder, int index) {
+  klassItable itable(this);
+  for (int i = 0; i < itable.size_offset_table(); i++) {
+    itableOffsetEntry* offset_entry = itable.offset_entry(i);
+    if (offset_entry->interface_klass() == holder) {
+      itableMethodEntry* ime = offset_entry->first_method_entry(this);
+      Method* m = ime[index].method();
+      return m;
+    }
+  }
+  return NULL; // offset entry not found
+}
 
 #if INCLUDE_JVMTI
 // update default_methods for redefineclasses for methods that are

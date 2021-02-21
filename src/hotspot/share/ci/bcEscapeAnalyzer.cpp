@@ -349,6 +349,7 @@ void BCEscapeAnalyzer::invoke(StateInfo &state, Bytecodes::Code code, ciMethod* 
         _dependencies.append(inline_target);
         _dependencies.append(calling_klass);
         _dependencies.append(callee_holder);
+        _dependencies.append(target);
         assert(callee_holder->is_interface() == (code == Bytecodes::_invokeinterface), "sanity");
       }
       _dependencies.appendAll(analyzer.dependencies());
@@ -1499,11 +1500,12 @@ void BCEscapeAnalyzer::copy_dependencies(Dependencies *deps) {
     // callee will trigger recompilation.
     deps->assert_evol_method(method());
   }
-  for (int i = 0; i < _dependencies.length(); i+=4) {
-    ciKlass*  recv   = _dependencies.at(i+0)->as_klass();
-    ciMethod* target = _dependencies.at(i+1)->as_method();
-    ciKlass*  caller = _dependencies.at(i+2)->as_klass();
-    ciKlass*  holder = _dependencies.at(i+3)->as_klass();
-    deps->assert_unique_concrete_method(recv, target, caller, holder);
+  for (int i = 0; i < _dependencies.length(); i+=5) {
+    ciKlass*  recv_klass      = _dependencies.at(i+0)->as_klass();
+    ciMethod* target          = _dependencies.at(i+1)->as_method();
+    ciKlass*  caller          = _dependencies.at(i+2)->as_klass();
+    ciKlass*  resolved_klass  = _dependencies.at(i+3)->as_klass();
+    ciMethod* resolved_method = _dependencies.at(i+4)->as_method();
+    deps->assert_unique_concrete_method(recv_klass, target, caller, resolved_klass, resolved_method);
   }
 }
