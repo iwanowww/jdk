@@ -157,7 +157,7 @@ class Dependencies: public ResourceObj {
     implicit_ctxk_types = 0,
     explicit_ctxk_types = all_types & ~(non_ctxk_types | implicit_ctxk_types),
 
-    max_arg_count = 5,   // current maximum number of arguments (incl. ctxk)
+    max_arg_count = 4,   // current maximum number of arguments (incl. ctxk)
 
     // A "context type" is a class or interface that
     // provides context for evaluating a dependency.
