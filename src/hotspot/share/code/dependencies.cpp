@@ -1894,7 +1894,7 @@ Klass* Dependencies::check_unique_concrete_method(Klass*  ctxk,
     MethodWalker wf(InstanceKlass::cast(resolved_klass), resolved_method, uniqm);
     return wf.find_witness_definer(ctxk, changes);
   } else {
-    // Dependency is redundant, but benign. Just keep the code to avoid recompilation.
+    // Dependency is redundant, but benign. Just keep it to avoid unnecessary recompilation.
     return NULL; // no vtable index available
   }
 }
