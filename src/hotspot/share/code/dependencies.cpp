@@ -1281,10 +1281,9 @@ class MethodWalker {
   enum { PARTICIPANT_LIMIT = 3 };
 
  private:
-  // optional method descriptor to check for:
-  Klass*  _resolved_klass;
-  Method* _resolved_method;
-  int     _index;
+  InstanceKlass* _resolved_klass;
+  Method*        _resolved_method;
+  int            _vtable_index;
 
   // special classes which are not allowed to be witnesses:
   Klass*    _participants[PARTICIPANT_LIMIT+1];
@@ -1333,11 +1332,15 @@ class MethodWalker {
  public:
   // The walker is initialized to recognize certain methods and/or types
   // as friendly participants.
-  MethodWalker(Klass* resolved_klass, Method* resolved_method, Method* uniqm = NULL) {
+  MethodWalker(InstanceKlass* resolved_klass, Method* resolved_method, Method* uniqm = NULL) {
+    assert(resolved_klass->is_linked(), "required");
+    assert(resolved_method->method_holder()->is_linked(), "required");
+    assert(!resolved_method->can_be_statically_bound(), "no vtable index available");
+
     _resolved_klass = resolved_klass;
     _resolved_method = resolved_method;
-    _index = compute_vtable_index(resolved_klass, resolved_method);
-    assert(_index >= 0, "invalid vtable index");
+    _vtable_index = compute_vtable_index(resolved_klass, resolved_method);
+    assert(_vtable_index >= 0, "invalid vtable index");
 
     if (uniqm != NULL) {
       initialize(uniqm->method_holder(), uniqm);
@@ -1441,7 +1444,7 @@ class MethodWalker {
     if (k->is_instance_klass()) {
       InstanceKlass* ik = InstanceKlass::cast(k);
       if (is_concrete_klass(ik)) {
-        Method* m = select_method(_resolved_klass, _resolved_method, ik, _index);
+        Method* m = select_method(ik);
         for (int i = 0; i < _num_participants; i++) {
           if (m == _found_methods[i]) {
             return false; // already recorded
@@ -1457,15 +1460,14 @@ class MethodWalker {
     }
   }
 
-  static Method* select_method(Klass* resolved_klass, Method* resolved_method, InstanceKlass* recv_klass, int index) {
+  Method* select_method(InstanceKlass* recv_klass) {
     Method* selected_method = NULL;
-    if (resolved_klass->is_interface() && resolved_method->has_itable_index()) {
-      assert(resolved_method->has_itable_index(), "sanity");
-      assert(resolved_method->itable_index() == index, "sanity");
-      assert(resolved_method->method_holder()->is_interface(), "sanity");
-      selected_method = recv_klass->method_at_itable_or_null(resolved_method->method_holder(), index);
+    if (_resolved_klass->is_interface() && _resolved_method->has_itable_index()) {
+      assert(_resolved_method->method_holder()->is_interface(), "sanity");
+      assert(_resolved_method->itable_index() == _vtable_index, "sanity");
+      selected_method = recv_klass->method_at_itable_or_null(_resolved_method->method_holder(), _vtable_index);
     } else {
-      selected_method = recv_klass->method_at_vtable(index);
+      selected_method = recv_klass->method_at_vtable(_vtable_index);
     }
     return selected_method;
   }
@@ -1882,12 +1884,19 @@ Klass* Dependencies::check_unique_concrete_method(Klass*  ctxk,
                                                   Klass*  resolved_klass,
                                                   Method* resolved_method,
                                                   KlassDepChange* changes) {
-  // Here is a missing optimization:  If uniqm->is_final(),
-  // we don't really need to search beneath it for overrides.
-  // This is probably not important, since we don't use dependencies
-  // to track final methods.  (They can't be "definalized".)
-  MethodWalker wf(resolved_klass, resolved_method, uniqm);
-  return wf.find_witness_definer(ctxk, changes);
+  assert(!ctxk->is_interface() || ctxk == resolved_klass, "sanity");
+  assert(!resolved_method->can_be_statically_bound() || resolved_method == uniqm, "sanity");
+  assert(resolved_klass->is_subtype_of(resolved_method->method_holder()), "sanity");
+
+  if (InstanceKlass::cast(resolved_klass)->is_linked() &&
+      resolved_method->method_holder()->is_linked() &&
+      !resolved_method->can_be_statically_bound()) {
+    MethodWalker wf(InstanceKlass::cast(resolved_klass), resolved_method, uniqm);
+    return wf.find_witness_definer(ctxk, changes);
+  } else {
+    // Dependency is redundant, but benign. Just keep the code to avoid recompilation.
+    return NULL; // no vtable index available
+  }
 }
 
 // If a class (or interface) has a unique concrete method uniqm, return NULL.
@@ -1912,7 +1921,12 @@ Method* Dependencies::find_unique_concrete_method(Klass* ctxk, Method* m, Klass*
   if (m->is_old()) {
     return NULL;
   }
-  MethodWalker wf(resolved_klass, resolved_method);
+  if (!InstanceKlass::cast(resolved_klass)->is_linked() ||
+      !resolved_method->method_holder()->is_linked() ||
+      resolved_method->can_be_statically_bound()) {
+    return m; // nothing to do: no witness under ctxk
+  }
+  MethodWalker wf(InstanceKlass::cast(resolved_klass), resolved_method);
   assert(wf.check_method_context(ctxk, m), "proper context");
   wf.record_witnesses(1);
   Klass* wit = wf.find_witness_definer(ctxk);
