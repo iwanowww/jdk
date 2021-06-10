@@ -325,8 +325,8 @@ public:
   const TypeMetadataPtr   *is_metadataptr() const;    // Java-style GC'd pointer
   const TypeKlassPtr      *isa_klassptr() const;      // Returns NULL if not KlassPtr
   const TypeKlassPtr      *is_klassptr() const;       // assert if not KlassPtr
-  const TypeInstKlassPtr  *isa_instklassptr() const;  // Returns NULL if not IntKlassPtr
-  const TypeInstKlassPtr  *is_instklassptr() const;   // assert if not IntKlassPtr
+  const TypeInstKlassPtr  *isa_instklassptr() const;  // Returns NULL if not InstKlassPtr
+  const TypeInstKlassPtr  *is_instklassptr() const;   // assert if not InstKlassPtr
   const TypeAryKlassPtr   *isa_aryklassptr() const;   // Returns NULL if not AryKlassPtr
   const TypeAryKlassPtr   *is_aryklassptr() const;    // assert if not AryKlassPtr
 
@@ -931,11 +931,10 @@ protected:
     NOT_SUBTYPE,
     LCA
   };
-  static MeetResult
-  meet_instptr(PTR &ptr, ciKlass* this_klass, ciKlass* tinst_klass, bool this_xk, bool tinst_xk, PTR this_ptr,
-               PTR tinst_ptr, ciKlass*&res_klass, bool &res_xk);
-  static MeetResult
-  meet_aryptr(PTR& ptr, const Type*& elem, ciKlass* this_klass, ciKlass* tap_klass, bool this_xk, bool tap_xk, PTR this_ptr, PTR tap_ptr, ciKlass*& res_klass, bool& res_xk);
+  static MeetResult meet_instptr(PTR& ptr, ciKlass* this_klass, ciKlass* tinst_klass, bool this_xk, bool tinst_xk,
+                                 PTR this_ptr, PTR tinst_ptr, ciKlass*& res_klass, bool& res_xk);
+  static MeetResult meet_aryptr(PTR& ptr, const Type*& elem, ciKlass* this_klass, ciKlass* tap_klass, bool this_xk, bool tap_xk,
+                                PTR this_ptr, PTR tap_ptr, ciKlass*& res_klass, bool& res_xk);
 
 public:
   const int _offset;            // Offset into oop, with TOP & BOT
@@ -1409,7 +1408,7 @@ public:
   bool  is_loaded() const { return klass()->is_loaded(); }
 
   static const TypeKlassPtr* make(ciKlass* klass);
-  static const TypeKlassPtr *make(PTR ptr, ciKlass* klass, int offset);
+  static const TypeKlassPtr* make(PTR ptr, ciKlass* klass, int offset);
 
 
   virtual const TypePtr* cast_to_ptr_type(PTR ptr) const { ShouldNotReachHere(); return NULL; }

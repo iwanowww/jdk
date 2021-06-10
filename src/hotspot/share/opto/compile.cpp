@@ -1438,13 +1438,12 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
     break;
   case 1:                       // Flatten to: oop, static, field or array
     switch (tj->base()) {
-    //case Type::AryPtr: tj = TypeAryPtr::RANGE;    break;
-    case Type::RawPtr:   tj = TypeRawPtr::BOTTOM;   break;
-    case Type::AryPtr:   // do not distinguish arrays at all
-    case Type::InstPtr:  tj = TypeInstPtr::BOTTOM;  break;
-    case Type::AryKlassPtr:
+    case Type::RawPtr:       tj = TypeRawPtr::BOTTOM;       break;
+    case Type::AryPtr:       // do not distinguish arrays at all
+    case Type::InstPtr:      tj = TypeInstPtr::BOTTOM;      break;
+    case Type::AryKlassPtr:  // do not distinguish array klasses at all
     case Type::InstKlassPtr: tj = TypeInstKlassPtr::OBJECT; break;
-    case Type::AnyPtr:   tj = TypePtr::BOTTOM;      break;  // caller checks it
+    case Type::AnyPtr:       tj = TypePtr::BOTTOM;          break;  // caller checks it
     default: ShouldNotReachHere();
     }
     break;

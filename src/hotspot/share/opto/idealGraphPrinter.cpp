@@ -537,8 +537,7 @@ void IdealGraphPrinter::visit_node(Node *n, bool edges, VectorSet* temp_set) {
         } else {
           print_prop(short_name, "L");
         }
-      } else if (t->base() == Type::KlassPtr || t->base() == Type::InstKlassPtr || t->base() == Type::AryKlassPtr) {
-        const TypeKlassPtr *typeKlass = t->is_klassptr();
+      } else if (t->isa_klassptr()) {
         print_prop(short_name, "CP");
       } else if (t->base() == Type::Control) {
         print_prop(short_name, "C");

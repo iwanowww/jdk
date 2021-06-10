@@ -1288,22 +1288,6 @@ const Type* URShiftINode::Value(PhaseGVN* phase) const {
     #endif
     return ti;
   }
-
-  //
-  // Do not support shifted oops in info for GC
-  //
-  // else if( t1->base() == Type::InstPtr ) {
-  //
-  //   const TypeInstPtr *o = t1->is_instptr();
-  //   if( t1->singleton() )
-  //     return TypeInt::make( ((uint32_t)o->const_oop() + o->_offset) >> shift );
-  // }
-  // else if( t1->base() == Type::KlassPtr ) {
-  //   const TypeKlassPtr *o = t1->is_klassptr();
-  //   if( t1->singleton() )
-  //     return TypeInt::make( ((uint32_t)o->const_oop() + o->_offset) >> shift );
-  // }
-
   return TypeInt::INT;
 }
 
