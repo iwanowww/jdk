@@ -3593,6 +3593,27 @@ int TypeOopPtr::dual_instance_id( ) const {
   return _instance_id;              // Map everything else into self
 }
 
+//------------------------------meet_const_oop----------------------------------
+ciObject* TypeOopPtr::meet_const_oop(const TypeOopPtr* that_t, PTR& res_ptr) const {
+  if (res_ptr == Constant) {
+    ciObject* this_oop = const_oop();
+    ciObject* that_oop = that_t->const_oop();
+    if (this_oop != NULL && that_oop != NULL && this_oop->equals(that_oop)) {
+      return this_oop;
+    } else if (above_centerline(this->ptr())) {
+      assert(!that_t->klass()->is_interface(), "");
+      return that_oop;
+    } else if (above_centerline(that_t->ptr())) {
+      assert(!klass()->is_interface(), "");
+      return this_oop;
+    } else {
+      res_ptr = NotNull;
+      return NULL;
+    }
+  }
+  return NULL;
+}
+
 /**
  * Check whether new profiling would improve speculative type
  *
@@ -3862,21 +3883,19 @@ const Type *TypeInstPtr::xmeet_helper(const Type *t) const {
 
   case InstPtr: {                // Meeting 2 Oops?
     // Found an InstPtr sub-type vs self-InstPtr type
-    const TypeInstPtr *tinst = t->is_instptr();
-    int off = meet_offset(tinst->offset());
-    PTR ptr = meet_ptr(tinst->ptr());
-    int instance_id = meet_instance_id(tinst->instance_id());
-    const TypePtr* speculative = xmeet_speculative(tinst);
-    int depth = meet_inline_depth(tinst->inline_depth());
-    ciKlass* tinst_klass = tinst->klass();
-    ciKlass* this_klass  = klass();
-    bool tinst_xk = tinst->klass_is_exact();
-    bool this_xk  = klass_is_exact();
+    return meet_instptr(t->is_instptr());
+  }
 
+  } // End of switch
+  return this;                  // Return the double constant
+}
+
+const TypeInstPtr* TypeInstPtr::meet_instptr(const TypeInstPtr* tinst) const {
+    PTR res_ptr = lastPTR;
     ciKlass* res_klass = NULL;
     bool res_xk = false;
-    const Type* res;
-    MeetResult kind = meet_instptr(ptr, this_klass, tinst_klass, this_xk, tinst_xk, this->_ptr, tinst->_ptr, res_klass, res_xk);
+    MeetResult kind = meet_instptr_helper(tinst,
+                                          res_ptr, res_klass, res_xk); // out parameters
     if (kind == UNLOADED) {
       // One of these classes has not been loaded
       const TypeInstPtr* unloaded_meet = xmeet_unloaded(tinst);
@@ -3887,93 +3906,94 @@ const Type *TypeInstPtr::xmeet_helper(const Type *t) const {
         tty->print(" tinst == "); tinst->dump(); tty->cr();
       }
 #endif
-      res = unloaded_meet;
-    } else {
-      if (kind == NOT_SUBTYPE && instance_id > 0) {
-        instance_id = InstanceBot;
-      } else if (kind == LCA) {
-        instance_id = InstanceBot;
-      }
-      ciObject* o = NULL;             // Assume not constant when done
-      ciObject* this_oop = const_oop();
-      ciObject* tinst_oop = tinst->const_oop();
-      if (ptr == Constant) {
-        if (this_oop != NULL && tinst_oop != NULL &&
-            this_oop->equals(tinst_oop))
-          o = this_oop;
-        else if (above_centerline(_ptr)) {
-          assert(!tinst_klass->is_interface(), "");
-          o = tinst_oop;
-        } else if (above_centerline(tinst->_ptr)) {
-          assert(!this_klass->is_interface(), "");
-          o = this_oop;
-        } else
-          ptr = NotNull;
-      }
-      res = make(ptr, res_klass, res_xk, o, off, instance_id, speculative, depth);
+      return unloaded_meet;
     }
-
-    return res;
-
-  } // End of case InstPtr
-
-  } // End of switch
-  return this;                  // Return the double constant
+    // Both instances have their klasses loaded.
+    ciObject* o = meet_const_oop(tinst, res_ptr);             // Assume not constant when done
+    int off = meet_offset(tinst->offset());
+    int instance_id = meet_instance_id(tinst->instance_id());
+    if (kind == NOT_SUBTYPE && instance_id > 0) {
+      instance_id = InstanceBot;
+    } else if (kind == LCA) {
+      instance_id = InstanceBot;
+    }
+    const TypePtr* speculative = xmeet_speculative(tinst);
+    int depth = meet_inline_depth(tinst->inline_depth());
+    return make(res_ptr, res_klass, res_xk, o, off, instance_id, speculative, depth);
 }
 
-TypePtr::MeetResult TypePtr::meet_instptr(PTR &ptr, ciKlass* this_klass, ciKlass* tinst_klass, bool this_xk, bool tinst_xk,
-                                          PTR this_ptr, PTR tinst_ptr, ciKlass*& res_klass, bool& res_xk) {
+TypePtr::MeetResult TypeInstPtr::meet_instptr_helper(const TypeInstPtr* that_t,
+                                                     PTR& res_ptr, ciKlass*& res_klass, bool& res_xk) const { // out parameters
+  return TypePtr::meet_instptr_helper(klass(), klass_is_exact(), ptr(),
+                                      that_t->klass(), that_t->klass_is_exact(), that_t->ptr(),
+                                      res_ptr, res_klass, res_xk); // out parameters
+}
+
+TypePtr::MeetResult TypePtr::meet_instptr_helper(ciKlass* this_klass, bool this_xk, PTR this_ptr,
+                                                 ciKlass* that_klass, bool that_xk, PTR that_ptr,
+                                                 PTR& res_ptr, ciKlass*& res_klass, bool& res_xk) { // out parameters
+  res_ptr = ptr_meet[that_ptr][this_ptr];
+  res_klass = NULL;
+  res_xk = false;
 
   // Check for easy case; klasses are equal (and perhaps not loaded!)
   // If we have constants, then we created oops so classes are loaded
   // and we can handle the constants further down.  This case handles
   // both-not-loaded or both-loaded classes
-  if (ptr != Constant && this_klass->equals(tinst_klass) && this_xk == tinst_xk) {
+  if (res_ptr != Constant && this_klass->equals(that_klass) && this_xk == that_xk) {
     res_klass = this_klass;
-    res_xk = this_xk;
+    res_xk    = this_xk;
     return QUICK;
   }
 
   // Classes require inspection in the Java klass hierarchy.  Must be loaded.
-  if (!tinst_klass->is_loaded() || !this_klass->is_loaded()) {
+  if (!this_klass->is_loaded() || !that_klass->is_loaded()) {
     return UNLOADED;
   }
 
   // Handle mixing oops and interfaces first.
-  if (this_klass->is_interface() && !(tinst_klass->is_interface() ||
-                                      tinst_klass == ciEnv::current()->Object_klass())) {
-    ciKlass *tmp = tinst_klass; // Swap interface around
-    tinst_klass = this_klass;
-    this_klass = tmp;
-    bool tmp2 = tinst_xk;
-    tinst_xk = this_xk;
-    this_xk = tmp2;
+  if (this_klass->is_interface() && !(that_klass->is_interface() ||
+                                      that_klass == ciEnv::current()->Object_klass())) {
+    // Swap interface around
+    swap(this_klass, that_klass);
+    swap(this_xk, that_xk);
   }
-  if (tinst_klass->is_interface() &&
-      !(this_klass->is_interface() ||
-        // Treat java/lang/Object as an honorary interface,
-        // because we need a bottom for the interface hierarchy.
-        this_klass == ciEnv::current()->Object_klass())) {
+  if (that_klass->is_interface() && !(this_klass->is_interface() ||
+                                      this_klass == ciEnv::current()->Object_klass())) {
     // Oop meets interface!
+    // Treat java/lang/Object as an honorary interface,
+    // because we need a bottom for the interface hierarchy.
 
     // See if the oop subtypes (implements) interface.
-    if (this_klass->is_subtype_of(tinst_klass)) {
+    if (this_klass->is_subtype_of(that_klass)) {
       // Oop indeed subtypes.  Now keep oop or interface depending
       // on whether we are both above the centerline or either is
       // below the centerline.  If we are on the centerline
       // (e.g., Constant vs. AnyNull interface), use the constant.
-      res_klass  = below_centerline(ptr) ? tinst_klass : this_klass;
-      // If we are keeping this_klass, keep its exactness too.
-      res_xk = below_centerline(ptr) ? tinst_xk    : this_xk;
+      // If we are choosing a klass, pick its exactness too.
+      if (below_centerline(res_ptr)) {
+        res_klass = that_klass;
+        res_xk    = that_xk;
+      } else {
+        res_klass = this_klass;
+        res_xk    = this_xk;
+      }
       return SUBTYPE;
     } else {                  // Does not implement, fall to Object
       // Oop does not implement interface, so mixing falls to Object
       // just like the verifier does (if both are above the
       // centerline fall to interface)
-      res_klass = above_centerline(ptr) ? tinst_klass : ciEnv::current()->Object_klass();
-      res_xk = above_centerline(ptr) ? tinst_xk : false;
+      if (above_centerline(res_ptr)) {
+        res_klass = that_klass;
+        res_xk    = that_xk;
+      } else {
+        res_klass = ciEnv::current()->Object_klass();
+        res_xk    = false;
+      }
       // Watch out for Constant vs. AnyNull interface.
-      if (ptr == Constant)  ptr = NotNull;   // forget it was a constant
+      if (res_ptr == Constant) {
+        res_ptr = NotNull;   // forget it was a constant
+      }
       return NOT_SUBTYPE;
     }
   }
@@ -4005,57 +4025,57 @@ TypePtr::MeetResult TypePtr::meet_instptr(PTR &ptr, ciKlass* this_klass, ciKlass
   // centerline and or-ed above it.  (N.B. Constants are always exact.)
 
   // Check for subtyping:
-  ciKlass *subtype = NULL;
-  bool subtype_exact = false;
-  if (tinst_klass->equals(this_klass)) {
+  ciKlass* subtype       = NULL;
+  bool     subtype_exact = false;
+  if (that_klass->equals(this_klass)) {
     subtype = this_klass;
-    subtype_exact = below_centerline(ptr) ? (this_xk && tinst_xk) : (this_xk || tinst_xk);
-  } else if (!tinst_xk && this_klass->is_subtype_of(tinst_klass)) {
-    subtype = this_klass;     // Pick subtyping class
+    if (below_centerline(res_ptr)) {
+      subtype_exact = this_xk && that_xk;
+    } else {
+      subtype_exact = this_xk || that_xk;
+    }
+  } else if (!that_xk && this_klass->is_subtype_of(that_klass)) {
+    subtype       = this_klass; // Pick subtyping class
     subtype_exact = this_xk;
-  } else if (!this_xk && tinst_klass->is_subtype_of(this_klass)) {
-    subtype = tinst_klass;    // Pick subtyping class
-    subtype_exact = tinst_xk;
+  } else if (!this_xk && that_klass->is_subtype_of(this_klass)) {
+    subtype       = that_klass; // Pick subtyping class
+    subtype_exact = that_xk;
   }
 
-  if (subtype) {
-    if (above_centerline(ptr)) { // both are up?
-      this_klass = tinst_klass = subtype;
-      this_xk = tinst_xk = subtype_exact;
-    } else if (above_centerline(this_ptr) && !above_centerline(tinst_ptr)) {
-      this_klass = tinst_klass; // tinst is down; keep down man
-      this_xk = tinst_xk;
-    } else if (above_centerline(tinst_ptr) && !above_centerline(this_ptr)) {
-      tinst_klass = this_klass; // this is down; keep down man
-      tinst_xk = this_xk;
+  if (subtype != NULL) {
+    if (above_centerline(res_ptr)) { // both are up?
+      this_klass = that_klass = subtype;
+      this_xk    = that_xk    = subtype_exact;
+    } else if (above_centerline(this_ptr) && !above_centerline(that_ptr)) {
+      this_klass = that_klass; // tinst is down; keep down man
+      this_xk    = that_xk;
+    } else if (above_centerline(that_ptr) && !above_centerline(this_ptr)) {
+      that_klass = this_klass; // this is down; keep down man
+      that_xk    = this_xk;
     } else {
       this_xk = subtype_exact;  // either they are equal, or we'll do an LCA
     }
   }
 
   // Check for classes now being equal
-  if (tinst_klass->equals(this_klass)) {
+  if (that_klass->equals(this_klass)) {
     // If the klasses are equal, the constants may still differ.  Fall to
     // NotNull if they do (neither constant is NULL; that is a special case
     // handled elsewhere).
     res_klass = this_klass;
-    res_xk = this_xk;
+    res_xk    = this_xk;
     return SUBTYPE;
-  } // Else classes are not equal
-
-  // Since klasses are different, we require a LCA in the Java
-  // class hierarchy - which means we have to fall to at least NotNull.
-  if (ptr == TopPTR || ptr == AnyNull || ptr == Constant) {
-    ptr = NotNull;
+  } else {
+    // Classes are not equal.
+    // Since klasses are different, we require a LCA in the Java
+    // class hierarchy - which means we have to fall to at least NotNull.
+    if (res_ptr == TopPTR || res_ptr == AnyNull || res_ptr == Constant) {
+      res_ptr = NotNull;
+    }
+    res_klass = this_klass->least_common_ancestor(that_klass);
+    res_xk    = false;
+    return LCA;
   }
-
-  // Now we find the LCA of Java classes
-  ciKlass* k = this_klass->least_common_ancestor(tinst_klass);
-
-  res_klass = k;
-  res_xk = false;
-
-  return LCA;
 }
 
 
@@ -4434,37 +4454,7 @@ const Type *TypeAryPtr::xmeet_helper(const Type *t) const {
   case RawPtr: return TypePtr::BOTTOM;
 
   case AryPtr: {                // Meeting 2 references?
-    const TypeAryPtr *tap = t->is_aryptr();
-    int off = meet_offset(tap->offset());
-    const TypeAry *tary = _ary->meet_speculative(tap->_ary)->is_ary();
-    PTR ptr = meet_ptr(tap->ptr());
-    int instance_id = meet_instance_id(tap->instance_id());
-    const TypePtr* speculative = xmeet_speculative(tap);
-    int depth = meet_inline_depth(tap->inline_depth());
-
-    ciKlass* res_klass = NULL;
-    bool res_xk = false;
-    const Type* elem = tary->_elem;
-    if (meet_aryptr(ptr, elem, this->klass(), tap->klass(), this->klass_is_exact(), tap->klass_is_exact(), this->ptr(), tap->ptr(), res_klass, res_xk) == NOT_SUBTYPE) {
-      instance_id = InstanceBot;
-    }
-
-    ciObject* o = NULL;             // Assume not constant when done
-    ciObject* this_oop = const_oop();
-    ciObject* tap_oop = tap->const_oop();
-    if (ptr == Constant) {
-      if (this_oop != NULL && tap_oop != NULL &&
-          this_oop->equals(tap_oop)) {
-        o = tap_oop;
-      } else if (above_centerline(_ptr)) {
-        o = tap_oop;
-      } else if (above_centerline(tap->_ptr)) {
-        o = this_oop;
-      } else {
-        ptr = NotNull;
-      }
-    }
-    return make(ptr, o, TypeAry::make(elem, tary->_size, tary->_stable), res_klass, res_xk, off, instance_id, speculative, depth);
+    return meet_aryptr(t->is_aryptr());
   }
 
   // All arrays inherit from Object class
@@ -4521,82 +4511,123 @@ const Type *TypeAryPtr::xmeet_helper(const Type *t) const {
   return this;                  // Lint noise
 }
 
+const TypeAryPtr* TypeAryPtr::meet_aryptr(const TypeAryPtr* that_t) const {
+  int off = meet_offset(that_t->offset());
+  int instance_id = meet_instance_id(that_t->instance_id());
+  const TypePtr* speculative = xmeet_speculative(that_t);
+  int depth = meet_inline_depth(that_t->inline_depth());
 
-TypePtr::MeetResult TypePtr::meet_aryptr(PTR& ptr, const Type*& elem, ciKlass* this_klass, ciKlass* tap_klass,
-                                         bool this_xk, bool tap_xk, PTR this_ptr, PTR tap_ptr,
-                                         ciKlass*& res_klass, bool& res_xk) {
+  const TypeAry* tary = _ary->meet_speculative(that_t->_ary)->is_ary();
+
+  PTR         res_ptr   = lastPTR;
+  const Type* res_elem  = NULL;
+  ciKlass*    res_klass = NULL;
+  bool        res_xk    = false;
+  MeetResult kind = meet_aryptr_helper(tary->_elem,
+                                       klass(), klass_is_exact(), ptr(),
+                                       that_t->klass(), that_t->klass_is_exact(), that_t->ptr(),
+                                       res_ptr, res_elem, res_klass, res_xk); // out parameters
+  if (kind == NOT_SUBTYPE) {
+    instance_id = InstanceBot;
+  }
+  ciObject* o = meet_const_oop(that_t, res_ptr);  // Assume not constant when done
+  tary = TypeAry::make(res_elem, tary->_size, tary->_stable); // Adjust element type
+  return make(res_ptr, o, tary, res_klass, res_xk, off, instance_id, speculative, depth);
+}
+
+const TypeAryKlassPtr* TypeAryKlassPtr::meet_aryklassptr(const TypeAryKlassPtr* that_t) const {
+  int off = meet_offset(that_t->offset());
+
+  PTR         res_ptr   = lastPTR;
+  const Type* res_elem  = NULL;
+  ciKlass*    res_klass = NULL;
+  bool        res_xk    = false;
+  meet_aryptr_helper(elem()->meet(that_t->elem()),
+                     klass(), klass_is_exact(), ptr(),
+                     that_t->klass(), that_t->klass_is_exact(), that_t->ptr(),
+                     res_ptr, res_elem, res_klass, res_xk); // out parameters
+  assert(res_xk == (res_ptr == Constant), "");
+  return make(res_ptr, res_elem, res_klass, off);
+}
+
+TypePtr::MeetResult TypePtr::meet_aryptr_helper(const Type* elem,
+                                                ciKlass* this_klass, bool this_xk, PTR this_ptr,
+                                                ciKlass* that_klass, bool that_xk, PTR that_ptr,
+                                                PTR& res_ptr, const Type*& res_elem, ciKlass*& res_klass, bool& res_xk) { // out parameters
+  res_ptr = ptr_meet[that_ptr][this_ptr];
+  res_elem = elem;
   res_klass = NULL;
+  res_xk = false;
   MeetResult result = SUBTYPE;
-  if (elem->isa_int()) {
+
+  if (res_elem->isa_int()) {
     // Integral array element types have irrelevant lattice relations.
     // It is the klass that determines array layout, not the element type.
     if (this_klass == NULL) {
-      res_klass = tap_klass;
-    } else if (tap_klass == NULL || tap_klass == this_klass) {
+      res_klass = that_klass;
+    } else if (that_klass == NULL || that_klass == this_klass) {
       res_klass = this_klass;
     } else {
       // Something like byte[int+] meets char[int+].
       // This must fall to bottom, not (int[-128..65535])[int+].
       // instance_id = InstanceBot;
-      elem = Type::BOTTOM;
+      res_elem = Type::BOTTOM;
       result = NOT_SUBTYPE;
     }
   } else { // Non integral arrays.
     // Must fall to bottom if exact klasses in upper lattice
     // are not equal or super klass is exact.
-    if ((above_centerline(ptr) || ptr == Constant) && this_klass != tap_klass &&
+    if ((above_centerline(res_ptr) || res_ptr == Constant) && this_klass != that_klass &&
         // meet with top[] and bottom[] are processed further down:
-        tap_klass != NULL  && this_klass != NULL   &&
+        that_klass != NULL  && this_klass != NULL   &&
         // both are exact and not equal:
-        ((tap_xk && this_xk) ||
-         // 'tap'  is exact and super or unrelated:
-         (tap_xk && !tap_klass->is_subtype_of(this_klass)) ||
+        ((that_xk && this_xk) ||
+         // 'that' is exact and super or unrelated:
+         (that_xk && !that_klass->is_subtype_of(this_klass)) ||
          // 'this' is exact and super or unrelated:
-         (this_xk && !this_klass->is_subtype_of(tap_klass)))) {
-      if (above_centerline(ptr) || (elem->make_ptr() && above_centerline(elem->make_ptr()->_ptr))) {
-        elem = Type::BOTTOM;
+         (this_xk && !this_klass->is_subtype_of(that_klass)))) {
+      if (above_centerline(res_ptr) || (res_elem->make_ptr() && above_centerline(res_elem->make_ptr()->ptr()))) {
+        res_elem = Type::BOTTOM;
       }
-      ptr = NotNull;
+      res_ptr = NotNull;
       res_xk = false;
       return NOT_SUBTYPE;
     }
   }
 
-  res_xk = false;
-  switch (tap_ptr) {
+  switch (that_ptr) {
     case AnyNull:
     case TopPTR:
-      // Compute new klass on demand, do not use tap->_klass
+      // Compute new klass on demand, do not use that_t->_klass
       if (below_centerline(this_ptr)) {
         res_xk = this_xk;
       } else {
-        res_xk = (tap_xk || this_xk);
+        res_xk = (that_xk || this_xk);
       }
-      return result;
-    case Constant: {
+      break;
+
+    case Constant:
       if (this_ptr == Constant) {
         res_xk = true;
       } else if (above_centerline(this_ptr)) {
         res_xk = true;
       } else {
         // Only precise for identical arrays
-        res_xk = this_xk && (this_klass == tap_klass);
+        res_xk = this_xk && (this_klass == that_klass);
       }
-      return result;
-    }
+      break;
+
     case NotNull:
     case BotPTR:
-      // Compute new klass on demand, do not use tap->_klass
+      // Compute new klass on demand, do not use that_t->_klass
       if (above_centerline(this_ptr)) {
-        res_xk = tap_xk;
+        res_xk = that_xk;
       } else {
-        res_xk = (tap_xk && this_xk) && (this_klass == tap_klass); // Only precise for identical arrays
+        res_xk = (that_xk && this_xk) && (this_klass == that_klass); // Only precise for identical arrays
       }
-      return result;
-    default:  {
-      ShouldNotReachHere();
-      return result;
-    }
+      break;
+
+    default: ShouldNotReachHere(); break;
   }
   return result;
 }
@@ -5322,31 +5353,9 @@ const Type* TypeInstKlassPtr::xmeet(const Type* t) const {
   //
 
   case InstKlassPtr: {  // Meet two InstKlassPtr types
-    const TypeInstKlassPtr* tkls = t->is_instklassptr();
-    int off = meet_offset(tkls->offset());
-    PTR ptr = meet_ptr(tkls->ptr());
-    ciKlass* tkls_klass = tkls->klass();
-    ciKlass* this_klass = klass();
-    bool tkls_xk = tkls->klass_is_exact();
-    bool this_xk = klass_is_exact();
+    return meet_instklassptr(t->is_instklassptr());
+  }
 
-    ciKlass* res_klass = NULL;
-    bool res_xk = false;
-    switch (meet_instptr(ptr, this_klass, tkls_klass, this_xk, tkls_xk, this->_ptr, tkls->_ptr, res_klass, res_xk)) {
-      case UNLOADED:
-        ShouldNotReachHere();
-      case SUBTYPE:
-      case NOT_SUBTYPE:
-      case LCA:
-      case QUICK: {
-        assert(res_xk == (ptr == Constant), "");
-        const Type* res1 = make(ptr, res_klass, off);
-        return res1;
-      }
-      default:
-        ShouldNotReachHere();
-    }
-  } // End of case InstKlassPtr
   case AryKlassPtr: {                // All arrays inherit from Object class
     const TypeAryKlassPtr* tp = t->is_aryklassptr();
     int offset = meet_offset(tp->offset());
@@ -5362,8 +5371,7 @@ const Type* TypeInstKlassPtr::xmeet(const Type* t) const {
         return TypeAryKlassPtr::make(ptr, tp->elem(), tp->klass(), offset);
       } else {
         // cannot subclass, so the meet has to fall badly below the centerline
-        ptr = NotNull;
-        return make(ptr, ciEnv::current()->Object_klass(), offset);
+        return make(NotNull, ciEnv::current()->Object_klass(), offset);
       }
     case Constant:
     case NotNull:
@@ -5388,23 +5396,35 @@ const Type* TypeInstKlassPtr::xmeet(const Type* t) const {
       return make(ptr, ciEnv::current()->Object_klass(), offset);
     default: typerr(t);
     }
-  }
+  } // End of case AryKlassPtr
 
   } // End of switch
   return this;                  // Return the double constant
 }
 
+const TypeInstKlassPtr* TypeInstKlassPtr::meet_instklassptr(const TypeInstKlassPtr* that_t) const {
+  PTR      res_ptr   = lastPTR;
+  ciKlass* res_klass = NULL;
+  bool     not_used;
+  MeetResult kind = meet_instptr_helper(klass(), klass_is_exact(), ptr(),
+                                        that_t->klass(), that_t->klass_is_exact(), that_t->ptr(),
+                                        res_ptr, res_klass, not_used); // out params
+  assert(kind != UNLOADED, "sanity");
+  int off = meet_offset(that_t->offset());
+  return make(res_ptr, res_klass, off);
+}
+
 //------------------------------xdual------------------------------------------
 // Dual: compute field-by-field dual
-const Type    *TypeInstKlassPtr::xdual() const {
+const Type* TypeInstKlassPtr::xdual() const {
   return new TypeInstKlassPtr(dual_ptr(), klass(), dual_offset());
 }
 
-const TypeAryKlassPtr *TypeAryKlassPtr::make(PTR ptr, const Type* elem, ciKlass* k, int offset) {
+const TypeAryKlassPtr* TypeAryKlassPtr::make(PTR ptr, const Type* elem, ciKlass* k, int offset) {
   return (TypeAryKlassPtr*)(new TypeAryKlassPtr(ptr, elem, k, offset))->hashcons();
 }
 
-const TypeAryKlassPtr *TypeAryKlassPtr::make(PTR ptr, ciKlass* klass, int offset) {
+const TypeAryKlassPtr* TypeAryKlassPtr::make(PTR ptr, ciKlass* klass, int offset) {
   if (klass->is_obj_array_klass()) {
     // Element is an object array. Recursively call ourself.
     ciKlass* eklass = klass->as_obj_array_klass()->element_klass();
@@ -5427,10 +5447,9 @@ const TypeAryKlassPtr* TypeAryKlassPtr::make(ciKlass* klass) {
 //------------------------------eq---------------------------------------------
 // Structural equality check for Type representations
 bool TypeAryKlassPtr::eq(const Type *t) const {
-  const TypeAryKlassPtr *p = t->is_aryklassptr();
-  return
-    _elem == p->_elem &&  // Check array
-    TypeKlassPtr::eq(p);  // Check sub-parts
+  const TypeAryKlassPtr* p = t->is_aryklassptr();
+  return _elem == p->_elem &&  // Check array
+         TypeKlassPtr::eq(p);  // Check sub-parts
 }
 
 //------------------------------hash-------------------------------------------
@@ -5649,17 +5668,9 @@ const Type* TypeAryKlassPtr::xmeet( const Type *t ) const {
   //
 
   case AryKlassPtr: {  // Meet two AryKlassPtr types
-    const TypeAryKlassPtr* tap = t->is_aryklassptr();
-    int off = meet_offset(tap->offset());
-    const Type* elem = _elem->meet(tap->_elem);
+    return meet_aryklassptr(t->is_aryklassptr());
+  }
 
-    PTR ptr = meet_ptr(tap->ptr());
-    ciKlass* res_klass = NULL;
-    bool res_xk = false;
-    meet_aryptr(ptr, elem, this->klass(), tap->klass(), this->klass_is_exact(), tap->klass_is_exact(), this->ptr(), tap->ptr(), res_klass, res_xk);
-    assert(res_xk == (ptr == Constant), "");
-    return make(ptr, elem, res_klass, off);
-  } // End of case AryKlassPtr
   case InstKlassPtr: {
     const TypeInstKlassPtr* tp = t->is_instklassptr();
     int offset = meet_offset(tp->offset());

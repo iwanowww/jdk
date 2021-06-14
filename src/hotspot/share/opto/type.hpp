@@ -931,10 +931,15 @@ protected:
     NOT_SUBTYPE,
     LCA
   };
-  static MeetResult meet_instptr(PTR& ptr, ciKlass* this_klass, ciKlass* tinst_klass, bool this_xk, bool tinst_xk,
-                                 PTR this_ptr, PTR tinst_ptr, ciKlass*& res_klass, bool& res_xk);
-  static MeetResult meet_aryptr(PTR& ptr, const Type*& elem, ciKlass* this_klass, ciKlass* tap_klass, bool this_xk, bool tap_xk,
-                                PTR this_ptr, PTR tap_ptr, ciKlass*& res_klass, bool& res_xk);
+
+  static MeetResult meet_instptr_helper(ciKlass* this_klass, bool this_xk, PTR this_ptr,
+                                        ciKlass* that_klass, bool that_xk, PTR that_ptr,
+                                        PTR& res_ptr, ciKlass*& res_klass, bool& res_xk);
+
+  static MeetResult meet_aryptr_helper(const Type* elem,
+                                       ciKlass* this_klass, bool this_xk, PTR this_ptr,
+                                       ciKlass* that_klass, bool that_xk, PTR that_ptr,
+                                       PTR& res_ptr, const Type*& res_elem, ciKlass*& res_klass, bool& res_xk); // out parameters
 
 public:
   const int _offset;            // Offset into oop, with TOP & BOT
@@ -1070,6 +1075,7 @@ protected:
   int dual_instance_id() const;
   int meet_instance_id(int uid) const;
 
+  ciObject* meet_const_oop(const TypeOopPtr* toop, PTR& res_ptr) const;
   // Do not allow interface-vs.-noninterface joins to collapse to top.
   virtual const Type *filter_helper(const Type *kills, bool include_speculative) const;
 
@@ -1157,6 +1163,11 @@ class TypeInstPtr : public TypeOopPtr {
   virtual int  hash() const;             // Type specific hashing
 
   ciSymbol*  _name;        // class name
+
+  const TypeInstPtr* meet_instptr(const TypeInstPtr* tinst) const;
+
+  MeetResult meet_instptr_helper(const TypeInstPtr* tinst,
+                                 PTR& res_ptr, ciKlass*& res_klass, bool& res_xk) const; // out parameters
 
  public:
   ciSymbol* name()         const { return _name; }
@@ -1265,6 +1276,8 @@ class TypeAryPtr : public TypeOopPtr {
   const bool     _is_autobox_cache;
 
   ciKlass* compute_klass(DEBUG_ONLY(bool verify = false)) const;
+
+  const TypeAryPtr* meet_aryptr(const TypeAryPtr* that_t) const;
 
 public:
   // Accessors
@@ -1440,6 +1453,8 @@ class TypeInstKlassPtr : public TypeKlassPtr {
 
   virtual bool must_be_exact() const;
 
+  const TypeInstKlassPtr* meet_instklassptr(const TypeInstKlassPtr* that_t) const;
+
 public:
   // Instance klass ignoring any interface
   ciInstanceKlass* instance_klass() const { return klass()->as_instance_klass();     }
@@ -1477,6 +1492,8 @@ class TypeAryKlassPtr : public TypeKlassPtr {
   }
 
   virtual bool must_be_exact() const;
+
+  const TypeAryKlassPtr* meet_aryklassptr(const TypeAryKlassPtr* that_t) const;
 
 public:
   virtual ciKlass* klass() const;
