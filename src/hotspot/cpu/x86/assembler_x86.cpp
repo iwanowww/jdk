@@ -12110,10 +12110,6 @@ bool Assembler::reachable(AddressLiteral adr) {
 }
 
 #ifdef ASSERT
-static bool is_in_code_cache(address addr) {
-  return (CodeCache::low_bound() <= addr) && (addr < CodeCache::high_bound());
-}
-
 bool Assembler::always_reachable(AddressLiteral adr) {
   switch (adr.reloc()) {
     // This should be rip relative and easily reachable.
@@ -12133,7 +12129,7 @@ bool Assembler::always_reachable(AddressLiteral adr) {
     case relocInfo::external_word_type:
     case relocInfo::poll_return_type: // these are really external_word but need special
     case relocInfo::poll_type: {      // relocs to identify them
-      return is_in_code_cache(adr._target);
+      return CodeCache::contains(adr._target);
     }
     default: {
       return false;

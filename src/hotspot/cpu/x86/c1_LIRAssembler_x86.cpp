@@ -2432,8 +2432,7 @@ void LIR_Assembler::intrinsic_op(LIR_Code code, LIR_Opr value, LIR_Opr tmp, LIR_
               __ movdbl(dest->as_xmm_double_reg(), value->as_xmm_double_reg());
             }
             assert(!tmp->is_valid(), "do not need temporary");
-            __ andpd(dest->as_xmm_double_reg(),
-                     __ as_Address(ExternalAddress((address)double_signmask_pool)));
+            __ andpd(dest->as_xmm_double_reg(), ExternalAddress((address)double_signmask_pool), rscratch1);
           }
         }
         break;
@@ -3823,8 +3822,7 @@ void LIR_Assembler::negate(LIR_Opr left, LIR_Opr dest, LIR_Opr tmp) {
       if (left->as_xmm_float_reg() != dest->as_xmm_float_reg()) {
         __ movflt(dest->as_xmm_float_reg(), left->as_xmm_float_reg());
       }
-      __ xorps(dest->as_xmm_float_reg(),
-               __ as_Address(ExternalAddress((address)float_signflip_pool)));
+      __ xorps(dest->as_xmm_float_reg(), ExternalAddress((address)float_signflip_pool), rscratch1);
     }
   } else if (dest->is_double_xmm()) {
 #ifdef _LP64
@@ -3840,8 +3838,7 @@ void LIR_Assembler::negate(LIR_Opr left, LIR_Opr dest, LIR_Opr tmp) {
       if (left->as_xmm_double_reg() != dest->as_xmm_double_reg()) {
         __ movdbl(dest->as_xmm_double_reg(), left->as_xmm_double_reg());
       }
-      __ xorpd(dest->as_xmm_double_reg(),
-               __ as_Address(ExternalAddress((address)double_signflip_pool)));
+      __ xorpd(dest->as_xmm_double_reg(), ExternalAddress((address)double_signflip_pool), rscratch1);
     }
 #ifndef _LP64
   } else if (left->is_single_fpu() || left->is_double_fpu()) {

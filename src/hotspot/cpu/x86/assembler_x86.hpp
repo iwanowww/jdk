@@ -789,7 +789,6 @@ private:
  protected:
 #ifdef ASSERT
   void check_relocation(RelocationHolder const& rspec, int format);
-  bool always_reachable(AddressLiteral adr) NOT_LP64( { return true; } );
 #endif
 
   void emit_data(jint data, relocInfo::relocType    rtype, int format);
@@ -797,7 +796,10 @@ private:
   void emit_data64(jlong data, relocInfo::relocType rtype, int format = 0);
   void emit_data64(jlong data, RelocationHolder const& rspec, int format = 0);
 
-  bool reachable(AddressLiteral adr)          NOT_LP64( { return true; } );
+#ifdef ASSERT
+  bool always_reachable(AddressLiteral adr) NOT_LP64( { return true; } );
+#endif // ASSERT
+  bool        reachable(AddressLiteral adr) NOT_LP64( { return true; } );
 
   // These are all easily abused and hence protected
 
