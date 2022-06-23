@@ -1274,7 +1274,7 @@ void C2_MacroAssembler::varshiftq(int opcode, XMMRegister dst, XMMRegister src, 
         }
         evpsravq(dst, src, shift, vlen_enc);
       } else {
-        vmovdqu(tmp, ExternalAddress(StubRoutines::x86::vector_long_sign_mask()));
+        vmovdqu(tmp, ExternalAddress(StubRoutines::x86::vector_long_sign_mask()), rscratch1);
         vpsrlvq(dst, src, shift, vlen_enc);
         vpsrlvq(tmp, tmp, shift, vlen_enc);
         vpxor(dst, dst, tmp, vlen_enc);
@@ -1499,19 +1499,19 @@ void C2_MacroAssembler::load_vector(XMMRegister dst, AddressLiteral src, int vle
   }
 }
 
-void C2_MacroAssembler::load_iota_indices(XMMRegister dst, Register scratch, int vlen_in_bytes) {
+void C2_MacroAssembler::load_iota_indices(XMMRegister dst, Register rscratch, int vlen_in_bytes) {
   ExternalAddress addr(StubRoutines::x86::vector_iota_indices());
   if (vlen_in_bytes <= 4) {
-    movdl(dst, addr);
+    movdl(dst, addr, rscratch);
   } else if (vlen_in_bytes == 8) {
-    movq(dst, addr);
+    movq(dst, addr, rscratch);
   } else if (vlen_in_bytes == 16) {
-    movdqu(dst, addr, scratch);
+    movdqu(dst, addr, rscratch);
   } else if (vlen_in_bytes == 32) {
-    vmovdqu(dst, addr, scratch);
+    vmovdqu(dst, addr, rscratch);
   } else {
     assert(vlen_in_bytes == 64, "%d", vlen_in_bytes);
-    evmovdqub(dst, k0, addr, false /*merge*/, Assembler::AVX_512bit, scratch);
+    evmovdqub(dst, k0, addr, false /*merge*/, Assembler::AVX_512bit, rscratch);
   }
 }
 

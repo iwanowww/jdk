@@ -4006,9 +4006,9 @@ instruct gather(legVec dst, memory mem, legVec idx, rRegP tmp, legVec mask) %{
     assert(!is_subword_type(elem_bt), "sanity"); // T_INT, T_LONG, T_FLOAT, T_DOUBLE
 
     if (vlen_enc == Assembler::AVX_128bit) {
-      __ movdqu($mask$$XMMRegister, ExternalAddress(vector_all_bits_set()));
+      __ movdqu($mask$$XMMRegister, ExternalAddress(vector_all_bits_set()), rscratch1);
     } else {
-      __ vmovdqu($mask$$XMMRegister, ExternalAddress(vector_all_bits_set()));
+      __ vmovdqu($mask$$XMMRegister, ExternalAddress(vector_all_bits_set()), rscratch1);
     }
     __ lea($tmp$$Register, $mem$$Address);
     __ vgather(elem_bt, $dst$$XMMRegister, $tmp$$Register, $idx$$XMMRegister, $mask$$XMMRegister, vlen_enc);
@@ -4143,7 +4143,7 @@ instruct ReplB_imm(vec dst, immI con) %{
   format %{ "replicateB $dst,$con" %}
   ins_encode %{
     InternalAddress addr = $constantaddress(T_BYTE, vreplicate_imm(T_BYTE, $con$$constant, Matcher::vector_length(this)));
-    __ load_vector($dst$$XMMRegister, addr, Matcher::vector_length_in_bytes(this));
+    __ load_vector($dst$$XMMRegister, addr, Matcher::vector_length_in_bytes(this), rscratch1);
   %}
   ins_pipe( pipe_slow );
 %}
@@ -4468,7 +4468,7 @@ instruct ReplF_imm(vec dst, immF con) %{
   format %{ "replicateF $dst,$con" %}
   ins_encode %{
     InternalAddress addr = $constantaddress(T_FLOAT, vreplicate_imm(T_FLOAT, $con$$constant, Matcher::vector_length(this)));
-    __ load_vector($dst$$XMMRegister, addr, Matcher::vector_length_in_bytes(this));
+    __ load_vector($dst$$XMMRegister, addr, Matcher::vector_length_in_bytes(this), rscratch1);
   %}
   ins_pipe( pipe_slow );
 %}
@@ -4533,7 +4533,7 @@ instruct ReplD_imm(vec dst, immD con) %{
   format %{ "replicateD $dst,$con" %}
   ins_encode %{
     InternalAddress addr = $constantaddress(T_DOUBLE, vreplicate_imm(T_DOUBLE, $con$$constant, Matcher::vector_length(this)));
-    __ load_vector($dst$$XMMRegister, addr, Matcher::vector_length_in_bytes(this));
+    __ load_vector($dst$$XMMRegister, addr, Matcher::vector_length_in_bytes(this), rscratch1);
   %}
   ins_pipe( pipe_slow );
 %}

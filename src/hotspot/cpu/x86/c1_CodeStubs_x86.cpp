@@ -102,7 +102,7 @@ void C1SafepointPollStub::emit_code(LIR_Assembler* ce) {
          "polling page return stub not created yet");
 
   address stub = SharedRuntime::polling_page_return_handler_blob()->entry_point();
-  __ jump(RuntimeAddress(stub));
+  __ jump(RuntimeAddress(stub), rscratch1);
 }
 
 void CounterOverflowStub::emit_code(LIR_Assembler* ce) {

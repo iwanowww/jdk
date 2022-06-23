@@ -1848,13 +1848,15 @@ public:
   void movptr(Address      dst, intptr_t       src, Register rscratch);
   void movptr(ArrayAddress dst, Register       src, Register rscratch);
 
+#ifdef _LP64
   // Generally the next two are only used for moving NULL
   // Although there are situations in initializing the mark word where
   // they could be used. They are dangerous.
+
+  // They only exist on LP64 so that int32_t and intptr_t are not the same
+  // and we have ambiguous declarations.
+
   void movptr(Address  dst, int32_t imm32);
-#ifdef _LP64
-  // It only exists on LP64 so that int32_t and intptr_t are not the same
-  // and we have ambiguous declaration.
   void movptr(Register dst, int32_t imm32);
 #endif // _LP64
 

@@ -834,10 +834,10 @@ void MacroAssembler::fast_pow(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
 
   // Special case: pow(x, 0.5) => sqrt(x)
   bind(B1_2);
-  cmp64(tmp1, ExternalAddress(DOUBLE0DOT5));
+  cmp64(tmp1, ExternalAddress(DOUBLE0DOT5), tmp2 /*rscratch*/);
   jccb(Assembler::notEqual, L_POW); // For pow(x, y), check whether y == 0.5
   movdq(tmp2, xmm0);
-  cmp64(tmp2, ExternalAddress(DOUBLE0));
+  cmp64(tmp2, ExternalAddress(DOUBLE0), tmp3 /*rscratch*/);
   jccb(Assembler::less, L_POW); // pow(x, 0.5) => sqrt(x) only for x >= 0.0 or x is +inf/NaN
   sqrtsd(xmm0, xmm0);
   jmp(B1_5);

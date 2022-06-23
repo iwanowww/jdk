@@ -1302,11 +1302,11 @@ void MacroAssembler::generateHtbl_48_block_zmm(Register htbl, Register avx512_ht
     Label GFMUL_AVX512;
 
     movdqu(HK, Address(htbl, 0));
-    movdqu(xmm10, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()));
+    movdqu(xmm10, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), rscratch1);
     vpshufb(HK, HK, xmm10, Assembler::AVX_128bit);
 
-    movdqu(xmm11, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr() + 64)); // Poly
-    movdqu(xmm12, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr() + 80)); // Twoone
+    movdqu(xmm11, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr() + 64), rscratch1); // Poly
+    movdqu(xmm12, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr() + 80), rscratch1); // Twoone
     // Compute H ^ 2 from the input subkeyH
     movdqu(xmm2, xmm6);
     vpsllq(xmm6, xmm6, 1, Assembler::AVX_128bit);
@@ -1876,7 +1876,7 @@ void MacroAssembler::aesgcm_encrypt(Register in, Register len, Register ct, Regi
     vpshufb(CTR_BLOCKx, CTR_BLOCKx, xmm24, Assembler::AVX_512bit);
     movdqu(Address(counter, 0), CTR_BLOCKx);
     // Load ghash lswap mask
-    movdqu(xmm24, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()));
+    movdqu(xmm24, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), rscratch1);
     // Shuffle ghash using lbswap_mask and store it
     vpshufb(AAD_HASHx, AAD_HASHx, xmm24, Assembler::AVX_128bit);
     movdqu(Address(state, 0), AAD_HASHx);

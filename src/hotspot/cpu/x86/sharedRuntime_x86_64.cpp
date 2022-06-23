@@ -1857,7 +1857,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   // argument registers at this point (what if we save/restore them there are no oop?
 
   {
-    SkipIfEqual skip(masm, &DTraceMethodProbes, false /*, rscratch1*/);
+    SkipIfEqual skip(masm, &DTraceMethodProbes, false, rscratch1);
     // protect the args we've loaded
     save_args(masm, total_c_args, c_arg, out_regs);
     __ mov_metadata(c_rarg1, method());
@@ -2080,7 +2080,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ bind(done);
   }
   {
-    SkipIfEqual skip(masm, &DTraceMethodProbes, false /*, rscratch1*/);
+    SkipIfEqual skip(masm, &DTraceMethodProbes, false, rscratch1);
     save_native_result(masm, ret_type, stack_slots);
     __ mov_metadata(c_rarg1, method());
     __ call_VM_leaf(

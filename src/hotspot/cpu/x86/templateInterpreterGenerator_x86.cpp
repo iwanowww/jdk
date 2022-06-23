@@ -665,7 +665,7 @@ address TemplateInterpreterGenerator::generate_Continuation_doYield_entry(void) 
 
   __ push_cont_fastpath();
 
-  __ jump(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::cont_doYield())));
+  __ jump(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::cont_doYield())), rscratch1);
   // return value is in rax
 
   return entry;

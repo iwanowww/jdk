@@ -1001,10 +1001,10 @@ void InterpreterMacroAssembler::remove_activation(
   jmp(fast_path);
   bind(slow_path);
   push(state);
-  set_last_Java_frame(rthread, noreg, rbp, (address)pc());
+  set_last_Java_frame(rthread, noreg, rbp, (address)pc(), rscratch1);
   super_call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::at_unwind), rthread);
   NOT_LP64(get_thread(rthread);) // call_VM clobbered it, restore
-  reset_last_Java_frame(rthread, true);
+  reset_last_Java_frame(rthread, true, rscratch1);
   pop(state);
   bind(fast_path);
 

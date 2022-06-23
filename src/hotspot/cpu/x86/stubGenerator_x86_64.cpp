@@ -7461,11 +7461,11 @@ address generate_avx_ghash_processBlocks() {
     OopMap* map = new OopMap(framesize, 1);
     oop_maps->add_gc_map(frame_complete, map);
 
-    __ set_last_Java_frame(rsp, rbp, the_pc);
+    __ set_last_Java_frame(rsp, rbp, the_pc, rscratch1);
     __ movptr(c_rarg0, r15_thread);
     __ movptr(c_rarg1, rsp);
     __ call_VM_leaf(Continuation::freeze_entry(), 2);
-    __ reset_last_Java_frame(true);
+    __ reset_last_Java_frame(true, rscratch1);
 
     Label L_pinned;
 
@@ -7554,7 +7554,7 @@ address generate_avx_ghash_processBlocks() {
     Label L_thaw_success;
     __ testptr(rbx, rbx);
     __ jccb(Assembler::notZero, L_thaw_success);
-    __ jump(ExternalAddress(StubRoutines::throw_StackOverflowError_entry()));
+    __ jump(ExternalAddress(StubRoutines::throw_StackOverflowError_entry()), rscratch1);
     __ bind(L_thaw_success);
 
     // Make room for the thawed frames and align the stack.
@@ -7653,10 +7653,10 @@ address generate_avx_ghash_processBlocks() {
 
     int frame_complete = the_pc - start;
 
-    __ set_last_Java_frame(rsp, rbp, the_pc);
+    __ set_last_Java_frame(rsp, rbp, the_pc, rscratch1);
     __ movptr(c_rarg0, r15_thread);
     __ call_VM_leaf(CAST_FROM_FN_PTR(address, JfrIntrinsicSupport::write_checkpoint), 1);
-    __ reset_last_Java_frame(true);
+    __ reset_last_Java_frame(true, rscratch1);
 
     // rax is jobject handle result, unpack and process it through a barrier.
     Label L_null_jobject;
