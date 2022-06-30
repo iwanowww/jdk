@@ -221,10 +221,10 @@ void BarrierSetAssembler::incr_allocated_bytes(MacroAssembler* masm,
                                                Register var_size_in_bytes,
                                                int con_size_in_bytes,
                                                Register t1) {
-  assert(t1->is_valid(), "need temp reg");
+  assert(Register::is_valid(t1), "need temp reg");
 
   __ ldr(t1, Address(rthread, in_bytes(JavaThread::allocated_bytes_offset())));
-  if (var_size_in_bytes->is_valid()) {
+  if (Register::is_valid(var_size_in_bytes)) {
     __ add(t1, t1, var_size_in_bytes);
   } else {
     __ add(t1, t1, con_size_in_bytes);

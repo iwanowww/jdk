@@ -146,7 +146,7 @@ int RegisterSaver::reg_offset_in_bytes(Register r) {
 #endif
 
   int r0_offset = v0_offset_in_bytes() + (slots_per_vect * FloatRegisterImpl::number_of_registers) * BytesPerInt;
-  return r0_offset + r->encoding() * wordSize;
+  return r0_offset + Register::encoding(r) * wordSize;
 }
 
 int RegisterSaver::v0_offset_in_bytes() {
@@ -233,7 +233,7 @@ OopMap* RegisterSaver::save_live_registers(MacroAssembler* masm, int additional_
       // Register slots are 8 bytes wide, 32 floating-point registers.
       int sp_offset = RegisterImpl::max_slots_per_register * i +
                       FloatRegisterImpl::save_slots_per_register * FloatRegisterImpl::number_of_registers;
-      oop_map->set_callee_saved(VMRegImpl::stack2reg(sp_offset + additional_frame_slots), r->as_VMReg());
+      oop_map->set_callee_saved(VMRegImpl::stack2reg(sp_offset + additional_frame_slots), Register::as_VMReg(r));
     }
   }
 
@@ -246,14 +246,14 @@ OopMap* RegisterSaver::save_live_registers(MacroAssembler* masm, int additional_
     } else {
       sp_offset = FloatRegisterImpl::save_slots_per_register * i;
     }
-    oop_map->set_callee_saved(VMRegImpl::stack2reg(sp_offset), r->as_VMReg());
+    oop_map->set_callee_saved(VMRegImpl::stack2reg(sp_offset), FloatRegister::as_VMReg(r));
   }
 
   if (_save_vectors && use_sve) {
     for (int i = 0; i < PRegisterImpl::number_of_saved_registers; i++) {
       PRegister r = as_PRegister(i);
       int sp_offset = sve_predicate_size_in_slots * i;
-      oop_map->set_callee_saved(VMRegImpl::stack2reg(sp_offset), r->as_VMReg());
+      oop_map->set_callee_saved(VMRegImpl::stack2reg(sp_offset), PRegister::as_VMReg(r));
     }
   }
 
@@ -329,7 +329,7 @@ int SharedRuntime::java_calling_convention(const BasicType *sig_bt,
     case T_SHORT:
     case T_INT:
       if (int_args < Argument::n_int_register_parameters_j) {
-        regs[i].set1(INT_ArgReg[int_args++]->as_VMReg());
+        regs[i].set1(Register::as_VMReg(INT_ArgReg[int_args++]));
       } else {
         regs[i].set1(VMRegImpl::stack2reg(stk_args));
         stk_args += 2;
@@ -347,7 +347,7 @@ int SharedRuntime::java_calling_convention(const BasicType *sig_bt,
     case T_ARRAY:
     case T_ADDRESS:
       if (int_args < Argument::n_int_register_parameters_j) {
-        regs[i].set2(INT_ArgReg[int_args++]->as_VMReg());
+        regs[i].set2(Register::as_VMReg(INT_ArgReg[int_args++]));
       } else {
         regs[i].set2(VMRegImpl::stack2reg(stk_args));
         stk_args += 2;
@@ -355,7 +355,7 @@ int SharedRuntime::java_calling_convention(const BasicType *sig_bt,
       break;
     case T_FLOAT:
       if (fp_args < Argument::n_float_register_parameters_j) {
-        regs[i].set1(FP_ArgReg[fp_args++]->as_VMReg());
+        regs[i].set1(FloatRegister::as_VMReg(FP_ArgReg[fp_args++]));
       } else {
         regs[i].set1(VMRegImpl::stack2reg(stk_args));
         stk_args += 2;
@@ -364,7 +364,7 @@ int SharedRuntime::java_calling_convention(const BasicType *sig_bt,
     case T_DOUBLE:
       assert((i + 1) < total_args_passed && sig_bt[i + 1] == T_VOID, "expecting half");
       if (fp_args < Argument::n_float_register_parameters_j) {
-        regs[i].set2(FP_ArgReg[fp_args++]->as_VMReg());
+        regs[i].set2(FloatRegister::as_VMReg(FP_ArgReg[fp_args++]));
       } else {
         regs[i].set2(VMRegImpl::stack2reg(stk_args));
         stk_args += 2;
@@ -835,7 +835,7 @@ static int c_calling_convention_priv(const BasicType *sig_bt,
       case T_SHORT:
       case T_INT:
         if (int_args < Argument::n_int_register_parameters_c) {
-          regs[i].set1(INT_ArgReg[int_args++]->as_VMReg());
+          regs[i].set1(Register::as_VMReg(INT_ArgReg[int_args++]));
         } else {
 #ifdef __APPLE__
           // Less-than word types are stored one after another.
@@ -854,7 +854,7 @@ static int c_calling_convention_priv(const BasicType *sig_bt,
       case T_ADDRESS:
       case T_METADATA:
         if (int_args < Argument::n_int_register_parameters_c) {
-          regs[i].set2(INT_ArgReg[int_args++]->as_VMReg());
+          regs[i].set2(Register::as_VMReg(INT_ArgReg[int_args++]));
         } else {
           regs[i].set2(VMRegImpl::stack2reg(stk_args));
           stk_args += 2;
@@ -862,7 +862,7 @@ static int c_calling_convention_priv(const BasicType *sig_bt,
         break;
       case T_FLOAT:
         if (fp_args < Argument::n_float_register_parameters_c) {
-          regs[i].set1(FP_ArgReg[fp_args++]->as_VMReg());
+          regs[i].set1(FloatRegister::as_VMReg(FP_ArgReg[fp_args++]));
         } else {
 #ifdef __APPLE__
           // Less-than word types are stored one after another.
@@ -876,7 +876,7 @@ static int c_calling_convention_priv(const BasicType *sig_bt,
       case T_DOUBLE:
         assert((i + 1) < total_args_passed && sig_bt[i + 1] == T_VOID, "expecting half");
         if (fp_args < Argument::n_float_register_parameters_c) {
-          regs[i].set2(FP_ArgReg[fp_args++]->as_VMReg());
+          regs[i].set2(FloatRegister::as_VMReg(FP_ArgReg[fp_args++]));
         } else {
           regs[i].set2(VMRegImpl::stack2reg(stk_args));
           stk_args += 2;
@@ -1441,7 +1441,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   // For JNI natives the incoming and outgoing registers are offset upwards.
   GrowableArray<int> arg_order(2 * total_in_args);
   VMRegPair tmp_vmreg;
-  tmp_vmreg.set2(r19->as_VMReg());
+  tmp_vmreg.set2(Register::as_VMReg(r19));
 
   for (int i = total_in_args - 1, c_arg = total_c_args - 1; i >= 0; i--, c_arg--) {
     arg_order.push(i);
@@ -1456,14 +1456,14 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     assert(c_arg != -1 && i != -1, "wrong order");
 #ifdef ASSERT
     if (in_regs[i].first()->is_Register()) {
-      assert(!reg_destroyed[in_regs[i].first()->as_Register()->encoding()], "destroyed reg!");
+      assert(!reg_destroyed[Register::encoding(in_regs[i].first()->as_Register())], "destroyed reg!");
     } else if (in_regs[i].first()->is_FloatRegister()) {
-      assert(!freg_destroyed[in_regs[i].first()->as_FloatRegister()->encoding()], "destroyed reg!");
+      assert(!freg_destroyed[FloatRegister::encoding(in_regs[i].first()->as_FloatRegister())], "destroyed reg!");
     }
     if (out_regs[c_arg].first()->is_Register()) {
-      reg_destroyed[out_regs[c_arg].first()->as_Register()->encoding()] = true;
+      reg_destroyed[Register::encoding(out_regs[c_arg].first()->as_Register())] = true;
     } else if (out_regs[c_arg].first()->is_FloatRegister()) {
-      freg_destroyed[out_regs[c_arg].first()->as_FloatRegister()->encoding()] = true;
+      freg_destroyed[FloatRegister::encoding(out_regs[c_arg].first()->as_FloatRegister())] = true;
     }
 #endif /* ASSERT */
     switch (in_sig_bt[i]) {

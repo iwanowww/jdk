@@ -105,21 +105,21 @@ class FrameMap : public CompilationResourceObj {
 
   static Register cpu_rnr2reg (int rnr) {
     assert(_init_done, "tables not initialized");
-    debug_only(cpu_range_check(rnr);)
+    cpu_range_check(rnr);
     return _cpu_rnr2reg[rnr];
   }
 
   static int cpu_reg2rnr (Register reg) {
     assert(_init_done, "tables not initialized");
-    debug_only(cpu_range_check(reg->encoding());)
-    return _cpu_reg2rnr[reg->encoding()];
+    cpu_range_check(Register::encoding(reg));
+    return _cpu_reg2rnr[Register::encoding(reg)];
   }
 
   static void map_register(int rnr, Register reg) {
-    debug_only(cpu_range_check(rnr);)
-    debug_only(cpu_range_check(reg->encoding());)
+    cpu_range_check(rnr);
+    cpu_range_check(Register::encoding(reg));
     _cpu_rnr2reg[rnr] = reg;
-    _cpu_reg2rnr[reg->encoding()] = rnr;
+    _cpu_reg2rnr[Register::encoding(reg)] = rnr;
   }
 
   void update_reserved_argument_area_size (int size) {
@@ -128,11 +128,7 @@ class FrameMap : public CompilationResourceObj {
   }
 
  protected:
-#ifndef PRODUCT
-  static void cpu_range_check (int rnr)          { assert(0 <= rnr && rnr < nof_cpu_regs, "cpu register number is too big"); }
-  static void fpu_range_check (int rnr)          { assert(0 <= rnr && rnr < nof_fpu_regs, "fpu register number is too big"); }
-#endif
-
+  static void cpu_range_check (int rnr) { assert(0 <= rnr && rnr < nof_cpu_regs, "cpu register number is too big"); }
 
   ByteSize sp_offset_for_monitor_base(const int idx) const;
 

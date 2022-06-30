@@ -384,24 +384,24 @@ void MacroAssembler::set_last_Java_frame(Register last_java_sp,
                                          Register last_java_pc,
                                          Register scratch) {
 
-  if (last_java_pc->is_valid()) {
-      str(last_java_pc, Address(rthread,
-                                JavaThread::frame_anchor_offset()
-                                + JavaFrameAnchor::last_Java_pc_offset()));
-    }
+  if (last_java_pc != noreg) {
+    str(last_java_pc, Address(rthread,
+                              JavaThread::frame_anchor_offset()
+                              + JavaFrameAnchor::last_Java_pc_offset()));
+  }
 
   // determine last_java_sp register
   if (last_java_sp == sp) {
     mov(scratch, sp);
     last_java_sp = scratch;
-  } else if (!last_java_sp->is_valid()) {
+  } else if (last_java_sp == noreg) {
     last_java_sp = esp;
   }
 
   str(last_java_sp, Address(rthread, JavaThread::last_Java_sp_offset()));
 
   // last_java_fp is optional
-  if (last_java_fp->is_valid()) {
+  if (last_java_fp != noreg) {
     str(last_java_fp, Address(rthread, JavaThread::last_Java_fp_offset()));
   }
 }
@@ -545,12 +545,12 @@ void MacroAssembler::call_VM_base(Register oop_result,
                                   int      number_of_arguments,
                                   bool     check_exceptions) {
    // determine java_thread register
-  if (!java_thread->is_valid()) {
+  if (java_thread == noreg) {
     java_thread = rthread;
   }
 
   // determine last_java_sp register
-  if (!last_java_sp->is_valid()) {
+  if (last_java_sp == noreg) {
     last_java_sp = esp;
   }
 
@@ -602,7 +602,7 @@ void MacroAssembler::call_VM_base(Register oop_result,
   }
 
   // get oop result if there is one and reset the value in the thread
-  if (oop_result->is_valid()) {
+  if (oop_result != noreg) {
     get_vm_result(oop_result, java_thread);
   }
 }
@@ -1211,7 +1211,7 @@ void MacroAssembler::_verify_oop(Register reg, const char* s, const char* file, 
   {
     ResourceMark rm;
     stringStream ss;
-    ss.print("verify_oop: %s: %s (%s:%d)", reg->name(), s, file, line);
+    ss.print("verify_oop: %s: %s (%s:%d)", Register::name(reg), s, file, line);
     b = code_string(ss.as_string());
   }
   BLOCK_COMMENT("verify_oop {");
@@ -1952,7 +1952,7 @@ int MacroAssembler::push(unsigned int bitset, Register stack) {
       regs[count++] = reg;
     bitset >>= 1;
   }
-  regs[count++] = zr->encoding_nocheck();
+  regs[count++] = Register::encoding_nocheck(zr);
   count &= ~1;  // Only push an even number of regs
 
   if (count) {
@@ -1982,7 +1982,7 @@ int MacroAssembler::pop(unsigned int bitset, Register stack) {
       regs[count++] = reg;
     bitset >>= 1;
   }
-  regs[count++] = zr->encoding_nocheck();
+  regs[count++] = Register::encoding_nocheck(zr);
   count &= ~1;
 
   for (int i = 2; i < count; i += 2) {
@@ -2504,7 +2504,7 @@ static bool different(Register a, RegisterOrConstant b, Register c) {
 #define ATOMIC_OP(NAME, LDXR, OP, IOP, AOP, STXR, sz)                   \
 void MacroAssembler::atomic_##NAME(Register prev, RegisterOrConstant incr, Register addr) { \
   if (UseLSE) {                                                         \
-    prev = prev->is_valid() ? prev : zr;                                \
+    prev = (prev == noreg ? zr : prev);                                 \
     if (incr.is_register()) {                                           \
       AOP(sz, incr.as_register(), prev, addr);                          \
     } else {                                                            \
@@ -2514,18 +2514,19 @@ void MacroAssembler::atomic_##NAME(Register prev, RegisterOrConstant incr, Regis
     return;                                                             \
   }                                                                     \
   Register result = rscratch2;                                          \
-  if (prev->is_valid())                                                 \
+  if (prev != noreg) {                                                  \
     result = different(prev, incr, addr) ? prev : rscratch2;            \
-                                                                        \
+  }                                                                     \
   Label retry_load;                                                     \
-  if (VM_Version::supports_stxr_prefetch())                             \
+  if (VM_Version::supports_stxr_prefetch()) {                           \
     prfm(Address(addr), PSTL1STRM);                                     \
+  }                                                                     \
   bind(retry_load);                                                     \
   LDXR(result, addr);                                                   \
   OP(rscratch1, result, incr);                                          \
   STXR(rscratch2, rscratch1, addr);                                     \
   cbnzw(rscratch2, retry_load);                                         \
-  if (prev->is_valid() && prev != result) {                             \
+  if (prev != noreg && prev != result) {                                \
     IOP(prev, rscratch1, incr);                                         \
   }                                                                     \
 }
@@ -2540,23 +2541,25 @@ ATOMIC_OP(addalw, ldaxrw, addw, subw, ldaddal, stlxrw, Assembler::word)
 #define ATOMIC_XCHG(OP, AOP, LDXR, STXR, sz)                            \
 void MacroAssembler::atomic_##OP(Register prev, Register newv, Register addr) { \
   if (UseLSE) {                                                         \
-    prev = prev->is_valid() ? prev : zr;                                \
+    prev = (prev == noreg ? zr : prev);                                 \
     AOP(sz, newv, prev, addr);                                          \
     return;                                                             \
   }                                                                     \
   Register result = rscratch2;                                          \
-  if (prev->is_valid())                                                 \
+  if (prev != noreg) {                                                  \
     result = different(prev, newv, addr) ? prev : rscratch2;            \
-                                                                        \
+  }                                                                     \
   Label retry_load;                                                     \
-  if (VM_Version::supports_stxr_prefetch())                             \
+  if (VM_Version::supports_stxr_prefetch()) {                           \
     prfm(Address(addr), PSTL1STRM);                                     \
+  }                                                                     \
   bind(retry_load);                                                     \
   LDXR(result, addr);                                                   \
   STXR(rscratch1, newv, addr);                                          \
   cbnzw(rscratch1, retry_load);                                         \
-  if (prev->is_valid() && prev != result)                               \
+  if (prev != noreg && prev != result) {                                \
     mov(prev, result);                                                  \
+  }                                                                     \
 }
 
 ATOMIC_XCHG(xchg, swp, ldxr, stxr, Assembler::xword)

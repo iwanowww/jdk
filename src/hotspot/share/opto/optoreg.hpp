@@ -139,6 +139,9 @@ class OptoReg {
     }
   }
 
+  static OptoReg::Name as_OptoReg(Register r) {
+    return as_OptoReg(Register::as_VMReg(r));
+  }
   static OptoReg::Name as_OptoReg(VMReg r) {
     if (r->is_stack()) {
       assert(false, "must warp");

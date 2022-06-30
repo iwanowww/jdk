@@ -45,14 +45,22 @@ public:
 
   constexpr Register() : _ptr(NULL) {}
 
+  inline static constexpr Register successor(Register r);
+  inline static constexpr int encoding(Register r);
+  inline static constexpr int encoding_nocheck(Register r);
+  inline static constexpr const char* name(Register r);
+  inline static constexpr VMReg as_VMReg(Register r);
+  inline static constexpr bool is_valid(Register r);
+
   int operator==(const Register r) const { return _ptr == r._ptr; }
   int operator!=(const Register r) const { return _ptr != r._ptr; }
+
   int operator<=(const Register r) const { return _ptr <= r._ptr; }
   int operator>=(const Register r) const { return _ptr >= r._ptr; }
   int operator>(const Register r) const { return _ptr > r._ptr; }
   int operator<(const Register r) const { return _ptr < r._ptr; }
 
-  const RegisterImpl* operator->() const { return _ptr; }
+//  const RegisterImpl* operator->() const { return _ptr; }
 };
 
 class RegisterImpl: public AbstractRegisterImpl {
@@ -94,6 +102,30 @@ inline constexpr Register as_Register(int encoding) {
 
 inline constexpr Register Register::first() {
   return Register(RegisterImpl::first());
+}
+
+inline constexpr Register Register::successor(Register r) {
+  return Register(r._ptr->successor());
+}
+
+inline constexpr int Register::encoding(Register r) {
+  return r._ptr->encoding();
+}
+
+inline constexpr int Register::encoding_nocheck(Register r) {
+  return r._ptr->encoding_nocheck();
+}
+
+inline constexpr VMReg Register::as_VMReg(Register r) {
+  return r._ptr->as_VMReg();
+}
+
+inline constexpr const char* Register::name(Register r) {
+  return r._ptr->name();
+}
+
+inline constexpr bool Register::is_valid(Register r) {
+  return r._ptr->is_valid();
 }
 
 // The integer registers of the aarch64 architecture
@@ -167,6 +199,13 @@ public:
   constexpr FloatRegister() : _ptr(NULL) {}
   constexpr FloatRegister(const FloatRegisterImpl* ptr) : _ptr(ptr) {}
 
+  inline static constexpr FloatRegister successor(FloatRegister fr);
+  inline static constexpr int encoding(FloatRegister fr);
+  inline static constexpr int encoding_nocheck(FloatRegister fr);
+  inline static constexpr const char* name(FloatRegister fr);
+  inline static constexpr VMReg as_VMReg(FloatRegister fr);
+  inline static constexpr bool is_valid(FloatRegister fr);
+
   int operator==(const FloatRegister r) const { return _ptr == r._ptr; }
   int operator!=(const FloatRegister r) const { return _ptr != r._ptr; }
   int operator<(const FloatRegister r) const { return _ptr < r._ptr; }
@@ -221,8 +260,28 @@ inline constexpr FloatRegister as_FloatRegister(int encoding) {
   return FloatRegister(as_FloatRegisterImpl(encoding));
 }
 
-inline constexpr FloatRegister FloatRegister::first() {
-  return FloatRegister(FloatRegisterImpl::first());
+inline constexpr FloatRegister FloatRegister::successor(FloatRegister fr) {
+  return FloatRegister(fr._ptr->successor());
+}
+
+inline constexpr int FloatRegister::encoding(FloatRegister fr) {
+  return fr._ptr->encoding();
+}
+
+inline constexpr int FloatRegister::encoding_nocheck(FloatRegister fr) {
+  return fr._ptr->encoding_nocheck();
+}
+
+inline constexpr VMReg FloatRegister::as_VMReg(FloatRegister fr) {
+  return fr._ptr->as_VMReg();
+}
+
+inline constexpr const char* FloatRegister::name(FloatRegister fr) {
+  return fr._ptr->name();
+}
+
+inline constexpr bool FloatRegister::is_valid(FloatRegister fr) {
+  return fr._ptr->is_valid();
 }
 
 inline FloatRegister FloatRegister::operator+(int off) const {
@@ -319,6 +378,13 @@ public:
   constexpr PRegister() : _ptr(NULL) {}
   constexpr PRegister(const PRegisterImpl* ptr) : _ptr(ptr) {}
 
+  inline static constexpr PRegister successor(PRegister pr);
+  inline static constexpr int encoding(PRegister pr);
+  inline static constexpr int encoding_nocheck(PRegister pr);
+  inline static constexpr const char* name(PRegister pr);
+  inline static constexpr VMReg as_VMReg(PRegister pr);
+  inline static constexpr bool is_valid(PRegister pr);
+
   int operator==(const PRegister r) const { return _ptr == r._ptr; }
   int operator!=(const PRegister r) const { return _ptr != r._ptr; }
 
@@ -372,6 +438,30 @@ inline constexpr PRegister as_PRegister(int encoding) {
 
 inline constexpr PRegister PRegister::first() {
   return PRegister(PRegisterImpl::first());
+}
+
+inline constexpr PRegister PRegister::successor(PRegister pr) {
+  return PRegister(pr._ptr->successor());
+}
+
+inline constexpr int PRegister::encoding(PRegister pr) {
+  return pr._ptr->encoding();
+}
+
+inline constexpr int PRegister::encoding_nocheck(PRegister pr) {
+  return pr._ptr->encoding_nocheck();
+}
+
+inline constexpr VMReg PRegister::as_VMReg(PRegister pr) {
+  return pr._ptr->as_VMReg();
+}
+
+inline constexpr const char* PRegister::name(PRegister pr) {
+  return pr._ptr->name();
+}
+
+inline constexpr bool PRegister::is_valid(PRegister pr) {
+  return pr._ptr->is_valid();
 }
 
 // The predicate registers of SVE.

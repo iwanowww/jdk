@@ -2725,7 +2725,7 @@ int LinearScan::append_scope_value_for_operand(LIR_Opr opr, GrowableArray<ScopeV
 
     } else if (opr->is_double_cpu()) {
 #ifdef _LP64
-      VMReg rname_first = opr->as_register_lo()->as_VMReg();
+      VMReg rname_first = Register::as_VMReg(opr->as_register_lo());
       first = new LocationValue(Location::new_reg_loc(Location::lng, rname_first));
       second = _int_0_scope_value;
 #else

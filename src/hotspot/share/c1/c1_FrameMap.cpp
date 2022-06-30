@@ -312,7 +312,7 @@ ByteSize FrameMap::sp_offset_for_monitor_object(int index) const {
 VMReg FrameMap::regname(LIR_Opr opr) const {
   if (opr->is_single_cpu()) {
     assert(!opr->is_virtual(), "should not see virtual registers here");
-    return opr->as_register()->as_VMReg();
+    return Register::as_VMReg(opr->as_register());
   } else if (opr->is_single_stack()) {
     return sp_offset2vmreg(sp_offset_for_slot(opr->single_stack_ix()));
   } else if (opr->is_address()) {

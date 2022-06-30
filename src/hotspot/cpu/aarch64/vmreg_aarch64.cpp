@@ -34,17 +34,17 @@ void VMRegImpl::set_regName() {
   int i;
   for (i = 0; i < ConcreteRegisterImpl::max_gpr ; ) {
     for (int j = 0 ; j < RegisterImpl::max_slots_per_register ; j++) {
-      regName[i++] = reg->name();
+      regName[i++] = Register::name(reg);
     }
-    reg = reg->successor();
+    reg = Register::successor(reg);
   }
 
   FloatRegister freg = ::as_FloatRegister(0);
   for ( ; i < ConcreteRegisterImpl::max_fpr ; ) {
     for (int j = 0 ; j < FloatRegisterImpl::max_slots_per_register ; j++) {
-      regName[i++] = freg->name();
+      regName[i++] = FloatRegister::name(freg);
     }
-    freg = freg->successor();
+    freg = FloatRegister::successor(freg);
   }
 
   for ( ; i < ConcreteRegisterImpl::number_of_registers ; i ++ ) {

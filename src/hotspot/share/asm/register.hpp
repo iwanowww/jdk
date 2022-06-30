@@ -101,7 +101,7 @@ public:
 
   AbstractRegSet() : _bitset(0) { }
 
-  AbstractRegSet(RegImpl r1) : _bitset(1 << r1->encoding()) { }
+  AbstractRegSet(RegImpl r1) : _bitset(1 << RegImpl::encoding(r1)) { }
 
   AbstractRegSet operator+(const AbstractRegSet aSet) const {
     AbstractRegSet result(_bitset | aSet._bitset);
@@ -140,11 +140,13 @@ public:
   }
 
   static AbstractRegSet range(RegImpl start, RegImpl end) {
-    assert(start <= end, "must be");
+    int start_enc = RegImpl::encoding(start);
+    int   end_enc = RegImpl::encoding(end);
+    assert(start_enc <= end_enc, "must be");
     uint32_t bits = ~0;
-    bits <<= start->encoding();
-    bits <<= 31 - end->encoding();
-    bits >>= 31 - end->encoding();
+    bits <<= start_enc;
+    bits <<= 31 - end_enc;
+    bits >>= 31 - end_enc;
 
     return AbstractRegSet(bits);
   }
@@ -177,7 +179,7 @@ public:
 
   RegSetIterator& operator++() {
     RegImpl r = _regs.first();
-    if (r->is_valid())
+    if (RegImpl::is_valid(r))
       _regs -= r;
     return *this;
   }
@@ -242,7 +244,7 @@ inline void assert_different_registers(R first_register, Rx... more_registers) {
   // Verify there are no equal entries.
   for (size_t i = 0; i < ARRAY_SIZE(regs) - 1; ++i) {
     for (size_t j = i + 1; j < ARRAY_SIZE(regs); ++j) {
-      assert(regs[i] != regs[j], "Multiple uses of register: %s", regs[i]->name());
+      assert(regs[i] != regs[j], "Multiple uses of register: %s", R::name(regs[i]));
     }
   }
 #endif

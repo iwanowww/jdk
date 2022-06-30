@@ -33,8 +33,9 @@ class SmallRegisterMap {
 public:
   static constexpr SmallRegisterMap* instance = nullptr;
 private:
-  static void assert_is_rfp(VMReg r) NOT_DEBUG_RETURN
-                                     DEBUG_ONLY({ assert (r == rfp->as_VMReg() || r == rfp->as_VMReg()->next(), "Reg: %s", r->name()); })
+  static void assert_is_rfp(VMReg r) {
+    assert (r->as_Register() == rfp, "Reg: %s", r->name());
+  }
 public:
   // as_RegisterMap is used when we didn't want to templatize and abstract over RegisterMap type to support SmallRegisterMap
   // Consider enhancing SmallRegisterMap to support those cases
@@ -82,7 +83,7 @@ public:
 
 #ifdef ASSERT
   bool should_skip_missing() const  { return false; }
-  VMReg find_register_spilled_here(void* p, intptr_t* sp) { return rfp->as_VMReg(); }
+  VMReg find_register_spilled_here(void* p, intptr_t* sp) { return Register::as_VMReg(rfp); }
   void print() const { print_on(tty); }
   void print_on(outputStream* st) const { st->print_cr("Small register map"); }
 #endif

@@ -338,7 +338,7 @@ inline JavaCallWrapper** frame::entry_frame_call_wrapper_addr() const {
 inline oop frame::saved_oop_result(RegisterMap* map) const {
   PRAGMA_DIAG_PUSH
   PRAGMA_NONNULL_IGNORED
-  oop* result_adr = (oop *)map->location(r0->as_VMReg(), sp());
+  oop* result_adr = (oop *)map->location(Register::as_VMReg(r0), sp());
   PRAGMA_DIAG_POP
   guarantee(result_adr != NULL, "bad register save location");
   return *result_adr;
@@ -347,7 +347,7 @@ inline oop frame::saved_oop_result(RegisterMap* map) const {
 inline void frame::set_saved_oop_result(RegisterMap* map, oop obj) {
   PRAGMA_DIAG_PUSH
   PRAGMA_NONNULL_IGNORED
-  oop* result_adr = (oop *)map->location(r0->as_VMReg(), sp());
+  oop* result_adr = (oop *)map->location(Register::as_VMReg(r0), sp());
   PRAGMA_DIAG_POP
   guarantee(result_adr != NULL, "bad register save location");
 
@@ -469,13 +469,13 @@ void frame::update_map_with_saved_link(RegisterMapT* map, intptr_t** link_addr) 
   // callee-saved register. We must record where that location is so
   // that if FP was live on callout from c2 we can find the saved copy.
 
-  map->set_location(rfp->as_VMReg(), (address) link_addr);
+  map->set_location(Register::as_VMReg(rfp), (address) link_addr);
   // this is weird "H" ought to be at a higher address however the
   // oopMaps seems to have the "H" regs at the same address and the
   // vanilla register.
   // XXXX make this go away
   if (true) {
-    map->set_location(rfp->as_VMReg()->next(), (address) link_addr);
+    map->set_location(Register::as_VMReg(rfp)->next(), (address) link_addr);
   }
 }
 #endif // CPU_AARCH64_FRAME_AARCH64_INLINE_HPP

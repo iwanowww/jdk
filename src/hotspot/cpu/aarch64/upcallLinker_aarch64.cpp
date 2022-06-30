@@ -129,7 +129,8 @@ address UpcallLinker::make_upcall_stub(jobject receiver, Method* entry,
   Register shuffle_reg = r19;
   JavaCallingConvention out_conv;
   NativeCallingConvention in_conv(call_regs._arg_regs);
-  ArgumentShuffle arg_shuffle(in_sig_bt, total_in_args, out_sig_bt, total_out_args, &in_conv, &out_conv, shuffle_reg->as_VMReg());
+  ArgumentShuffle arg_shuffle(in_sig_bt, total_in_args, out_sig_bt, total_out_args, &in_conv, &out_conv,
+                              Register::as_VMReg(shuffle_reg));
   int stack_slots = SharedRuntime::out_preserve_stack_slots() + arg_shuffle.out_arg_stack_slots();
   int out_arg_area = align_up(stack_slots * VMRegImpl::stack_slot_size, StackAlignmentInBytes);
 
@@ -221,7 +222,7 @@ address UpcallLinker::make_upcall_stub(jobject receiver, Method* entry,
     assert(ret_buf_offset != -1, "no return buffer allocated");
     __ lea(abi._ret_buf_addr_reg, Address(sp, ret_buf_offset));
   }
-  arg_shuffle.generate(_masm, shuffle_reg->as_VMReg(), abi._shadow_space_bytes, 0);
+  arg_shuffle.generate(_masm, Register::as_VMReg(shuffle_reg), abi._shadow_space_bytes, 0);
   __ block_comment("} argument shuffle");
 
   __ block_comment("{ receiver ");
@@ -248,11 +249,11 @@ address UpcallLinker::make_upcall_stub(jobject receiver, Method* entry,
         case T_CHAR:
         case T_INT:
         case T_LONG:
-        j_expected_result_reg = r0->as_VMReg();
+        j_expected_result_reg = Register::as_VMReg(r0);
         break;
         case T_FLOAT:
         case T_DOUBLE:
-          j_expected_result_reg = v0->as_VMReg();
+          j_expected_result_reg = FloatRegister::as_VMReg(v0);
           break;
         default:
           fatal("unexpected return type: %s", type2name(ret_type));

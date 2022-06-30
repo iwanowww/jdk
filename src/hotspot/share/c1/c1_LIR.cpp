@@ -1524,10 +1524,10 @@ void LIR_Opr::print(outputStream* out) const {
   } else if (is_virtual()) {
     out->print("R%d", vreg_number());
   } else if (is_single_cpu()) {
-    out->print("%s", as_register()->name());
+    out->print("%s", Register::name(as_register()));
   } else if (is_double_cpu()) {
-    out->print("%s", as_register_hi()->name());
-    out->print("%s", as_register_lo()->name());
+    out->print("%s", Register::name(as_register_hi()));
+    out->print("%s", Register::name(as_register_lo()));
 #if defined(X86)
   } else if (is_single_xmm()) {
     out->print("%s", as_xmm_float_reg()->name());

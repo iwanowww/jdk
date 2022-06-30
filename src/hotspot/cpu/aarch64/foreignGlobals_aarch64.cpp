@@ -79,8 +79,8 @@ enum class RegType {
 
 VMReg ForeignGlobals::vmstorage_to_vmreg(int type, int index) {
   switch(static_cast<RegType>(type)) {
-    case RegType::INTEGER: return ::as_Register(index)->as_VMReg();
-    case RegType::VECTOR: return ::as_FloatRegister(index)->as_VMReg();
+    case RegType::INTEGER: return Register::as_VMReg(::as_Register(index));
+    case RegType::VECTOR: return FloatRegister::as_VMReg(::as_FloatRegister(index));
     case RegType::STACK: return VMRegImpl::stack2reg(index LP64_ONLY(* 2));
   }
   return VMRegImpl::Bad();

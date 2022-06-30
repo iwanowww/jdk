@@ -275,29 +275,29 @@ public:
   }
 
   void rf(Register r, int lsb) {
-    f(r->encoding_nocheck(), lsb + 4, lsb);
+    f(Register::encoding_nocheck(r), lsb + 4, lsb);
   }
 
   // reg|ZR
   void zrf(Register r, int lsb) {
-    f(r->encoding_nocheck() - (r == zr), lsb + 4, lsb);
+    f(Register::encoding_nocheck(r) - (r == zr), lsb + 4, lsb);
   }
 
   // reg|SP
   void srf(Register r, int lsb) {
-    f(r == sp ? 31 : r->encoding_nocheck(), lsb + 4, lsb);
+    f(r == sp ? 31 : Register::encoding_nocheck(r), lsb + 4, lsb);
   }
 
   void rf(FloatRegister r, int lsb) {
-    f(r->encoding_nocheck(), lsb + 4, lsb);
+    f(FloatRegister::encoding_nocheck(r), lsb + 4, lsb);
   }
 
   void prf(PRegister r, int lsb) {
-    f(r->encoding_nocheck(), lsb + 3, lsb);
+    f(PRegister::encoding_nocheck(r), lsb + 3, lsb);
   }
 
   void pgrf(PRegister r, int lsb) {
-    f(r->encoding_nocheck(), lsb + 2, lsb);
+    f(PRegister::encoding_nocheck(r), lsb + 2, lsb);
   }
 
   unsigned get(int msb = 31, int lsb = 0) {
@@ -1283,8 +1283,8 @@ public:
 #define INSN(NAME, a, r)                                                \
   void NAME(operand_size sz, Register Rs, Register Rs1,                 \
             Register Rt, Register Rt1, Register Rn) {                   \
-    assert((Rs->encoding() & 1) == 0 && (Rt->encoding() & 1) == 0 &&    \
-           Rs->successor() == Rs1 && Rt->successor() == Rt1 &&          \
+    assert((Register::encoding(Rs) & 1) == 0 && (Register::encoding(Rt) & 1) == 0 &&    \
+           Register::successor(Rs) == Rs1 && Register::successor(Rt) == Rt1 &&          \
            Rs != Rn && Rs1 != Rn && Rs != Rt, "invalid registers");     \
     lse_cas(Rs, Rt, Rn, sz, a, r, false);                               \
   }
@@ -1752,7 +1752,7 @@ void mvnw(Register Rd, Register Rm,
 
 #define INSN(NAME, op)                                                  \
   void NAME(Register Rn, Register Rm, int imm, Condition cond) {        \
-    int regNumber = (Rm == zr ? 31 : Rm->encoding());                   \
+    int regNumber = (Rm == zr ? 31 : Register::encoding(Rm));           \
     conditional_compare(op, 0, 0, 0, Rn, regNumber, imm, cond);         \
   }                                                                     \
                                                                         \

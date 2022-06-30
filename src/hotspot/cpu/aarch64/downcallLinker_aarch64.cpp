@@ -139,7 +139,7 @@ void DowncallStubGenerator::generate() {
   Register shuffle_reg = r19;
   JavaCallingConvention in_conv;
   NativeCallingConvention out_conv(_input_registers);
-  ArgumentShuffle arg_shuffle(_signature, _num_args, _signature, _num_args, &in_conv, &out_conv, shuffle_reg->as_VMReg());
+  ArgumentShuffle arg_shuffle(_signature, _num_args, _signature, _num_args, &in_conv, &out_conv, Register::as_VMReg(shuffle_reg));
 
 #ifndef PRODUCT
   LogTarget(Trace, foreign, downcall) lt;
@@ -199,7 +199,7 @@ void DowncallStubGenerator::generate() {
   __ stlrw(tmp1, tmp2);
 
   __ block_comment("{ argument shuffle");
-  arg_shuffle.generate(_masm, shuffle_reg->as_VMReg(), 0, _abi._shadow_space_bytes);
+  arg_shuffle.generate(_masm, Register::as_VMReg(shuffle_reg), 0, _abi._shadow_space_bytes);
   if (_needs_return_buffer) {
     assert(ret_buf_addr_sp_offset != -1, "no return buffer addr spill");
     __ str(_abi._ret_buf_addr_reg, Address(sp, ret_buf_addr_sp_offset));

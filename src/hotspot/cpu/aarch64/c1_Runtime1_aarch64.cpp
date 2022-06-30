@@ -55,7 +55,7 @@
 
 int StubAssembler::call_RT(Register oop_result1, Register metadata_result, address entry, int args_size) {
   // setup registers
-  assert(!(oop_result1->is_valid() || metadata_result->is_valid()) || oop_result1 != metadata_result, "registers must be different");
+  assert(!(Register::is_valid(oop_result1) || Register::is_valid(metadata_result)) || oop_result1 != metadata_result, "registers must be different");
   assert(oop_result1 != rthread && metadata_result != rthread, "registers must be different");
   assert(args_size >= 0, "illegal args_size");
   bool align_stack = false;
@@ -92,10 +92,10 @@ int StubAssembler::call_RT(Register oop_result1, Register metadata_result, addre
     cbz(rscratch1, L);
     // exception pending => remove activation and forward to exception handler
     // make sure that the vm_results are cleared
-    if (oop_result1->is_valid()) {
+    if (Register::is_valid(oop_result1)) {
       str(zr, Address(rthread, JavaThread::vm_result_offset()));
     }
-    if (metadata_result->is_valid()) {
+    if (Register::is_valid(metadata_result)) {
       str(zr, Address(rthread, JavaThread::vm_result_2_offset()));
     }
     if (frame_size() == no_frame_size) {
@@ -109,10 +109,10 @@ int StubAssembler::call_RT(Register oop_result1, Register metadata_result, addre
     bind(L);
   }
   // get oop results if there are any and reset the values in the thread
-  if (oop_result1->is_valid()) {
+  if (Register::is_valid(oop_result1)) {
     get_vm_result(oop_result1, rthread);
   }
-  if (metadata_result->is_valid()) {
+  if (Register::is_valid(metadata_result)) {
     get_vm_result_2(metadata_result, rthread);
   }
   return call_offset;
@@ -253,10 +253,10 @@ static OopMap* generate_oop_map(StubAssembler* sasm, bool save_fpu_registers) {
 
   for (int i = 0; i < FrameMap::nof_cpu_regs; i++) {
     Register r = as_Register(i);
-    if (i <= 18 && i != rscratch1->encoding() && i != rscratch2->encoding()) {
+    if (i <= 18 && r != rscratch1 && r != rscratch2) {
       int sp_offset = cpu_reg_save_offsets[i];
       oop_map->set_callee_saved(VMRegImpl::stack2reg(sp_offset),
-                                r->as_VMReg());
+                                Register::as_VMReg(r));
     }
   }
 

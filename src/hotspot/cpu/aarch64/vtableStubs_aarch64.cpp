@@ -75,7 +75,7 @@ VtableStub* VtableStubs::create_vtable_stub(int vtable_index) {
 #endif
 
   // get receiver (need to skip return address on top of stack)
-  assert(VtableStub::receiver_location() == j_rarg0->as_VMReg(), "receiver expected in j_rarg0");
+  assert(VtableStub::receiver_location() == Register::as_VMReg(j_rarg0), "receiver expected in j_rarg0");
 
   // get receiver klass
   address npe_addr = __ pc();
@@ -165,7 +165,7 @@ VtableStub* VtableStubs::create_itable_stub(int itable_index) {
 #endif
 
   // get receiver (need to skip return address on top of stack)
-  assert(VtableStub::receiver_location() == j_rarg0->as_VMReg(), "receiver expected in j_rarg0");
+  assert(VtableStub::receiver_location() == Register::as_VMReg(j_rarg0), "receiver expected in j_rarg0");
 
   // Entry arguments:
   //  rscratch2: CompiledICHolder

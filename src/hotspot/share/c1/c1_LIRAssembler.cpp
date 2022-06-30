@@ -834,7 +834,7 @@ void LIR_Assembler::verify_oop_map(CodeEmitInfo* info) {
         VMReg r = v.reg();
         if (!r->is_stack()) {
           stringStream st;
-          st.print("bad oop %s at %d", r->as_Register()->name(), _masm->offset());
+          st.print("bad oop %s at %d", Register::name(r->as_Register()), _masm->offset());
           _masm->verify_oop(r->as_Register());
         } else {
           _masm->verify_stack_oop(r->reg2stack() * VMRegImpl::stack_slot_size);

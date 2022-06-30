@@ -46,7 +46,7 @@ Register InterpreterRuntime::SignatureHandlerGenerator::temp() { return rscratch
 
 Register InterpreterRuntime::SignatureHandlerGenerator::next_gpr() {
   if (_num_reg_int_args < Argument::n_int_register_parameters_c-1) {
-    return as_Register(_num_reg_int_args++ + c_rarg1->encoding());
+    return as_Register(_num_reg_int_args++ + Register::encoding(c_rarg1));
   }
   return noreg;
 }
