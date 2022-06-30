@@ -27,7 +27,6 @@
 #define CPU_AARCH64_VMREG_AARCH64_INLINE_HPP
 
 inline VMReg RegisterImpl::as_VMReg() const {
-  if( this==noreg.ptr() ) return VMRegImpl::Bad();
   return VMRegImpl::as_VMReg(encoding() * RegisterImpl::max_slots_per_register);
 }
 

@@ -53,8 +53,6 @@ public:
   int operator<(const Register r) const { return _ptr < r._ptr; }
 
   const RegisterImpl* operator->() const { return _ptr; }
-
-  const RegisterImpl* ptr() const { return _ptr; }
 };
 
 class RegisterImpl: public AbstractRegisterImpl {
