@@ -213,7 +213,7 @@ public:
   inline FloatRegister operator+(int off) const;
   inline FloatRegister operator+=(int off) const;
 
-  const FloatRegisterImpl* operator->() const { return _ptr; }
+//  const FloatRegisterImpl* operator->() const { return _ptr; }
 };
 
 
@@ -523,8 +523,8 @@ inline FloatRegister AbstractRegSet<FloatRegister>::first() {
   return first ? as_FloatRegister(exact_log2(first)) : fnoreg;
 }
 
-inline Register as_Register(FloatRegister reg) {
-  return as_Register(reg->encoding());
+inline Register as_Register(FloatRegister freg) {
+  return as_Register(FloatRegister::encoding(freg));
 }
 
 #endif // CPU_AARCH64_REGISTER_AARCH64_HPP

@@ -56,7 +56,7 @@ LIR_Opr FrameMap::map_to_opr(BasicType type, VMRegPair* reg, bool) {
     }
   } else if (r_1->is_FloatRegister()) {
     assert(type == T_DOUBLE || type == T_FLOAT, "wrong type");
-    int num = r_1->as_FloatRegister()->encoding();
+    int num = FloatRegister::encoding(r_1->as_FloatRegister());
     if (type == T_FLOAT) {
       opr = LIR_OprFact::single_fpu(num);
     } else {
@@ -347,7 +347,7 @@ Address FrameMap::make_new_address(ByteSize sp_offset) const {
 VMReg FrameMap::fpu_regname (int n) {
   // Return the OptoReg name for the fpu stack slot "n"
   // A spilled fpu stack slot comprises to two single-word OptoReg's.
-  return as_FloatRegister(n)->as_VMReg();
+  return FloatRegister::as_VMReg(as_FloatRegister(n));
 }
 
 LIR_Opr FrameMap::stack_pointer() {

@@ -474,7 +474,7 @@ public:
     }
 
     // Sprinkle load instructions into the generated instructions
-    if (_data->is_valid() && _once) {
+    if (_data != fnoreg && _once) {
       assert(length() >= unrolls(), "not enough room for inteleaved loads");
       if (index < unrolls()) {
         ld1((_data + index*register_stride), T16B, post(r2, 0x10));

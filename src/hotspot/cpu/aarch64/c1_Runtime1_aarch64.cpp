@@ -262,11 +262,11 @@ static OopMap* generate_oop_map(StubAssembler* sasm, bool save_fpu_registers) {
 
   if (save_fpu_registers) {
     for (int i = 0; i < FrameMap::nof_fpu_regs; i++) {
-      FloatRegister r = as_FloatRegister(i);
+      FloatRegister fr = as_FloatRegister(i);
       {
         int sp_offset = fpu_reg_save_offsets[i];
         oop_map->set_callee_saved(VMRegImpl::stack2reg(sp_offset),
-                                  r->as_VMReg());
+                                  FloatRegister::as_VMReg(fr));
       }
     }
   }
