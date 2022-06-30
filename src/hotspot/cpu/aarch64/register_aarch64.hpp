@@ -384,11 +384,12 @@ public:
   inline static constexpr const char* name(PRegister pr);
   inline static constexpr VMReg as_VMReg(PRegister pr);
   inline static constexpr bool is_valid(PRegister pr);
+  inline static constexpr bool is_governing(PRegister pr);
 
   int operator==(const PRegister r) const { return _ptr == r._ptr; }
   int operator!=(const PRegister r) const { return _ptr != r._ptr; }
 
-  const PRegisterImpl* operator->() const { return _ptr; }
+//  const PRegisterImpl* operator->() const { return _ptr; }
 };
 
 inline constexpr PRegister as_PRegister(int encoding);
@@ -462,6 +463,10 @@ inline constexpr const char* PRegister::name(PRegister pr) {
 
 inline constexpr bool PRegister::is_valid(PRegister pr) {
   return pr._ptr->is_valid();
+}
+
+inline constexpr bool PRegister::is_governing(PRegister pr) {
+  return pr._ptr->is_governing();
 }
 
 // The predicate registers of SVE.

@@ -548,7 +548,7 @@ void C2_MacroAssembler::string_indexof_char_sve(Register str1, Register cnt1,
                                                 PRegister tmp_pdn, bool isL)
 {
   // Note that `tmp_pdn` should *NOT* be used as governing predicate register.
-  assert(tmp_pg->is_governing(),
+  assert(PRegister::is_governing(tmp_pg),
          "this register has to be a governing predicate register");
 
   Label LOOP, MATCH, DONE, NOMATCH;
@@ -1092,7 +1092,7 @@ void C2_MacroAssembler::sve_vmask_fromlong(PRegister dst, Register src, BasicTyp
 
 void C2_MacroAssembler::sve_compare(PRegister pd, BasicType bt, PRegister pg,
                                     FloatRegister zn, FloatRegister zm, int cond) {
-  assert(pg->is_governing(), "This register has to be a governing predicate register");
+  assert(PRegister::is_governing(pg), "This register has to be a governing predicate register");
   FloatRegister z1 = zn, z2 = zm;
   // Convert the original BoolTest condition to Assembler::condition.
   Condition condition;
@@ -1242,7 +1242,7 @@ void C2_MacroAssembler::sve_vmaskcast_narrow(PRegister dst, PRegister src,
 void C2_MacroAssembler::sve_reduce_integral(int opc, Register dst, BasicType bt, Register src1,
                                             FloatRegister src2, PRegister pg, FloatRegister tmp) {
   assert(bt == T_BYTE || bt == T_SHORT || bt == T_INT || bt == T_LONG, "unsupported element type");
-  assert(pg->is_governing(), "This register has to be a governing predicate register");
+  assert(PRegister::is_governing(pg), "This register has to be a governing predicate register");
   assert_different_registers(src1, dst);
   // Register "dst" and "tmp" are to be clobbered, and "src1" and "src2" should be preserved.
   Assembler::SIMD_RegVariant size = elemType_to_regVariant(bt);
@@ -1381,7 +1381,7 @@ void C2_MacroAssembler::sve_ptrue_lanecnt(PRegister dst, SIMD_RegVariant size, i
 void C2_MacroAssembler::sve_compress_short(FloatRegister dst, FloatRegister src, PRegister mask,
                                            FloatRegister vtmp1, FloatRegister vtmp2,
                                            PRegister pgtmp) {
-  assert(pgtmp->is_governing(), "This register has to be a governing predicate register");
+  assert(PRegister::is_governing(pgtmp), "This register has to be a governing predicate register");
   assert_different_registers(dst, src, vtmp1, vtmp2);
   assert_different_registers(mask, pgtmp);
 
@@ -1437,7 +1437,7 @@ void C2_MacroAssembler::sve_compress_byte(FloatRegister dst, FloatRegister src, 
                                           FloatRegister vtmp1, FloatRegister vtmp2,
                                           FloatRegister vtmp3, FloatRegister vtmp4,
                                           PRegister ptmp, PRegister pgtmp) {
-  assert(pgtmp->is_governing(), "This register has to be a governing predicate register");
+  assert(PRegister::is_governing(pgtmp), "This register has to be a governing predicate register");
   assert_different_registers(dst, src, vtmp1, vtmp2, vtmp3, vtmp4);
   assert_different_registers(mask, ptmp, pgtmp);
   // Example input:   src   = 88 77 66 55 44 33 22 11
