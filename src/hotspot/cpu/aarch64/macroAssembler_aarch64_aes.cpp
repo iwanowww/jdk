@@ -582,7 +582,7 @@ void MacroAssembler::ghash_processBlocks_wide(address field_polynomial, Register
   // v0 contains the initial state. Clear the others.
   for (int i = 1; i < unrolls; i++) {
     int ofs = register_stride * i;
-    eor(ofs+v0, T16B, ofs+v0, ofs+v0); // zero each state register
+    eor(v0+ofs, T16B, v0+ofs, v0+ofs); // zero each state register
   }
 
   ext(a1_xor_a0, T16B, Hprime, Hprime, 0x08); // long-swap subkeyH into a1_xor_a0
@@ -654,7 +654,7 @@ void MacroAssembler::ghash_processBlocks_wide(address field_polynomial, Register
     ldrq(Hprime, Address(subkeyH, 16 * (unrolls - i - 1)));
 
     rbit(v2+ofs, T16B, v2+ofs);
-    eor(v2+ofs, T16B, ofs+v0, v2+ofs);   // bit-swapped data ^ bit-swapped state
+    eor(v2+ofs, T16B, v0+ofs, v2+ofs);   // bit-swapped data ^ bit-swapped state
 
     rev64(Hprime, T16B, Hprime);
     rbit(Hprime, T16B, Hprime);

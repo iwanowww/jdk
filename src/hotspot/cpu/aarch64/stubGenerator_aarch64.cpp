@@ -3045,7 +3045,7 @@ class StubGenerator: public StubCodeGenerator {
       __ movi(v9, __ T4S, 1);
       __ ins(v8, __ S, v9, 3, 3); // v8 contains { 0, 0, 0, 1 }
 
-      for (FloatRegister f = v0; f < v0 + bulk_width; f++) {
+      for (FloatRegister f = v0; f < v0 + bulk_width; f = f->successor()) {
         __ rev32(f, __ T16B, v16);
         __ addv(v16, __ T4S, v16, v8);
       }
@@ -3162,7 +3162,7 @@ class StubGenerator: public StubCodeGenerator {
       __ movi(v8, __ T4S, 0);
       __ movi(v9, __ T4S, 1);
       __ ins(v8, __ S, v9, 3, 3); // v8 contains { 0, 0, 0, 1 }
-      for (FloatRegister f = v0; f < v8; f++) {
+      for (FloatRegister f = v0; f < v8; f = f->successor()) {
         __ rev32(f, __ T16B, v16);
         __ addv(v16, __ T4S, v16, v8);
       }
