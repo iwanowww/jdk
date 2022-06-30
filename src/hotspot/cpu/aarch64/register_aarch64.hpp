@@ -54,13 +54,6 @@ public:
 
   int operator==(const Register r) const { return _ptr == r._ptr; }
   int operator!=(const Register r) const { return _ptr != r._ptr; }
-
-  int operator<=(const Register r) const { return _ptr <= r._ptr; }
-  int operator>=(const Register r) const { return _ptr >= r._ptr; }
-  int operator>(const Register r) const { return _ptr > r._ptr; }
-  int operator<(const Register r) const { return _ptr < r._ptr; }
-
-//  const RegisterImpl* operator->() const { return _ptr; }
 };
 
 class RegisterImpl: public AbstractRegisterImpl {
@@ -208,12 +201,6 @@ public:
 
   int operator==(const FloatRegister r) const { return _ptr == r._ptr; }
   int operator!=(const FloatRegister r) const { return _ptr != r._ptr; }
-  int operator<(const FloatRegister r) const { return _ptr < r._ptr; }
-
-  inline FloatRegister operator+(int off) const;
-  inline FloatRegister operator+=(int off) const;
-
-//  const FloatRegisterImpl* operator->() const { return _ptr; }
 };
 
 
@@ -282,14 +269,6 @@ inline constexpr const char* FloatRegister::name(FloatRegister fr) {
 
 inline constexpr bool FloatRegister::is_valid(FloatRegister fr) {
   return fr._ptr->is_valid();
-}
-
-inline FloatRegister FloatRegister::operator+(int off) const {
-  return as_FloatRegister(_ptr->encoding_nocheck() + off);
-}
-
-inline FloatRegister FloatRegister::operator+=(int off) const {
-  return as_FloatRegister(_ptr->encoding_nocheck() + off);
 }
 
 // The float registers of the AARCH64 architecture
@@ -388,8 +367,6 @@ public:
 
   int operator==(const PRegister r) const { return _ptr == r._ptr; }
   int operator!=(const PRegister r) const { return _ptr != r._ptr; }
-
-//  const PRegisterImpl* operator->() const { return _ptr; }
 };
 
 inline constexpr PRegister as_PRegister(int encoding);

@@ -218,6 +218,7 @@ public:
   }
 
   virtual void generate(int index) {
+    int subkeys_enc = FloatRegister::encoding(_subkeys);
     switch (index) {
     case  0:
       if (_from != noreg) {
@@ -231,27 +232,27 @@ public:
         br(Assembler::EQ, _rounds_52);
       }
       break;
-    case  2:  aes_round(_data, _subkeys +  0);  break;
-    case  3:  aes_round(_data, _subkeys +  1);  break;
+    case  2:  aes_round(_data, as_FloatRegister(subkeys_enc +  0));  break;
+    case  3:  aes_round(_data, as_FloatRegister(subkeys_enc +  1));  break;
     case  4:
       if (_once)  bind(_rounds_52);
       break;
-    case  5:  aes_round(_data, _subkeys +  2);  break;
-    case  6:  aes_round(_data, _subkeys +  3);  break;
+    case  5:  aes_round(_data, as_FloatRegister(subkeys_enc +  2));  break;
+    case  6:  aes_round(_data, as_FloatRegister(subkeys_enc +  3));  break;
     case  7:
       if (_once)  bind(_rounds_44);
       break;
-    case  8:  aes_round(_data, _subkeys +  4);  break;
-    case  9:  aes_round(_data, _subkeys +  5);  break;
-    case 10:  aes_round(_data, _subkeys +  6);  break;
-    case 11:  aes_round(_data, _subkeys +  7);  break;
-    case 12:  aes_round(_data, _subkeys +  8);  break;
-    case 13:  aes_round(_data, _subkeys +  9);  break;
-    case 14:  aes_round(_data, _subkeys + 10);  break;
-    case 15:  aes_round(_data, _subkeys + 11);  break;
-    case 16:  aes_round(_data, _subkeys + 12);  break;
-    case 17:  aese(_data, _subkeys + 13);  break;
-    case 18:  eor(_data, T16B, _data, _subkeys + 14);  break;
+    case  8:  aes_round(_data, as_FloatRegister(subkeys_enc +  4));  break;
+    case  9:  aes_round(_data, as_FloatRegister(subkeys_enc +  5));  break;
+    case 10:  aes_round(_data, as_FloatRegister(subkeys_enc +  6));  break;
+    case 11:  aes_round(_data, as_FloatRegister(subkeys_enc +  7));  break;
+    case 12:  aes_round(_data, as_FloatRegister(subkeys_enc +  8));  break;
+    case 13:  aes_round(_data, as_FloatRegister(subkeys_enc +  9));  break;
+    case 14:  aes_round(_data, as_FloatRegister(subkeys_enc + 10));  break;
+    case 15:  aes_round(_data, as_FloatRegister(subkeys_enc + 11));  break;
+    case 16:  aes_round(_data, as_FloatRegister(subkeys_enc + 12));  break;
+    case 17:  aese(_data, as_FloatRegister(subkeys_enc + 13));  break;
+    case 18:  eor(_data, T16B, _data, as_FloatRegister(subkeys_enc + 14));  break;
     case 19:
       if (_to != noreg) {
         st1(_data, T16B, _to);
@@ -264,7 +265,7 @@ public:
   virtual KernelGenerator *next() {
     return new AESKernelGenerator(this, _unrolls,
                                   _from, _to, _keylen,
-                                  _data + 1, _subkeys, /*once*/false);
+                                  FloatRegister::successor(_data), _subkeys, /*once*/false);
   }
 
   virtual int length() { return 20; }
@@ -411,12 +412,12 @@ public:
 
   virtual KernelGenerator *next() {
     GHASHMultiplyGenerator *result = new GHASHMultiplyGenerator(*this);
-    result->_result_lo += register_stride;
-    result->_result_hi += register_stride;
-    result->_b += register_stride;
-    result->_tmp1 += register_stride;
-    result->_tmp2 += register_stride;
-    result->_tmp3 += register_stride;
+    result->_result_lo = as_FloatRegister(FloatRegister::encoding(result->_result_lo) + register_stride);
+    result->_result_hi = as_FloatRegister(FloatRegister::encoding(result->_result_hi) + register_stride);
+    result->_b         = as_FloatRegister(FloatRegister::encoding(result->_b)         + register_stride);
+    result->_tmp1      = as_FloatRegister(FloatRegister::encoding(result->_tmp1)      + register_stride);
+    result->_tmp2      = as_FloatRegister(FloatRegister::encoding(result->_tmp2)      + register_stride);
+    result->_tmp3      = as_FloatRegister(FloatRegister::encoding(result->_tmp3)      + register_stride);
     return result;
   }
 
@@ -477,17 +478,18 @@ public:
     if (_data != fnoreg && _once) {
       assert(length() >= unrolls(), "not enough room for inteleaved loads");
       if (index < unrolls()) {
-        ld1((_data + index*register_stride), T16B, post(r2, 0x10));
+        FloatRegister dst = as_FloatRegister(FloatRegister::encoding(_data) + index*register_stride);
+        ld1(dst, T16B, post(r2, 0x10));
       }
     }
   }
 
   virtual KernelGenerator *next() {
     GHASHReduceGenerator *result = new GHASHReduceGenerator(*this);
-    result->_result += register_stride;
-    result->_hi += register_stride;
-    result->_lo += register_stride;
-    result->_t1 += register_stride;
+    result->_result = as_FloatRegister(FloatRegister::encoding(result->_result) + register_stride);
+    result->_hi     = as_FloatRegister(FloatRegister::encoding(result->_hi)     + register_stride);
+    result->_lo     = as_FloatRegister(FloatRegister::encoding(result->_lo)     + register_stride);
+    result->_t1     = as_FloatRegister(FloatRegister::encoding(result->_t1)     + register_stride);
     result->_once = false;
     return result;
   }
@@ -578,11 +580,18 @@ void MacroAssembler::ghash_processBlocks_wide(address field_polynomial, Register
 
   orr(Hprime, T16B, v6, v6);     // Move H ** unrolls into Hprime
 
+  int v0_enc = FloatRegister::encoding(v0);
+  int v1_enc = FloatRegister::encoding(v1);
+  int v2_enc = FloatRegister::encoding(v2);
+  int v3_enc = FloatRegister::encoding(v3);
+  int v4_enc = FloatRegister::encoding(v4);
+  int v5_enc = FloatRegister::encoding(v5);
+
   // Hprime contains (H ** 1, H ** 2, ... H ** unrolls)
   // v0 contains the initial state. Clear the others.
-  for (int i = 1; i < unrolls; i++) {
-    int ofs = register_stride * i;
-    eor(v0+ofs, T16B, v0+ofs, v0+ofs); // zero each state register
+  for (int ofs = 0; ofs < unrolls * register_stride; ofs += register_stride) {
+    FloatRegister v0_ofs = as_FloatRegister(v0_enc + ofs);
+    eor(v0_ofs, T16B, v0_ofs, v0_ofs); // zero each state register
   }
 
   ext(a1_xor_a0, T16B, Hprime, Hprime, 0x08); // long-swap subkeyH into a1_xor_a0
@@ -590,7 +599,8 @@ void MacroAssembler::ghash_processBlocks_wide(address field_polynomial, Register
 
   // Load #unrolls blocks of data
   for (int ofs = 0; ofs < unrolls * register_stride; ofs += register_stride) {
-    ld1(v2+ofs, T16B, post(data, 0x10));
+    FloatRegister v2_ofs = as_FloatRegister(v2_enc + ofs);
+    ld1(v2_ofs, T16B, post(data, 0x10));
   }
 
   // Register assignments, replicated across 4 clones, v0 ... v23
@@ -623,8 +633,10 @@ void MacroAssembler::ghash_processBlocks_wide(address field_polynomial, Register
 
     // Xor data into current state
     for (int ofs = 0; ofs < unrolls * register_stride; ofs += register_stride) {
-      rbit((v2+ofs), T16B, (v2+ofs));
-      eor((v2+ofs), T16B, v0+ofs, (v2+ofs));   // bit-swapped data ^ bit-swapped state
+      FloatRegister v0_ofs = as_FloatRegister(v0_enc + ofs);
+      FloatRegister v2_ofs = as_FloatRegister(v2_enc + ofs);
+      rbit(v2_ofs, T16B, v2_ofs);
+      eor(v2_ofs, T16B, v0_ofs, v2_ofs);   // bit-swapped data ^ bit-swapped state
     }
 
     // Generate fully-unrolled multiply-reduce in two stages.
@@ -651,24 +663,32 @@ void MacroAssembler::ghash_processBlocks_wide(address field_polynomial, Register
   // First, we multiply/reduce each clone by the appropriate power of H.
   for (int i = 0; i < unrolls; i++) {
     int ofs = register_stride * i;
+    FloatRegister v0_ofs = as_FloatRegister(v0_enc + ofs);
+    FloatRegister v1_ofs = as_FloatRegister(v1_enc + ofs);
+    FloatRegister v2_ofs = as_FloatRegister(v2_enc + ofs);
+    FloatRegister v3_ofs = as_FloatRegister(v3_enc + ofs);
+    FloatRegister v4_ofs = as_FloatRegister(v4_enc + ofs);
+    FloatRegister v5_ofs = as_FloatRegister(v5_enc + ofs);
+
     ldrq(Hprime, Address(subkeyH, 16 * (unrolls - i - 1)));
 
-    rbit(v2+ofs, T16B, v2+ofs);
-    eor(v2+ofs, T16B, v0+ofs, v2+ofs);   // bit-swapped data ^ bit-swapped state
+    rbit(v2_ofs, T16B, v2_ofs);
+    eor(v2_ofs, T16B, v0_ofs, v2_ofs);   // bit-swapped data ^ bit-swapped state
 
     rev64(Hprime, T16B, Hprime);
     rbit(Hprime, T16B, Hprime);
     ext(a1_xor_a0, T16B, Hprime, Hprime, 0x08); // long-swap subkeyH into a1_xor_a0
     eor(a1_xor_a0, T16B, a1_xor_a0, Hprime);    // xor subkeyH into subkeyL (Karatsuba: (A1+A0))
-    ghash_modmul(/*result*/v0+ofs, /*result_lo*/v5+ofs, /*result_hi*/v4+ofs, /*b*/v2+ofs,
+    ghash_modmul(/*result*/v0_ofs, /*result_lo*/v5_ofs, /*result_hi*/v4_ofs, /*b*/v2_ofs,
                  Hprime, vzr, a1_xor_a0, p,
-                 /*temps*/v1+ofs, v3+ofs, /* reuse b*/v2+ofs);
+                 /*temps*/v1_ofs, v3_ofs, /* reuse b*/v2_ofs);
   }
 
   // Then we sum the results.
-  for (int i = 0; i < unrolls - 1; i++) {
+  for (int i = 1; i < unrolls; i++) {
     int ofs = register_stride * i;
-    eor(v0, T16B, v0, v0 + register_stride + ofs);
+    FloatRegister v0_ofs = as_FloatRegister(v0_enc + ofs);
+    eor(v0, T16B, v0, v0_ofs);
   }
 
   sub(blocks, blocks, (unsigned char)unrolls);
