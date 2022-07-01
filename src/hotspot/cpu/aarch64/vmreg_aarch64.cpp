@@ -30,10 +30,10 @@
 
 
 void VMRegImpl::set_regName() {
-  Register reg = ::as_Register(0);
   int i;
+  Register reg = ::as_Register(0);
   for (i = 0; i < ConcreteRegisterImpl::max_gpr ; ) {
-    for (int j = 0 ; j < RegisterImpl::max_slots_per_register ; j++) {
+    for (int j = 0 ; j < Register::max_slots_per_register ; j++) {
       regName[i++] = Register::name(reg);
     }
     reg = Register::successor(reg);

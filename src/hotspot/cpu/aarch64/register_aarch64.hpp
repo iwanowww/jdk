@@ -30,35 +30,15 @@
 #include "code/vmreg.hpp"
 #include "utilities/powerOfTwo.hpp"
 
-class RegisterImpl;
 
 class Register {
-  friend class RegisterImpl;
+private:
+  int _enc;
 
-  static constexpr Register first();
+  constexpr Register(int enc, bool unused) : _enc(enc) {}
 
-  const RegisterImpl* _ptr;
-
-  constexpr Register(const RegisterImpl* ptr) : _ptr(ptr) {}
 public:
   inline friend constexpr Register as_Register(int encoding);
-
-  constexpr Register() : _ptr(NULL) {}
-
-  inline static constexpr Register successor(Register r);
-  inline static constexpr int encoding(Register r);
-  inline static constexpr int encoding_nocheck(Register r);
-  inline static constexpr const char* name(Register r);
-  inline static constexpr VMReg as_VMReg(Register r);
-  inline static constexpr bool is_valid(Register r);
-
-  inline constexpr int operator==(const Register r) const;
-  inline constexpr int operator!=(const Register r) const;
-};
-
-class RegisterImpl: public AbstractRegisterImpl {
-public:
-  static constexpr const RegisterImpl* first();
 
   enum {
     number_of_registers         =   32,
@@ -66,67 +46,36 @@ public:
     max_slots_per_register = 2
   };
 
-  // derived registers, offsets, and addresses
-  const Register successor() const { return Register(this + 1); }
-//  const RegisterImpl* successor() const { return this + 1; }
+  constexpr Register()                  : _enc(    -1) {}
 
-  // construction
-  inline friend constexpr const RegisterImpl* as_RegisterImpl(int encoding);
+  static const char* name(Register r);
 
-  VMReg as_VMReg() const;
+  static VMReg as_VMReg(Register r);
 
-  // accessors
-  int encoding() const             { assert(is_valid(), "invalid register"); return encoding_nocheck(); }
-  bool is_valid() const            { return (unsigned)encoding_nocheck() < number_of_registers; }
-  const char* name() const;
-  int encoding_nocheck() const     { return this - first(); }
+  static Register successor(Register r) {
+    return Register(r._enc + 1, false);
+  }
+
+  static constexpr int encoding(Register r) {
+    assert(is_valid(r), "invalid register");
+    return encoding_nocheck(r);
+  }
+
+  static constexpr int encoding_nocheck(Register r) {
+    return r._enc;
+  }
+
+  static constexpr bool is_valid(Register r) {
+    return (unsigned)r._enc < number_of_registers;
+  }
+
+  inline constexpr int operator==(const Register r) const { return _enc == r._enc; }
+  inline constexpr int operator!=(const Register r) const { return _enc != r._enc; }
 };
 
-inline constexpr const RegisterImpl* as_RegisterImpl(int encoding) {
-  return RegisterImpl::first() + encoding;
-}
-extern RegisterImpl all_Registers[RegisterImpl::number_of_declared_registers + 1] INTERNAL_VISIBILITY;
-
-inline constexpr const RegisterImpl* RegisterImpl::first() { return all_Registers + 1; }
-
-inline constexpr Register as_Register(int encoding) {
-  return Register(as_RegisterImpl(encoding));
-}
-
-inline constexpr Register Register::first() {
-  return Register(RegisterImpl::first());
-}
-
-inline constexpr Register Register::successor(Register r) {
-  return Register(r._ptr->successor());
-}
-
-inline constexpr int Register::encoding(Register r) {
-  return r._ptr->encoding();
-}
-
-inline constexpr int Register::encoding_nocheck(Register r) {
-  return r._ptr->encoding_nocheck();
-}
-
-inline constexpr VMReg Register::as_VMReg(Register r) {
-  return r._ptr->as_VMReg();
-}
-
-inline constexpr const char* Register::name(Register r) {
-  return r._ptr->name();
-}
-
-inline constexpr bool Register::is_valid(Register r) {
-  return r._ptr->is_valid();
-}
-
-inline constexpr int Register::operator==(const Register r) const {
-  return _ptr->encoding_nocheck() == encoding_nocheck(r);
-}
-
-inline constexpr int Register::operator!=(const Register r) const {
-  return _ptr->encoding_nocheck() != encoding_nocheck(r);
+inline constexpr Register as_Register(int enc) {
+  assert(-1 <= enc && enc < Register::number_of_declared_registers, "invalid");
+  return Register(enc, false);
 }
 
 // The integer registers of the aarch64 architecture
@@ -501,7 +450,7 @@ class ConcreteRegisterImpl : public AbstractRegisterImpl {
   // There is no requirement that any ordering here matches any ordering c2 gives
   // it's optoregs.
 
-    number_of_registers = (RegisterImpl::max_slots_per_register * RegisterImpl::number_of_registers +
+    number_of_registers = (Register::max_slots_per_register * Register::number_of_registers +
                            FloatRegisterImpl::max_slots_per_register * FloatRegisterImpl::number_of_registers +
                            PRegisterImpl::max_slots_per_register * PRegisterImpl::number_of_registers +
                            1) // flags

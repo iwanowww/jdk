@@ -26,8 +26,8 @@
 #ifndef CPU_AARCH64_VMREG_AARCH64_INLINE_HPP
 #define CPU_AARCH64_VMREG_AARCH64_INLINE_HPP
 
-inline VMReg RegisterImpl::as_VMReg() const {
-  return VMRegImpl::as_VMReg(encoding() * RegisterImpl::max_slots_per_register);
+inline VMReg Register::as_VMReg(Register r) {
+  return VMRegImpl::as_VMReg(encoding(r) * Register::max_slots_per_register);
 }
 
 inline VMReg FloatRegisterImpl::as_VMReg() const {

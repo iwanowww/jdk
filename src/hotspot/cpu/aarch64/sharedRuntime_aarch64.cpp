@@ -119,9 +119,9 @@ class RegisterSaver {
                 // setting for it. We must therefore force the layout
                 // so that it agrees with the frame sender code.
                 r0_off = fpu_state_off + FPUStateSizeInWords,
-                rfp_off = r0_off + (RegisterImpl::number_of_registers - 2) * RegisterImpl::max_slots_per_register,
-                return_off = rfp_off + RegisterImpl::max_slots_per_register,      // slot for return address
-                reg_save_size = return_off + RegisterImpl::max_slots_per_register};
+                rfp_off = r0_off + (Register::number_of_registers - 2) * Register::max_slots_per_register,
+                return_off = rfp_off + Register::max_slots_per_register,      // slot for return address
+                reg_save_size = return_off + Register::max_slots_per_register};
 
 };
 
@@ -226,12 +226,12 @@ OopMap* RegisterSaver::save_live_registers(MacroAssembler* masm, int additional_
   OopMapSet *oop_maps = new OopMapSet();
   OopMap* oop_map = new OopMap(frame_size_in_slots, 0);
 
-  for (int i = 0; i < RegisterImpl::number_of_registers; i++) {
+  for (int i = 0; i < Register::number_of_registers; i++) {
     Register r = as_Register(i);
     if (i <= Register::encoding(rfp) && r != rscratch1 && r != rscratch2) {
       // SP offsets are in 4-byte words.
       // Register slots are 8 bytes wide, 32 floating-point registers.
-      int sp_offset = RegisterImpl::max_slots_per_register * i +
+      int sp_offset = Register::max_slots_per_register * i +
                       FloatRegisterImpl::save_slots_per_register * FloatRegisterImpl::number_of_registers;
       oop_map->set_callee_saved(VMRegImpl::stack2reg(sp_offset + additional_frame_slots), Register::as_VMReg(r));
     }
@@ -1427,9 +1427,9 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   int int_args = 0;
 
 #ifdef ASSERT
-  bool reg_destroyed[RegisterImpl::number_of_registers];
+  bool reg_destroyed[Register::number_of_registers];
   bool freg_destroyed[FloatRegisterImpl::number_of_registers];
-  for ( int r = 0 ; r < RegisterImpl::number_of_registers ; r++ ) {
+  for ( int r = 0 ; r < Register::number_of_registers ; r++ ) {
     reg_destroyed[r] = false;
   }
   for ( int f = 0 ; f < FloatRegisterImpl::number_of_registers ; f++ ) {

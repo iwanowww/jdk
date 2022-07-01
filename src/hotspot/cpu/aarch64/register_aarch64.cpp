@@ -26,12 +26,11 @@
 #include "precompiled.hpp"
 #include "register_aarch64.hpp"
 
-REGISTER_IMPL_DEFINITION(Register, RegisterImpl, RegisterImpl::number_of_declared_registers);
 REGISTER_IMPL_DEFINITION(FloatRegister, FloatRegisterImpl, FloatRegisterImpl::number_of_registers);
 REGISTER_IMPL_DEFINITION(PRegister, PRegisterImpl, PRegisterImpl::number_of_registers);
 
-const int ConcreteRegisterImpl::max_gpr = RegisterImpl::number_of_registers *
-                                          RegisterImpl::max_slots_per_register;
+const int ConcreteRegisterImpl::max_gpr = Register::number_of_registers *
+                                          Register::max_slots_per_register;
 
 const int ConcreteRegisterImpl::max_fpr
   = ConcreteRegisterImpl::max_gpr +
@@ -41,7 +40,7 @@ const int ConcreteRegisterImpl::max_pr
   = ConcreteRegisterImpl::max_fpr +
     PRegisterImpl::number_of_registers * PRegisterImpl::max_slots_per_register;
 
-const char* RegisterImpl::name() const {
+const char* Register::name(Register r)  {
   static const char *const names[number_of_registers] = {
     "c_rarg0", "c_rarg1", "c_rarg2", "c_rarg3", "c_rarg4", "c_rarg5", "c_rarg6", "c_rarg7",
     "rscratch1", "rscratch2",
@@ -50,7 +49,7 @@ const char* RegisterImpl::name() const {
     "resp", "rdispatch", "rbcp", "r23", "rlocals", "rmonitors", "rcpool", "rheapbase",
     "rthread", "rfp", "lr", "sp"
   };
-  return is_valid() ? names[encoding()] : "noreg";
+  return is_valid(r) ? names[encoding(r)] : "noreg";
 }
 
 const char* FloatRegisterImpl::name() const {

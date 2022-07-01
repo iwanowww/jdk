@@ -2504,7 +2504,7 @@ static bool different(Register a, RegisterOrConstant b, Register c) {
 #define ATOMIC_OP(NAME, LDXR, OP, IOP, AOP, STXR, sz)                   \
 void MacroAssembler::atomic_##NAME(Register prev, RegisterOrConstant incr, Register addr) { \
   if (UseLSE) {                                                         \
-    prev = (prev == noreg ? zr : prev);                                 \
+    prev = (Register::is_valid(prev) ? prev : zr);                      \
     if (incr.is_register()) {                                           \
       AOP(sz, incr.as_register(), prev, addr);                          \
     } else {                                                            \
@@ -2541,7 +2541,7 @@ ATOMIC_OP(addalw, ldaxrw, addw, subw, ldaddal, stlxrw, Assembler::word)
 #define ATOMIC_XCHG(OP, AOP, LDXR, STXR, sz)                            \
 void MacroAssembler::atomic_##OP(Register prev, Register newv, Register addr) { \
   if (UseLSE) {                                                         \
-    prev = (prev == noreg ? zr : prev);                                 \
+    prev = (Register::is_valid(prev) ? prev : zr);                      \
     AOP(sz, newv, prev, addr);                                          \
     return;                                                             \
   }                                                                     \

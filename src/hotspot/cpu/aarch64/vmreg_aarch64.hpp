@@ -41,7 +41,7 @@ inline bool is_PRegister() {
 inline Register as_Register() {
   assert( is_Register(), "must be");
   // Yuk
-  return ::as_Register(value() / RegisterImpl::max_slots_per_register);
+  return ::as_Register(value() / Register::max_slots_per_register);
 }
 
 inline FloatRegister as_FloatRegister() {
