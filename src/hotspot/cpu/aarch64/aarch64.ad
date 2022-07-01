@@ -2037,12 +2037,12 @@ static enum RC rc_class(OptoReg::Name reg) {
   }
 
   // we have 32 float register * 8 halves
-  int slots_of_float_registers = FloatRegisterImpl::max_slots_per_register * FloatRegisterImpl::number_of_registers;
+  int slots_of_float_registers = FloatRegister::max_slots_per_register * FloatRegister::number_of_registers;
   if (reg < slots_of_int_registers + slots_of_float_registers) {
     return rc_float;
   }
 
-  int slots_of_predicate_registers = PRegisterImpl::max_slots_per_register * PRegisterImpl::number_of_registers;
+  int slots_of_predicate_registers = PRegister::max_slots_per_register * PRegister::number_of_registers;
   if (reg < slots_of_int_registers + slots_of_float_registers + slots_of_predicate_registers) {
     return rc_predicate;
   }

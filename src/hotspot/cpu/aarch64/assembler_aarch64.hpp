@@ -625,8 +625,8 @@ class InternalAddress: public Address {
   InternalAddress(address target) : Address(target, relocInfo::internal_word_type) {}
 };
 
-const int FPUStateSizeInWords = FloatRegisterImpl::number_of_registers *
-                                FloatRegisterImpl::save_slots_per_register;
+const int FPUStateSizeInWords = FloatRegister::number_of_registers *
+                                FloatRegister::save_slots_per_register;
 
 typedef enum {
   PLDL1KEEP = 0b00000, PLDL1STRM, PLDL2KEEP, PLDL2STRM, PLDL3KEEP, PLDL3STRM,

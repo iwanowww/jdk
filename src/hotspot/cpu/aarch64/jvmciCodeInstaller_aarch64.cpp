@@ -187,7 +187,7 @@ VMReg CodeInstaller::get_hotspot_reg(jint jvmci_reg, JVMCI_TRAPS) {
     return Register::as_VMReg(as_Register(jvmci_reg));
   } else {
     jint floatRegisterNumber = jvmci_reg - Register::number_of_declared_registers;
-    if (floatRegisterNumber >= 0 && floatRegisterNumber < FloatRegisterImpl::number_of_registers) {
+    if (floatRegisterNumber >= 0 && floatRegisterNumber < FloatRegister::number_of_registers) {
       return FloatRegister::as_VMReg(as_FloatRegister(floatRegisterNumber));
     }
     JVMCI_ERROR_NULL("invalid register number: %d", jvmci_reg);

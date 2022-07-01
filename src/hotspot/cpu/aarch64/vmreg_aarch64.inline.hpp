@@ -30,13 +30,13 @@ inline VMReg Register::as_VMReg(Register r) {
   return VMRegImpl::as_VMReg(encoding(r) * Register::max_slots_per_register);
 }
 
-inline VMReg FloatRegisterImpl::as_VMReg() const {
-  return VMRegImpl::as_VMReg((encoding() * FloatRegisterImpl::max_slots_per_register) +
+inline VMReg FloatRegister::as_VMReg(FloatRegister fr) {
+  return VMRegImpl::as_VMReg((encoding(fr) * FloatRegister::max_slots_per_register) +
                              ConcreteRegisterImpl::max_gpr);
 }
 
-inline VMReg PRegisterImpl::as_VMReg() const {
-  return VMRegImpl::as_VMReg(encoding() + ConcreteRegisterImpl::max_fpr);
+inline VMReg PRegister::as_VMReg(PRegister pr) {
+  return VMRegImpl::as_VMReg(encoding(pr) + ConcreteRegisterImpl::max_fpr);
 }
 
 #endif // CPU_AARCH64_VMREG_AARCH64_INLINE_HPP

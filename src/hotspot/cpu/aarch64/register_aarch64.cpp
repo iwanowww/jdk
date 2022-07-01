@@ -26,19 +26,16 @@
 #include "precompiled.hpp"
 #include "register_aarch64.hpp"
 
-REGISTER_IMPL_DEFINITION(FloatRegister, FloatRegisterImpl, FloatRegisterImpl::number_of_registers);
-REGISTER_IMPL_DEFINITION(PRegister, PRegisterImpl, PRegisterImpl::number_of_registers);
-
 const int ConcreteRegisterImpl::max_gpr = Register::number_of_registers *
                                           Register::max_slots_per_register;
 
 const int ConcreteRegisterImpl::max_fpr
   = ConcreteRegisterImpl::max_gpr +
-    FloatRegisterImpl::number_of_registers * FloatRegisterImpl::max_slots_per_register;
+    FloatRegister::number_of_registers * FloatRegister::max_slots_per_register;
 
 const int ConcreteRegisterImpl::max_pr
   = ConcreteRegisterImpl::max_fpr +
-    PRegisterImpl::number_of_registers * PRegisterImpl::max_slots_per_register;
+    PRegister::number_of_registers * PRegister::max_slots_per_register;
 
 const char* Register::name(Register r)  {
   static const char *const names[number_of_registers] = {
@@ -52,20 +49,20 @@ const char* Register::name(Register r)  {
   return is_valid(r) ? names[encoding(r)] : "noreg";
 }
 
-const char* FloatRegisterImpl::name() const {
+const char* FloatRegister::name(FloatRegister fr)  {
   static const char *const names[number_of_registers] = {
     "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7",
     "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15",
     "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23",
     "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31"
   };
-  return is_valid() ? names[encoding()] : "noreg";
+  return is_valid(fr) ? names[encoding(fr)] : "noreg";
 }
 
-const char* PRegisterImpl::name() const {
+const char* PRegister::name(PRegister pr) {
   static const char *const names[number_of_registers] = {
     "p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7",
     "p8", "p9", "p10", "p11", "p12", "p13", "p14", "p15"
   };
-  return is_valid() ? names[encoding()] : "noreg";
+  return is_valid(pr) ? names[encoding(pr)] : "noreg";
 }

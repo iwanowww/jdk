@@ -49,11 +49,11 @@ public:
   constexpr Register()                  : _enc(    -1) {}
 
   static const char* name(Register r);
-
   static VMReg as_VMReg(Register r);
 
   static Register successor(Register r) {
-    return Register(r._enc + 1, false);
+    int succ_enc = (encoding(r) + 1) % (unsigned) number_of_registers;
+    return Register(succ_enc, false);
   }
 
   static constexpr int encoding(Register r) {
@@ -136,37 +136,13 @@ constexpr Register dummy_reg = r31_sp;
 
 /* ============================================================================= */
 
-class FloatRegisterImpl;
-
+// The implementation of floating point registers for the architecture
 class FloatRegister {
-  static constexpr FloatRegister first();
+  int _enc;
 
-  const FloatRegisterImpl* _ptr;
-
+  constexpr FloatRegister(int enc, bool unused) : _enc(enc) {}
 public:
   inline friend constexpr FloatRegister as_FloatRegister(int encoding);
-
-  constexpr FloatRegister() : _ptr(NULL) {}
-  constexpr FloatRegister(const FloatRegisterImpl* ptr) : _ptr(ptr) {}
-
-  inline static constexpr FloatRegister successor(FloatRegister fr);
-  inline static constexpr int encoding(FloatRegister fr);
-  inline static constexpr int encoding_nocheck(FloatRegister fr);
-  inline static constexpr const char* name(FloatRegister fr);
-  inline static constexpr VMReg as_VMReg(FloatRegister fr);
-  inline static constexpr bool is_valid(FloatRegister fr);
-
-  inline constexpr int operator==(const FloatRegister r) const;
-  inline constexpr int operator!=(const FloatRegister r) const;
-};
-
-
-inline constexpr FloatRegister as_FloatRegister(int encoding);
-
-// The implementation of floating point registers for the architecture
-class FloatRegisterImpl: public AbstractRegisterImpl {
-public:
-  static constexpr const FloatRegisterImpl* first();
 
   enum {
     number_of_registers = 32,
@@ -176,68 +152,35 @@ public:
     extra_save_slots_per_neon_register = slots_per_neon_register - save_slots_per_register
   };
 
-  // construction
-  inline friend constexpr const FloatRegisterImpl* as_FloatRegisterImpl(int encoding);
+  constexpr FloatRegister() : _enc(-1) {}
 
-  VMReg as_VMReg() const;
+  static VMReg as_VMReg(FloatRegister fr);
+  static const char* name(FloatRegister fr);
 
-  // derived registers, offsets, and addresses
-  FloatRegister successor() const {
-    return as_FloatRegister((encoding() + 1) % (unsigned)number_of_registers);
+  inline static constexpr FloatRegister successor(FloatRegister fr) {
+    int succ_enc = (encoding(fr) + 1) % (unsigned) number_of_registers;
+    return FloatRegister(succ_enc, false);
+  }
+  inline static constexpr int encoding(FloatRegister fr) {
+    assert(is_valid(fr), "invalid register");
+    return encoding_nocheck(fr);
+  }
+  inline static constexpr int encoding_nocheck(FloatRegister fr) {
+    return fr._enc;
+  }
+  inline static constexpr bool is_valid(FloatRegister fr) {
+    return (unsigned) encoding_nocheck(fr) < number_of_registers;
   }
 
-  // accessors
-  int encoding() const             { assert(is_valid(), "invalid register"); return encoding_nocheck(); }
-  bool is_valid() const            { return (unsigned)encoding_nocheck() < number_of_registers; }
-  const char* name() const;
-  int encoding_nocheck() const     { return this - first(); }
+  inline constexpr int operator==(const FloatRegister r) const { return _enc == r._enc; }
+  inline constexpr int operator!=(const FloatRegister r) const { return _enc != r._enc; }
 };
 
-inline constexpr const FloatRegisterImpl* as_FloatRegisterImpl(int encoding) {
-  return FloatRegisterImpl::first() + encoding;
-}
-extern FloatRegisterImpl all_FloatRegisters[FloatRegisterImpl::number_of_registers + 1] INTERNAL_VISIBILITY;
-
-inline constexpr const FloatRegisterImpl* FloatRegisterImpl::first() { return all_FloatRegisters + 1; }
-
 inline constexpr FloatRegister as_FloatRegister(int encoding) {
-  return FloatRegister(as_FloatRegisterImpl(encoding));
-}
-
-inline constexpr FloatRegister FloatRegister::successor(FloatRegister fr) {
-  return FloatRegister(fr._ptr->successor());
-}
-
-inline constexpr int FloatRegister::encoding(FloatRegister fr) {
-  return fr._ptr->encoding();
-}
-
-inline constexpr int FloatRegister::encoding_nocheck(FloatRegister fr) {
-  return fr._ptr->encoding_nocheck();
-}
-
-inline constexpr VMReg FloatRegister::as_VMReg(FloatRegister fr) {
-  return fr._ptr->as_VMReg();
-}
-
-inline constexpr const char* FloatRegister::name(FloatRegister fr) {
-  return fr._ptr->name();
-}
-
-inline constexpr bool FloatRegister::is_valid(FloatRegister fr) {
-  return fr._ptr->is_valid();
-}
-
-inline constexpr int FloatRegister::operator==(const FloatRegister r) const {
-  return _ptr->encoding_nocheck() == encoding_nocheck(r);
-}
-
-inline constexpr int FloatRegister::operator!=(const FloatRegister r) const {
-  return _ptr->encoding_nocheck() != encoding_nocheck(r);
+  return FloatRegister(encoding, false);
 }
 
 // The float registers of the AARCH64 architecture
-
 constexpr FloatRegister fnoreg = as_FloatRegister(-1);
 
 constexpr FloatRegister v0  = as_FloatRegister( 0);
@@ -309,37 +252,14 @@ constexpr FloatRegister z31 = as_FloatRegister(31);
 
 /* ============================================================================= */
 
-class PRegisterImpl;
-
+// The implementation of predicate registers for the architecture
 class PRegister {
-  static constexpr PRegister first();
+  int _enc;
 
-  const PRegisterImpl* _ptr;
+  constexpr PRegister(int enc, bool unused) : _enc(enc) {}
 
 public:
   inline friend constexpr PRegister as_PRegister(int encoding);
-
-  constexpr PRegister() : _ptr(NULL) {}
-  constexpr PRegister(const PRegisterImpl* ptr) : _ptr(ptr) {}
-
-  inline static constexpr PRegister successor(PRegister pr);
-  inline static constexpr int encoding(PRegister pr);
-  inline static constexpr int encoding_nocheck(PRegister pr);
-  inline static constexpr const char* name(PRegister pr);
-  inline static constexpr VMReg as_VMReg(PRegister pr);
-  inline static constexpr bool is_valid(PRegister pr);
-  inline static constexpr bool is_governing(PRegister pr);
-
-  inline constexpr int operator==(const PRegister r) const;
-  inline constexpr int operator!=(const PRegister r) const;
-};
-
-inline constexpr PRegister as_PRegister(int encoding);
-
-// The implementation of predicate registers for the architecture
-class PRegisterImpl: public AbstractRegisterImpl {
- public:
-  static constexpr const PRegisterImpl* first();
 
   enum {
     number_of_registers = 16,
@@ -352,71 +272,38 @@ class PRegisterImpl: public AbstractRegisterImpl {
     max_slots_per_register = 1
   };
 
-  // construction
-  inline friend constexpr const PRegisterImpl* as_PRegisterImpl(int encoding);
+  constexpr PRegister() : _enc(-1) {}
 
-  VMReg as_VMReg() const;
+  static VMReg as_VMReg(PRegister pr);
+  static const char* name(PRegister pr);
 
-  // derived registers, offsets, and addresses
-  PRegister successor() const     { return this + 1; }
+  static constexpr PRegister successor(PRegister pr) {
+    int succ_enc = (pr._enc + 1) % number_of_registers;
+    return PRegister(succ_enc, false);
+  }
 
-  // accessors
-  int encoding() const            { assert(is_valid(), "invalid register"); return encoding_nocheck(); }
-  int encoding_nocheck() const    { return this - first(); }
-  bool is_valid() const           { return (unsigned)encoding_nocheck() < number_of_registers; }
-  bool is_governing() const       { return first() <= this && this - first() < number_of_governing_registers; }
-  const char* name() const;
+  static constexpr int encoding(PRegister pr) {
+    assert(is_valid(pr), "invalid register");
+    return encoding_nocheck(pr);
+  }
+  static constexpr int encoding_nocheck(PRegister pr) {
+    return pr._enc;
+  }
+  static constexpr bool is_valid(PRegister pr) {
+    return (unsigned)encoding_nocheck(pr) < number_of_registers;
+  }
+  static constexpr bool is_governing(PRegister pr) {
+    return (unsigned)encoding_nocheck(pr) < number_of_governing_registers;
+  }
+
+  inline constexpr int operator==(const PRegister r) const { return _enc == r._enc; }
+  inline constexpr int operator!=(const PRegister r) const { return _enc != r._enc; }
 };
 
-inline constexpr const PRegisterImpl* as_PRegisterImpl(int encoding) {
-  return PRegisterImpl::first() + encoding;
-}
-extern PRegisterImpl all_PRegisters[PRegisterImpl::number_of_registers + 1] INTERNAL_VISIBILITY;
-
-inline constexpr const PRegisterImpl* PRegisterImpl::first() { return all_PRegisters + 1; }
+inline constexpr PRegister as_PRegister(int encoding);
 
 inline constexpr PRegister as_PRegister(int encoding) {
-  return PRegister(as_PRegisterImpl(encoding));
-}
-
-inline constexpr PRegister PRegister::first() {
-  return PRegister(PRegisterImpl::first());
-}
-
-inline constexpr PRegister PRegister::successor(PRegister pr) {
-  return PRegister(pr._ptr->successor());
-}
-
-inline constexpr int PRegister::encoding(PRegister pr) {
-  return pr._ptr->encoding();
-}
-
-inline constexpr int PRegister::encoding_nocheck(PRegister pr) {
-  return pr._ptr->encoding_nocheck();
-}
-
-inline constexpr VMReg PRegister::as_VMReg(PRegister pr) {
-  return pr._ptr->as_VMReg();
-}
-
-inline constexpr const char* PRegister::name(PRegister pr) {
-  return pr._ptr->name();
-}
-
-inline constexpr bool PRegister::is_valid(PRegister pr) {
-  return pr._ptr->is_valid();
-}
-
-inline constexpr bool PRegister::is_governing(PRegister pr) {
-  return pr._ptr->is_governing();
-}
-
-inline constexpr int PRegister::operator==(const PRegister r) const {
-  return _ptr->encoding_nocheck() == encoding_nocheck(r);
-}
-
-inline constexpr int PRegister::operator!=(const PRegister r) const {
-  return _ptr->encoding_nocheck() != encoding_nocheck(r);
+  return PRegister(encoding, false);
 }
 
 // The predicate registers of SVE.
@@ -451,8 +338,8 @@ class ConcreteRegisterImpl : public AbstractRegisterImpl {
   // it's optoregs.
 
     number_of_registers = (Register::max_slots_per_register * Register::number_of_registers +
-                           FloatRegisterImpl::max_slots_per_register * FloatRegisterImpl::number_of_registers +
-                           PRegisterImpl::max_slots_per_register * PRegisterImpl::number_of_registers +
+                           FloatRegister::max_slots_per_register * FloatRegister::number_of_registers +
+                           PRegister::max_slots_per_register * PRegister::number_of_registers +
                            1) // flags
   };
 
