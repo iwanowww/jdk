@@ -226,7 +226,7 @@ OopMap* RegisterSaver::save_live_registers(MacroAssembler* masm, int additional_
   OopMapSet *oop_maps = new OopMapSet();
   OopMap* oop_map = new OopMap(frame_size_in_slots, 0);
 
-  for (int i = 0; i < Register::number_of_registers; i++) {
+  for (uint i = 0; i < Register::number_of_registers; i++) {
     Register r = as_Register(i);
     if (i <= Register::encoding(rfp) && r != rscratch1 && r != rscratch2) {
       // SP offsets are in 4-byte words.

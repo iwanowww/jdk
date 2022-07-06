@@ -2648,7 +2648,7 @@ void MacroAssembler::push_call_clobbered_registers_except(RegSet exclude) {
   mov(rscratch1, -step);
   // Push v0-v7, v16-v31.
   for (int i = 31; i>= 4; i -= 4) {
-    if (i <= FloatRegister::encoding(v7) || i >= FloatRegister::encoding(v16)) {
+    if ((uint)i <= FloatRegister::encoding(v7) || (uint)i >= FloatRegister::encoding(v16)) {
       st1(as_FloatRegister(i-3), as_FloatRegister(i-2), as_FloatRegister(i-1),
           as_FloatRegister(i), T1D, Address(post(sp, rscratch1)));
     }
@@ -2659,7 +2659,7 @@ void MacroAssembler::push_call_clobbered_registers_except(RegSet exclude) {
 
 void MacroAssembler::pop_call_clobbered_registers_except(RegSet exclude) {
   for (int i = 0; i < 32; i += 4) {
-    if (i <= FloatRegister::encoding(v7) || i >= FloatRegister::encoding(v16)) {
+    if ((uint)i <= FloatRegister::encoding(v7) || (uint)i >= FloatRegister::encoding(v16)) {
       ld1(as_FloatRegister(i), as_FloatRegister(i+1), as_FloatRegister(i+2),
           as_FloatRegister(i+3), T1D, Address(post(sp, 4 * wordSize)));
     }

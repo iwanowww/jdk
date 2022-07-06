@@ -33,9 +33,9 @@
 
 class Register {
 private:
-  int _enc;
+  uint _enc;
 
-  constexpr Register(int enc, bool unused) : _enc(enc) {}
+  constexpr Register(uint enc, bool unused) : _enc(enc) {}
 
 public:
   inline friend constexpr Register as_Register(int encoding);
@@ -46,59 +46,61 @@ public:
     max_slots_per_register = 2
   };
 
-  constexpr Register()                  : _enc(    -1) {}
+  constexpr Register() : _enc(number_of_declared_registers) {} // noreg
 
   static const char* name(Register r);
   static VMReg as_VMReg(Register r);
 
   static Register successor(Register r) {
-    int succ_enc = (encoding(r) + 1) % (unsigned) number_of_registers;
+    uint succ_enc = (encoding(r) + 1) % (number_of_declared_registers + 1);
     return Register(succ_enc, false);
   }
 
-  static constexpr int encoding(Register r) {
+  static constexpr uint encoding(Register r) {
     assert(is_valid(r), "invalid register");
     return encoding_nocheck(r);
   }
 
-  static constexpr int encoding_nocheck(Register r) {
+  static constexpr uint encoding_nocheck(Register r) {
     return r._enc;
   }
 
   static constexpr bool is_valid(Register r) {
-    return (unsigned)r._enc < number_of_registers;
+    return r._enc < number_of_registers;
   }
 
   inline constexpr int operator==(const Register r) const { return _enc == r._enc; }
   inline constexpr int operator!=(const Register r) const { return _enc != r._enc; }
 };
 
-inline constexpr Register as_Register(int enc) {
-  assert(-1 <= enc && enc < Register::number_of_declared_registers, "invalid");
-  return Register(enc, false);
+constexpr Register noreg = Register();
+
+inline constexpr Register as_Register(int encoding) {
+  if (encoding < 0 || encoding >= Register::number_of_declared_registers) {
+    return noreg;
+  }
+  return Register((unsigned) encoding, false);
 }
 
 // The integer registers of the aarch64 architecture
-
-constexpr Register noreg = as_Register(-1);
-constexpr Register r0    = as_Register(0);
-constexpr Register r1    = as_Register(1);
-constexpr Register r2    = as_Register(2);
-constexpr Register r3    = as_Register(3);
-constexpr Register r4    = as_Register(4);
-constexpr Register r5    = as_Register(5);
-constexpr Register r6    = as_Register(6);
-constexpr Register r7    = as_Register(7);
-constexpr Register r8    = as_Register(8);
-constexpr Register r9    = as_Register(9);
-constexpr Register r10   = as_Register(10);
-constexpr Register r11   = as_Register(11);
-constexpr Register r12   = as_Register(12);
-constexpr Register r13   = as_Register(13);
-constexpr Register r14   = as_Register(14);
-constexpr Register r15   = as_Register(15);
-constexpr Register r16   = as_Register(16);
-constexpr Register r17   = as_Register(17);
+constexpr Register r0  = as_Register(0);
+constexpr Register r1  = as_Register(1);
+constexpr Register r2  = as_Register(2);
+constexpr Register r3  = as_Register(3);
+constexpr Register r4  = as_Register(4);
+constexpr Register r5  = as_Register(5);
+constexpr Register r6  = as_Register(6);
+constexpr Register r7  = as_Register(7);
+constexpr Register r8  = as_Register(8);
+constexpr Register r9  = as_Register(9);
+constexpr Register r10 = as_Register(10);
+constexpr Register r11 = as_Register(11);
+constexpr Register r12 = as_Register(12);
+constexpr Register r13 = as_Register(13);
+constexpr Register r14 = as_Register(14);
+constexpr Register r15 = as_Register(15);
+constexpr Register r16 = as_Register(16);
+constexpr Register r17 = as_Register(17);
 
 // In the ABI for Windows+AArch64 the register r18 is used to store the pointer
 // to the current thread's TEB (where TLS variables are stored). We could
@@ -138,10 +140,11 @@ constexpr Register dummy_reg = r31_sp;
 
 // The implementation of floating point registers for the architecture
 class FloatRegister {
-  int _enc;
+ private:
+  uint _enc;
 
-  constexpr FloatRegister(int enc, bool unused) : _enc(enc) {}
-public:
+  constexpr FloatRegister(uint enc, bool unused) : _enc(enc) {}
+ public:
   inline friend constexpr FloatRegister as_FloatRegister(int encoding);
 
   enum {
@@ -152,37 +155,40 @@ public:
     extra_save_slots_per_neon_register = slots_per_neon_register - save_slots_per_register
   };
 
-  constexpr FloatRegister() : _enc(-1) {}
+  constexpr FloatRegister() : _enc(number_of_registers) {} // fnoreg
 
   static VMReg as_VMReg(FloatRegister fr);
   static const char* name(FloatRegister fr);
 
   inline static constexpr FloatRegister successor(FloatRegister fr) {
-    int succ_enc = (encoding(fr) + 1) % (unsigned) number_of_registers;
+    uint succ_enc = (encoding(fr) + 1) % (number_of_registers + 1);
     return FloatRegister(succ_enc, false);
   }
-  inline static constexpr int encoding(FloatRegister fr) {
+  inline static constexpr uint encoding(FloatRegister fr) {
     assert(is_valid(fr), "invalid register");
     return encoding_nocheck(fr);
   }
-  inline static constexpr int encoding_nocheck(FloatRegister fr) {
+  inline static constexpr uint encoding_nocheck(FloatRegister fr) {
     return fr._enc;
   }
   inline static constexpr bool is_valid(FloatRegister fr) {
-    return (unsigned) encoding_nocheck(fr) < number_of_registers;
+    return encoding_nocheck(fr) < number_of_registers;
   }
 
   inline constexpr int operator==(const FloatRegister r) const { return _enc == r._enc; }
   inline constexpr int operator!=(const FloatRegister r) const { return _enc != r._enc; }
 };
 
+constexpr FloatRegister fnoreg = FloatRegister();
+
 inline constexpr FloatRegister as_FloatRegister(int encoding) {
-  return FloatRegister(encoding, false);
+  if (encoding < 0 || encoding >= FloatRegister::number_of_registers) {
+    return fnoreg;
+  }
+  return FloatRegister((unsigned) encoding, false);
 }
 
 // The float registers of the AARCH64 architecture
-constexpr FloatRegister fnoreg = as_FloatRegister(-1);
-
 constexpr FloatRegister v0  = as_FloatRegister( 0);
 constexpr FloatRegister v1  = as_FloatRegister( 1);
 constexpr FloatRegister v2  = as_FloatRegister( 2);
@@ -217,46 +223,46 @@ constexpr FloatRegister v30 = as_FloatRegister(30);
 constexpr FloatRegister v31 = as_FloatRegister(31);
 
 // SVE vector registers, shared with the SIMD&FP v0-v31. Vn maps to Zn[127:0].
-constexpr FloatRegister z0  = as_FloatRegister( 0);
-constexpr FloatRegister z1  = as_FloatRegister( 1);
-constexpr FloatRegister z2  = as_FloatRegister( 2);
-constexpr FloatRegister z3  = as_FloatRegister( 3);
-constexpr FloatRegister z4  = as_FloatRegister( 4);
-constexpr FloatRegister z5  = as_FloatRegister( 5);
-constexpr FloatRegister z6  = as_FloatRegister( 6);
-constexpr FloatRegister z7  = as_FloatRegister( 7);
-constexpr FloatRegister z8  = as_FloatRegister( 8);
-constexpr FloatRegister z9  = as_FloatRegister( 9);
-constexpr FloatRegister z10 = as_FloatRegister(10);
-constexpr FloatRegister z11 = as_FloatRegister(11);
-constexpr FloatRegister z12 = as_FloatRegister(12);
-constexpr FloatRegister z13 = as_FloatRegister(13);
-constexpr FloatRegister z14 = as_FloatRegister(14);
-constexpr FloatRegister z15 = as_FloatRegister(15);
-constexpr FloatRegister z16 = as_FloatRegister(16);
-constexpr FloatRegister z17 = as_FloatRegister(17);
-constexpr FloatRegister z18 = as_FloatRegister(18);
-constexpr FloatRegister z19 = as_FloatRegister(19);
-constexpr FloatRegister z20 = as_FloatRegister(20);
-constexpr FloatRegister z21 = as_FloatRegister(21);
-constexpr FloatRegister z22 = as_FloatRegister(22);
-constexpr FloatRegister z23 = as_FloatRegister(23);
-constexpr FloatRegister z24 = as_FloatRegister(24);
-constexpr FloatRegister z25 = as_FloatRegister(25);
-constexpr FloatRegister z26 = as_FloatRegister(26);
-constexpr FloatRegister z27 = as_FloatRegister(27);
-constexpr FloatRegister z28 = as_FloatRegister(28);
-constexpr FloatRegister z29 = as_FloatRegister(29);
-constexpr FloatRegister z30 = as_FloatRegister(30);
-constexpr FloatRegister z31 = as_FloatRegister(31);
+constexpr FloatRegister z0  = v0;
+constexpr FloatRegister z1  = v1;
+constexpr FloatRegister z2  = v2;
+constexpr FloatRegister z3  = v3;
+constexpr FloatRegister z4  = v4;
+constexpr FloatRegister z5  = v5;
+constexpr FloatRegister z6  = v6;
+constexpr FloatRegister z7  = v7;
+constexpr FloatRegister z8  = v8;
+constexpr FloatRegister z9  = v9;
+constexpr FloatRegister z10 = v10;
+constexpr FloatRegister z11 = v11;
+constexpr FloatRegister z12 = v12;
+constexpr FloatRegister z13 = v13;
+constexpr FloatRegister z14 = v14;
+constexpr FloatRegister z15 = v15;
+constexpr FloatRegister z16 = v16;
+constexpr FloatRegister z17 = v17;
+constexpr FloatRegister z18 = v18;
+constexpr FloatRegister z19 = v19;
+constexpr FloatRegister z20 = v20;
+constexpr FloatRegister z21 = v21;
+constexpr FloatRegister z22 = v22;
+constexpr FloatRegister z23 = v23;
+constexpr FloatRegister z24 = v24;
+constexpr FloatRegister z25 = v25;
+constexpr FloatRegister z26 = v26;
+constexpr FloatRegister z27 = v27;
+constexpr FloatRegister z28 = v28;
+constexpr FloatRegister z29 = v29;
+constexpr FloatRegister z30 = v30;
+constexpr FloatRegister z31 = v31;
 
 /* ============================================================================= */
 
 // The implementation of predicate registers for the architecture
 class PRegister {
-  int _enc;
+  uint _enc;
 
-  constexpr PRegister(int enc, bool unused) : _enc(enc) {}
+  constexpr PRegister(uint enc, bool unused) : _enc(enc) {}
 
 public:
   inline friend constexpr PRegister as_PRegister(int encoding);
@@ -272,17 +278,17 @@ public:
     max_slots_per_register = 1
   };
 
-  constexpr PRegister() : _enc(-1) {}
+  constexpr PRegister() : _enc(number_of_registers) {} // pnoreg
 
   static VMReg as_VMReg(PRegister pr);
   static const char* name(PRegister pr);
 
   static constexpr PRegister successor(PRegister pr) {
-    int succ_enc = (pr._enc + 1) % number_of_registers;
+    uint succ_enc = (pr._enc + 1) % (number_of_registers + 1);
     return PRegister(succ_enc, false);
   }
 
-  static constexpr int encoding(PRegister pr) {
+  static constexpr uint encoding(PRegister pr) {
     assert(is_valid(pr), "invalid register");
     return encoding_nocheck(pr);
   }
@@ -290,26 +296,26 @@ public:
     return pr._enc;
   }
   static constexpr bool is_valid(PRegister pr) {
-    return (unsigned)encoding_nocheck(pr) < number_of_registers;
+    return encoding_nocheck(pr) < number_of_registers;
   }
   static constexpr bool is_governing(PRegister pr) {
-    return (unsigned)encoding_nocheck(pr) < number_of_governing_registers;
+    return encoding_nocheck(pr) < number_of_governing_registers;
   }
 
   inline constexpr int operator==(const PRegister r) const { return _enc == r._enc; }
   inline constexpr int operator!=(const PRegister r) const { return _enc != r._enc; }
 };
 
-inline constexpr PRegister as_PRegister(int encoding);
+constexpr PRegister pnoreg = PRegister();
 
 inline constexpr PRegister as_PRegister(int encoding) {
+  if (encoding < 0 || encoding >= PRegister::number_of_registers) {
+    return pnoreg;
+  }
   return PRegister(encoding, false);
 }
 
 // The predicate registers of SVE.
-//
-constexpr PRegister pnoreg = as_PRegister(-1);
-
 constexpr PRegister p0  = as_PRegister( 0);
 constexpr PRegister p1  = as_PRegister( 1);
 constexpr PRegister p2  = as_PRegister( 2);

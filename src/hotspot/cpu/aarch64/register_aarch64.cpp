@@ -38,31 +38,33 @@ const int ConcreteRegisterImpl::max_pr
     PRegister::number_of_registers * PRegister::max_slots_per_register;
 
 const char* Register::name(Register r)  {
-  static const char *const names[number_of_registers] = {
+  static const char *const names[number_of_declared_registers + 1] = {
     "c_rarg0", "c_rarg1", "c_rarg2", "c_rarg3", "c_rarg4", "c_rarg5", "c_rarg6", "c_rarg7",
     "rscratch1", "rscratch2",
     "r10", "r11", "r12", "r13", "r14", "r15", "r16",
     "r17", "r18_tls", "r19",
     "resp", "rdispatch", "rbcp", "r23", "rlocals", "rmonitors", "rcpool", "rheapbase",
-    "rthread", "rfp", "lr", "sp"
+    "rthread", "rfp", "lr", "r31_sp", "zr", "sp", "noreg"
   };
-  return is_valid(r) ? names[encoding(r)] : "noreg";
+  return names[encoding(r)];
 }
 
 const char* FloatRegister::name(FloatRegister fr)  {
-  static const char *const names[number_of_registers] = {
+  static const char *const names[number_of_registers + 1] = {
     "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7",
     "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15",
     "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23",
-    "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31"
+    "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31",
+    "fnoreg"
   };
-  return is_valid(fr) ? names[encoding(fr)] : "noreg";
+  return names[encoding(fr)];
 }
 
 const char* PRegister::name(PRegister pr) {
-  static const char *const names[number_of_registers] = {
+  static const char *const names[number_of_registers + 1] = {
     "p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7",
-    "p8", "p9", "p10", "p11", "p12", "p13", "p14", "p15"
+    "p8", "p9", "p10", "p11", "p12", "p13", "p14", "p15",
+    "pnoreg"
   };
-  return is_valid(pr) ? names[encoding(pr)] : "noreg";
+  return names[encoding(pr)];
 }

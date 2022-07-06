@@ -128,7 +128,8 @@ address TemplateInterpreterGenerator::generate_slow_signature_handler() {
   // InterpreterRuntime::slow_signature_handler so we don't touch it
   // here.  It will be loaded with the JNIEnv* later.
   __ ldr(c_rarg1, Address(sp, 1 * wordSize));
-  for (int i = Register::encoding(c_rarg2); i <= Register::encoding(c_rarg7); i += 2) {
+  assert(Register::encoding(c_rarg2) < Register::encoding(c_rarg7), "");
+  for (uint i = Register::encoding(c_rarg2); i <= Register::encoding(c_rarg7); i += 2) {
     Register rm = as_Register(i), rn = as_Register(i+1);
     __ ldp(rm, rn, Address(sp, i * wordSize));
   }
