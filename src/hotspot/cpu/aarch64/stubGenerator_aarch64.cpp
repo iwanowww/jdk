@@ -7247,7 +7247,8 @@ class StubGenerator: public StubCodeGenerator {
     //    Preserves len
     //    Leaves s pointing to the address which was in d at start
     void reverse(Register d, Register s, Register len, Register tmp1, Register tmp2) {
-      assert(tmp1 < r19 && tmp2 < r19, "register corruption");
+      assert(tmp1->encoding() < r19->encoding(), "register corruption");
+      assert(tmp2->encoding() < r19->encoding(), "register corruption");
 
       lea(s, Address(s, len, Address::uxtw(LogBytesPerWord)));
       mov(tmp1, len);

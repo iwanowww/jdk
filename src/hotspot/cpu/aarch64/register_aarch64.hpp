@@ -32,14 +32,10 @@
 class VMRegImpl;
 typedef VMRegImpl* VMReg;
 
-// Use Register as shortcut
-class RegisterImpl;
-typedef const RegisterImpl* Register;
-
-inline constexpr Register as_Register(int encoding);
+class Register;
 
 class RegisterImpl: public AbstractRegisterImpl {
-  static constexpr Register first();
+  static constexpr const RegisterImpl* first();
 
 public:
   enum {
@@ -49,10 +45,10 @@ public:
   };
 
   // derived registers, offsets, and addresses
-  const Register successor() const { return this + 1; }
+  const Register successor() const; // { return this + 1; }
 
   // construction
-  inline friend constexpr Register as_Register(int encoding);
+  inline friend constexpr const RegisterImpl* as_RegisterImpl(int encoding);
 
   VMReg as_VMReg() const;
 
@@ -63,8 +59,37 @@ public:
   int encoding_nocheck() const     { return this - first(); }
 };
 
+//REGISTER_IMPL_DECLARATION(Register, RegisterImpl, RegisterImpl::number_of_declared_registers);
 
-REGISTER_IMPL_DECLARATION(Register, RegisterImpl, RegisterImpl::number_of_declared_registers);
+inline constexpr const RegisterImpl* as_RegisterImpl(int encoding) {
+  return RegisterImpl::first() + encoding;
+}
+extern RegisterImpl all_RegisterImpls[RegisterImpl::number_of_declared_registers + 1] INTERNAL_VISIBILITY;
+inline constexpr const RegisterImpl* RegisterImpl::first() { return all_RegisterImpls + 1; }
+
+class Register {
+  friend class RegisterImpl;
+
+  const RegisterImpl* _ptr;
+
+  constexpr Register(const RegisterImpl* ptr) : _ptr(ptr) {}
+
+public:
+  inline friend constexpr Register as_Register(int encoding);
+
+  Register() : _ptr(as_RegisterImpl(-1)) {} // noreg
+
+  int operator==(const Register r) const { return _ptr == r._ptr; }
+  int operator!=(const Register r) const { return _ptr != r._ptr; }
+
+  const RegisterImpl* operator->() const { return _ptr; }
+};
+
+inline constexpr Register as_Register(int encoding) {
+  return Register(as_RegisterImpl(encoding));
+}
+
+inline const Register RegisterImpl::successor() const { return Register(this + 1); }
 
 // The integer registers of the aarch64 architecture
 
