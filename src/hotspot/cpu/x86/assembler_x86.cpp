@@ -534,16 +534,23 @@ static bool is_valid_encoding(int reg_enc) {
 
 static int raw_encode(Register reg) {
   assert(reg == noreg || reg->is_valid(), "sanity");
-  int reg_enc = (intptr_t)reg;
+  int reg_enc = reg->encoding_nocheck();
   assert(reg_enc == -1 || is_valid_encoding(reg_enc), "sanity");
   return reg_enc;
 }
 
 static int raw_encode(XMMRegister xmmreg) {
   assert(xmmreg == xnoreg || xmmreg->is_valid(), "sanity");
-  int xmmreg_enc = (intptr_t)xmmreg;
+  int xmmreg_enc = xmmreg->encoding_nocheck();
   assert(xmmreg_enc == -1 || is_valid_encoding(xmmreg_enc), "sanity");
   return xmmreg_enc;
+}
+
+static int raw_encode(KRegister kreg) {
+  assert(kreg == knoreg || kreg->is_valid(), "sanity");
+  int kreg_enc = kreg->encoding_nocheck();
+  assert(kreg_enc == -1 || is_valid_encoding(kreg_enc), "sanity");
+  return kreg_enc;
 }
 
 static int modrm_encoding(int mod, int dst_enc, int src_enc) {
@@ -701,6 +708,7 @@ void Assembler::emit_operand(Register reg, Register base, Register index,
                       scale, disp, rspec, rip_relative_correction);
 
 }
+
 void Assembler::emit_operand(XMMRegister xmmreg, Register base, Register index,
                              Address::ScaleFactor scale, int disp,
                              RelocationHolder const& rspec) {
@@ -717,6 +725,16 @@ void Assembler::emit_operand(XMMRegister xmmreg, Register base, XMMRegister xmmi
   assert(xmmindex->encoding() < 16 || UseAVX > 2, "not supported");
   emit_operand_helper(raw_encode(xmmreg), raw_encode(base), raw_encode(xmmindex),
                       scale, disp, rspec, /* rip_relative_correction */ 0);
+}
+
+void Assembler::emit_operand(KRegister kreg, Register base, Register index,
+                             Address::ScaleFactor scale, int disp,
+                             RelocationHolder const& rspec,
+                             int rip_relative_correction) {
+  assert(!index->is_valid() || index != rsp, "illegal addressing mode");
+  emit_operand_helper(raw_encode(kreg), raw_encode(base), raw_encode(index),
+                      scale, disp, rspec, rip_relative_correction);
+
 }
 
 // Secret local extension to Assembler::WhichOperand:
@@ -1236,6 +1254,13 @@ void Assembler::emit_operand(XMMRegister reg, Address adr) {
        emit_operand(reg, adr._base, adr._index, adr._scale, adr._disp,
        adr._rspec);
     }
+}
+
+void Assembler::emit_operand(KRegister kreg, Address adr,
+                             int rip_relative_correction) {
+  emit_operand(kreg, adr._base, adr._index, adr._scale, adr._disp,
+               adr._rspec,
+               rip_relative_correction);
 }
 
 // Now the Assembler instructions (identical for 32/64 bits)
@@ -2589,7 +2614,7 @@ void Assembler::kmovwl(KRegister dst, Address src) {
   InstructionAttr attributes(AVX_128bit, /* vex_w */ false, /* legacy_mode */ true, /* no_mask_reg */ true, /* uses_vl */ false);
   vex_prefix(src, 0, dst->encoding(), VEX_SIMD_NONE, VEX_OPCODE_0F, &attributes);
   emit_int8((unsigned char)0x90);
-  emit_operand((Register)dst, src);
+  emit_operand(dst, src);
 }
 
 void Assembler::kmovwl(Address dst, KRegister src) {
@@ -2598,7 +2623,7 @@ void Assembler::kmovwl(Address dst, KRegister src) {
   InstructionAttr attributes(AVX_128bit, /* vex_w */ false, /* legacy_mode */ true, /* no_mask_reg */ true, /* uses_vl */ false);
   vex_prefix(dst, 0, src->encoding(), VEX_SIMD_NONE, VEX_OPCODE_0F, &attributes);
   emit_int8((unsigned char)0x91);
-  emit_operand((Register)src, dst);
+  emit_operand(src, dst);
 }
 
 void Assembler::kmovwl(KRegister dst, KRegister src) {
@@ -2635,7 +2660,7 @@ void Assembler::kmovql(KRegister dst, Address src) {
   InstructionAttr attributes(AVX_128bit, /* vex_w */ true, /* legacy_mode */ true, /* no_mask_reg */ true, /* uses_vl */ false);
   vex_prefix(src, 0, dst->encoding(), VEX_SIMD_NONE, VEX_OPCODE_0F, &attributes);
   emit_int8((unsigned char)0x90);
-  emit_operand((Register)dst, src);
+  emit_operand(dst, src);
 }
 
 void Assembler::kmovql(Address dst, KRegister src) {
@@ -2644,7 +2669,7 @@ void Assembler::kmovql(Address dst, KRegister src) {
   InstructionAttr attributes(AVX_128bit, /* vex_w */ true, /* legacy_mode */ true, /* no_mask_reg */ true, /* uses_vl */ false);
   vex_prefix(dst, 0, src->encoding(), VEX_SIMD_NONE, VEX_OPCODE_0F, &attributes);
   emit_int8((unsigned char)0x91);
-  emit_operand((Register)src, dst);
+  emit_operand(src, dst);
 }
 
 void Assembler::kmovql(KRegister dst, Register src) {
