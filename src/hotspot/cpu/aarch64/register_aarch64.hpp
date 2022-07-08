@@ -216,7 +216,7 @@ inline constexpr FloatRegister as_FloatRegister(int encoding) {
 }
 
 inline FloatRegister FloatRegisterImpl::successor() const {
-  return as_FloatRegister(encoding() + 1);
+  return as_FloatRegister((encoding() + 1) % (unsigned) number_of_registers);
 }
 
 // The float registers of the AArch64 architecture
