@@ -26,16 +26,12 @@
 
 #include "register_x86.hpp"
 
-REGISTER_IMPL_DEFINITION(Register, RegisterImpl, RegisterImpl::number_of_registers);
-REGISTER_IMPL_DEFINITION(FloatRegister, FloatRegisterImpl, FloatRegisterImpl::number_of_registers);
-REGISTER_IMPL_DEFINITION(XMMRegister, XMMRegisterImpl, XMMRegisterImpl::number_of_registers);
-REGISTER_IMPL_DEFINITION(KRegister, KRegisterImpl, KRegisterImpl::number_of_registers);
+RegisterImpl all_RegisterImpls[RegisterImpl::number_of_registers + 1];
+FloatRegisterImpl all_FloatRegisterImpls[FloatRegisterImpl::number_of_registers + 1];
+XMMRegisterImpl all_XMMRegisterImpls[XMMRegisterImpl::number_of_registers + 1];
+KRegisterImpl all_KRegisterImpls[KRegisterImpl::number_of_registers + 1];
 
-#ifndef AMD64
-const int ConcreteRegisterImpl::max_gpr = RegisterImpl::number_of_registers;
-#else
-const int ConcreteRegisterImpl::max_gpr = RegisterImpl::number_of_registers << 1;
-#endif // AMD64
+const int ConcreteRegisterImpl::max_gpr = RegisterImpl::number_of_registers LP64_ONLY( << 1 );
 
 const int ConcreteRegisterImpl::max_fpr = ConcreteRegisterImpl::max_gpr +
     2 * FloatRegisterImpl::number_of_registers;
@@ -46,12 +42,12 @@ const int ConcreteRegisterImpl::max_kpr = ConcreteRegisterImpl::max_xmm +
 
 const char * RegisterImpl::name() const {
   static const char *const names[number_of_registers] = {
-#ifndef AMD64
-    "eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi"
-#else
+#ifdef _LP64 
     "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi",
     "r8",  "r9",  "r10", "r11", "r12", "r13", "r14", "r15"
-#endif // AMD64
+#else
+    "eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi"
+#endif // _LP64
   };
   return is_valid() ? names[encoding()] : "noreg";
 }
@@ -66,11 +62,11 @@ const char* FloatRegisterImpl::name() const {
 const char* XMMRegisterImpl::name() const {
   static const char *const names[number_of_registers] = {
     "xmm0","xmm1","xmm2","xmm3","xmm4","xmm5","xmm6","xmm7"
-#ifdef AMD64
+#ifdef _LP64 
     ,"xmm8",   "xmm9",  "xmm10", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15"
     ,"xmm16",  "xmm17", "xmm18", "xmm19", "xmm20", "xmm21", "xmm22", "xmm23"
     ,"xmm24",  "xmm25", "xmm26", "xmm27", "xmm28", "xmm29", "xmm30", "xmm31"
-#endif // AMD64
+#endif // _LP64 
   };
   return is_valid() ? names[encoding()] : "xnoreg";
 }
@@ -85,7 +81,7 @@ const char* XMMRegisterImpl::sub_word_name(int i) const {
       "xmm5:0", "xmm5:1", "xmm5:2", "xmm5:3", "xmm5:4", "xmm5:5", "xmm5:6", "xmm5:7",
       "xmm6:0", "xmm6:1", "xmm6:2", "xmm6:3", "xmm6:4", "xmm6:5", "xmm6:6", "xmm6:7",
       "xmm7:0", "xmm7:1", "xmm7:2", "xmm7:3", "xmm7:4", "xmm7:5", "xmm7:6", "xmm7:7",
-#ifdef AMD64
+#ifdef _LP64 
       "xmm8:0", "xmm8:1", "xmm8:2", "xmm8:3", "xmm8:4", "xmm8:5", "xmm8:6", "xmm8:7",
       "xmm9:0", "xmm9:1", "xmm9:2", "xmm9:3", "xmm9:4", "xmm9:5", "xmm9:6", "xmm9:7",
       "xmm10:0", "xmm10:1", "xmm10:2", "xmm10:3", "xmm10:4", "xmm10:5", "xmm10:6", "xmm10:7",
@@ -94,7 +90,7 @@ const char* XMMRegisterImpl::sub_word_name(int i) const {
       "xmm13:0", "xmm13:1", "xmm13:2", "xmm13:3", "xmm13:4", "xmm13:5", "xmm13:6", "xmm13:7",
       "xmm14:0", "xmm14:1", "xmm14:2", "xmm14:3", "xmm14:4", "xmm14:5", "xmm14:6", "xmm14:7",
       "xmm15:0", "xmm15:1", "xmm15:2", "xmm15:3", "xmm15:4", "xmm15:5", "xmm15:6", "xmm15:7",
-#endif // AMD64
+#endif // _LP64 
   };
   assert(i >= 0 && i < 8, "offset too large");
   return is_valid() ? names[encoding() * 8 + i] : "xnoreg";

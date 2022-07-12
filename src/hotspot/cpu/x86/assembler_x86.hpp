@@ -763,11 +763,6 @@ private:
                     RelocationHolder const& rspec,
                     int rip_relative_correction = 0);
 
-  void emit_operand(Register reg,
-                    Register base, XMMRegister index, Address::ScaleFactor scale,
-                    int disp,
-                    RelocationHolder const& rspec);
-
   void emit_operand(XMMRegister xreg,
                     Register base, XMMRegister xindex, Address::ScaleFactor scale,
                     int disp,
@@ -782,6 +777,15 @@ private:
                     RelocationHolder const& rspec);
 
   void emit_operand(XMMRegister reg, Address adr);
+
+  void emit_operand(KRegister kreg, Address adr,
+                    int rip_relative_correction = 0);
+
+  void emit_operand(KRegister reg,
+                    Register base, Register index, Address::ScaleFactor scale,
+                    int disp,
+                    RelocationHolder const& rspec,
+                    int rip_relative_correction = 0);
 
   // Immediate-to-memory forms
   void emit_arith_operand(int op1, Register rm, Address adr, int32_t imm32);
@@ -2903,7 +2907,7 @@ public:
 
   // Set embedded opmask register specifier.
   void set_embedded_opmask_register_specifier(KRegister mask) {
-    _embedded_opmask_register_specifier = (*mask).encoding() & 0x7;
+    _embedded_opmask_register_specifier = mask->encoding() & 0x7;
   }
 
 };

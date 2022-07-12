@@ -327,7 +327,7 @@ class Post : public PrePost {
   Register _idx;
   bool _is_postreg;
 public:
-  Post(Register reg, int o) : PrePost(reg, o) { _idx = NULL; _is_postreg = false; }
+  Post(Register reg, int o) : PrePost(reg, o) { _idx = noreg; _is_postreg = false; }
   Post(Register reg, Register idx) : PrePost(reg, 0) { _idx = idx; _is_postreg = true; }
   Register idx_reg() { return _idx; }
   bool is_postreg() {return _is_postreg; }

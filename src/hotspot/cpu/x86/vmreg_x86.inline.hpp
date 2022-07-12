@@ -26,12 +26,7 @@
 #define CPU_X86_VMREG_X86_INLINE_HPP
 
 inline VMReg RegisterImpl::as_VMReg() const {
-  if( this==noreg ) return VMRegImpl::Bad();
-#ifdef AMD64
-  return VMRegImpl::as_VMReg(encoding() << 1 );
-#else
-  return VMRegImpl::as_VMReg(encoding() );
-#endif // AMD64
+  return VMRegImpl::as_VMReg(encoding() LP64_ONLY( << 1 ), true);
 }
 
 inline VMReg FloatRegisterImpl::as_VMReg() const {

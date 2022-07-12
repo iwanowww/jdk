@@ -33,35 +33,31 @@
 class VMRegImpl;
 typedef VMRegImpl* VMReg;
 
-// Use Register as shortcut
-class RegisterImpl;
-typedef RegisterImpl* Register;
+// The implementation of integer registers for the x86/x64 architectures
 
-// The implementation of integer registers for the ia32 architecture
-
-inline constexpr Register as_Register(int encoding);
+class Register;
 
 class RegisterImpl: public AbstractRegisterImpl {
-  static constexpr Register first();
+  static constexpr RegisterImpl* first();
 
 public:
   enum {
-#ifndef AMD64
-    number_of_registers      = 8,
-    number_of_byte_registers = 4,
-    max_slots_per_register   = 1
-#else
+#ifdef _LP64
     number_of_registers      = 16,
     number_of_byte_registers = 16,
     max_slots_per_register   = 2
-#endif // AMD64
+#else
+    number_of_registers      = 8,
+    number_of_byte_registers = 4,
+    max_slots_per_register   = 1
+#endif // _LP64
   };
 
   // derived registers, offsets, and addresses
-  Register successor() const                          { return as_Register(encoding() + 1); }
+  inline Register successor() const;
 
   // construction
-  inline constexpr friend Register as_Register(int encoding);
+  inline friend constexpr RegisterImpl* as_RegisterImpl(int encoding);
 
   inline VMReg as_VMReg() const;
 
@@ -70,104 +66,163 @@ public:
   int   encoding() const                         { assert(is_valid(), "invalid register"); return raw_encoding(); }
   bool  is_valid() const                         { return 0 <= raw_encoding() && raw_encoding() < number_of_registers; }
   bool  has_byte_register() const                { return 0 <= raw_encoding() && raw_encoding() < number_of_byte_registers; }
-  const char *name() const;
+  const char* name() const;
 };
 
-REGISTER_IMPL_DECLARATION(Register, RegisterImpl, RegisterImpl::number_of_registers);
+//REGISTER_IMPL_DECLARATION(Register, RegisterImpl, RegisterImpl::number_of_registers);
 
-// The integer registers of the ia32/amd64 architecture
+inline constexpr RegisterImpl* as_RegisterImpl(int encoding) {
+  return RegisterImpl::first() + encoding;
+}
+extern RegisterImpl all_RegisterImpls[RegisterImpl::number_of_registers + 1] INTERNAL_VISIBILITY;
+inline constexpr RegisterImpl* RegisterImpl::first() { return all_RegisterImpls + 1; }
 
-CONSTANT_REGISTER_DECLARATION(Register, noreg, (-1));
+class Register {
+  friend class RegisterImpl;
 
+  const RegisterImpl* _ptr;
 
-CONSTANT_REGISTER_DECLARATION(Register, rax,    (0));
-CONSTANT_REGISTER_DECLARATION(Register, rcx,    (1));
-CONSTANT_REGISTER_DECLARATION(Register, rdx,    (2));
-CONSTANT_REGISTER_DECLARATION(Register, rbx,    (3));
-CONSTANT_REGISTER_DECLARATION(Register, rsp,    (4));
-CONSTANT_REGISTER_DECLARATION(Register, rbp,    (5));
-CONSTANT_REGISTER_DECLARATION(Register, rsi,    (6));
-CONSTANT_REGISTER_DECLARATION(Register, rdi,    (7));
-#ifdef AMD64
-CONSTANT_REGISTER_DECLARATION(Register, r8,     (8));
-CONSTANT_REGISTER_DECLARATION(Register, r9,     (9));
-CONSTANT_REGISTER_DECLARATION(Register, r10,   (10));
-CONSTANT_REGISTER_DECLARATION(Register, r11,   (11));
-CONSTANT_REGISTER_DECLARATION(Register, r12,   (12));
-CONSTANT_REGISTER_DECLARATION(Register, r13,   (13));
-CONSTANT_REGISTER_DECLARATION(Register, r14,   (14));
-CONSTANT_REGISTER_DECLARATION(Register, r15,   (15));
-#endif // AMD64
+  constexpr Register(const RegisterImpl* ptr, bool unused) : _ptr(ptr) {}
 
-// Use FloatRegister as shortcut
-class FloatRegisterImpl;
-typedef const FloatRegisterImpl* FloatRegister;
+public:
+  inline friend constexpr Register as_Register(int encoding);
 
-inline constexpr FloatRegister as_FloatRegister(int encoding);
+  constexpr Register() : _ptr(as_RegisterImpl(-1)) {} // noreg
+
+  int operator==(const Register r) const { return _ptr == r._ptr; }
+  int operator!=(const Register r) const { return _ptr != r._ptr; }
+
+  const RegisterImpl* operator->() const { return _ptr; }
+};
+
+constexpr Register noreg = Register();
+
+inline constexpr Register as_Register(int encoding) {
+  if (0 <= encoding && encoding < RegisterImpl::number_of_registers) {
+    return Register(as_RegisterImpl(encoding), false);
+  }
+  return noreg;
+}
+
+inline Register RegisterImpl::successor() const {
+  return as_Register(encoding() + 1);
+}
+
+// The integer registers of the x86/x64 architectures
+constexpr Register rax = as_Register(0);
+constexpr Register rcx = as_Register(1);
+constexpr Register rdx = as_Register(2);
+constexpr Register rbx = as_Register(3);
+constexpr Register rsp = as_Register(4);
+constexpr Register rbp = as_Register(5);
+constexpr Register rsi = as_Register(6);
+constexpr Register rdi = as_Register(7);
+#ifdef _LP64
+constexpr Register r8  = as_Register( 8);
+constexpr Register r9  = as_Register( 9);
+constexpr Register r10 = as_Register(10);
+constexpr Register r11 = as_Register(11);
+constexpr Register r12 = as_Register(12);
+constexpr Register r13 = as_Register(13);
+constexpr Register r14 = as_Register(14);
+constexpr Register r15 = as_Register(15);
+#endif // _LP64
+
 
 // The implementation of floating point registers for the ia32 architecture
+class FloatRegister;
+
 class FloatRegisterImpl: public AbstractRegisterImpl {
-  static constexpr FloatRegister first();
+  static constexpr FloatRegisterImpl* first();
 
 public:
   enum {
     number_of_registers = 8
   };
 
+  // derived registers, offsets, and addresses
+  inline FloatRegister successor() const;
+
   // construction
-  inline friend constexpr FloatRegister as_FloatRegister(int encoding);
+  inline friend constexpr FloatRegisterImpl* as_FloatRegisterImpl(int encoding);
 
   inline VMReg as_VMReg() const;
-
-  // derived registers, offsets, and addresses
-
-  FloatRegister successor() const                          { return as_FloatRegister(encoding() + 1); }
 
   // accessors
   int   raw_encoding() const                      { return this - first(); }
   int   encoding() const                          { assert(is_valid(), "invalid register"); return raw_encoding(); }
   bool  is_valid() const                          { return 0 <= raw_encoding() && raw_encoding() < number_of_registers; }
   const char* name() const;
-
 };
 
-REGISTER_IMPL_DECLARATION(FloatRegister, FloatRegisterImpl, FloatRegisterImpl::number_of_registers);
+// REGISTER_IMPL_DECLARATION(FloatRegister, FloatRegisterImpl, FloatRegisterImpl::number_of_registers);
+inline constexpr FloatRegisterImpl* as_FloatRegisterImpl(int encoding) {
+  return FloatRegisterImpl::first() + encoding;
+}
+extern FloatRegisterImpl all_FloatRegisterImpls[FloatRegisterImpl::number_of_registers + 1] INTERNAL_VISIBILITY;
+inline constexpr FloatRegisterImpl* FloatRegisterImpl::first() { return all_FloatRegisterImpls + 1; }
 
-CONSTANT_REGISTER_DECLARATION(FloatRegister, fnoreg, (-1));
+class FloatRegister {
+  friend class FloatRegisterImpl;
 
-// Use XMMRegister as shortcut
-class XMMRegisterImpl;
-typedef XMMRegisterImpl* XMMRegister;
+  const FloatRegisterImpl* _ptr;
 
-inline constexpr XMMRegister as_XMMRegister(int encoding);
+  constexpr FloatRegister(const FloatRegisterImpl* ptr, bool unused) : _ptr(ptr) {}
+
+public:
+  inline friend constexpr FloatRegister as_FloatRegister(int encoding);
+
+  constexpr FloatRegister() : _ptr(as_FloatRegisterImpl(-1)) {} // fnoreg
+
+  int operator==(const FloatRegister r) const { return _ptr == r._ptr; }
+  int operator!=(const FloatRegister r) const { return _ptr != r._ptr; }
+
+  const FloatRegisterImpl* operator->() const { return _ptr; }
+};
+
+constexpr FloatRegister fnoreg = FloatRegister();
+
+inline constexpr FloatRegister as_FloatRegister(int encoding) {
+  if (0 <= encoding && encoding < FloatRegisterImpl::number_of_registers) {
+    return FloatRegister(as_FloatRegisterImpl(encoding), false);
+  }
+  return fnoreg;
+}
+
+inline FloatRegister FloatRegisterImpl::successor() const {
+  return as_FloatRegister(encoding() + 1);
+}
+
 
 // The implementation of XMM registers.
+class XMMRegister;
+
 class XMMRegisterImpl: public AbstractRegisterImpl {
-  static constexpr XMMRegister first();
+  static constexpr XMMRegisterImpl* first();
 
  public:
   enum {
-#ifndef AMD64
-    number_of_registers = 8,
-    max_slots_per_register = 16   // 512-bit
-#else
+#ifdef _LP64
     number_of_registers = 32,
     max_slots_per_register = 16   // 512-bit
-#endif // AMD64
+#else
+    number_of_registers = 8,
+    max_slots_per_register = 16   // 512-bit
+#endif // _LP64
   };
 
+  // derived registers, offsets, and addresses
+  inline XMMRegister successor() const;
+
   // construction
-  friend constexpr XMMRegister as_XMMRegister(int encoding);
+  friend constexpr XMMRegisterImpl* as_XMMRegisterImpl(int encoding);
 
   inline VMReg as_VMReg() const;
-
-  // derived registers, offsets, and addresses
-  XMMRegister successor() const                          { return as_XMMRegister(encoding() + 1); }
 
   // accessors
   int raw_encoding() const                       { return this - first(); }
   int   encoding() const                         { assert(is_valid(), "invalid register"); return raw_encoding(); }
-  bool  is_valid() const                          { return 0 <= raw_encoding() && raw_encoding() < number_of_registers; }
+  bool  is_valid() const                         { return 0 <= raw_encoding() && raw_encoding() < number_of_registers; }
   const char* name() const;
   const char* sub_word_name(int offset) const;
 
@@ -184,57 +239,88 @@ class XMMRegisterImpl: public AbstractRegisterImpl {
   }
 };
 
+// REGISTER_IMPL_DECLARATION(XMMRegister, XMMRegisterImpl, XMMRegisterImpl::number_of_registers);
+inline constexpr XMMRegisterImpl* as_XMMRegisterImpl(int encoding) {
+  return XMMRegisterImpl::first() + encoding;
+}
+extern XMMRegisterImpl all_XMMRegisterImpls[XMMRegisterImpl::number_of_registers + 1] INTERNAL_VISIBILITY;
+inline constexpr XMMRegisterImpl* XMMRegisterImpl::first() { return all_XMMRegisterImpls + 1; }
 
-REGISTER_IMPL_DECLARATION(XMMRegister, XMMRegisterImpl, XMMRegisterImpl::number_of_registers);
+class XMMRegister {
+  friend class XMMRegisterImpl;
 
-// The XMM registers, for P3 and up chips
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xnoreg , (-1));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm0 , ( 0));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm1 , ( 1));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm2 , ( 2));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm3 , ( 3));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm4 , ( 4));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm5 , ( 5));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm6 , ( 6));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm7 , ( 7));
-#ifdef AMD64
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm8,      (8));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm9,      (9));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm10,    (10));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm11,    (11));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm12,    (12));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm13,    (13));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm14,    (14));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm15,    (15));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm16,    (16));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm17,    (17));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm18,    (18));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm19,    (19));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm20,    (20));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm21,    (21));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm22,    (22));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm23,    (23));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm24,    (24));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm25,    (25));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm26,    (26));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm27,    (27));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm28,    (28));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm29,    (29));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm30,    (30));
-CONSTANT_REGISTER_DECLARATION(XMMRegister, xmm31,    (31));
-#endif // AMD64
+  const XMMRegisterImpl* _ptr;
 
-// Use KRegister as shortcut
-class KRegisterImpl;
-typedef KRegisterImpl* KRegister;
-
-inline constexpr KRegister as_KRegister(int encoding);
-
-// The implementation of AVX-3 (AVX-512) opmask registers.
-class KRegisterImpl : public AbstractRegisterImpl {
-  static constexpr KRegister first();
+  constexpr XMMRegister(const XMMRegisterImpl* ptr, bool unused) : _ptr(ptr) {}
 
 public:
+  inline friend constexpr XMMRegister as_XMMRegister(int encoding);
+
+  constexpr XMMRegister() : _ptr(as_XMMRegisterImpl(-1)) {} // xnoreg
+
+  int operator==(const XMMRegister r) const { return _ptr == r._ptr; }
+  int operator!=(const XMMRegister r) const { return _ptr != r._ptr; }
+
+  const XMMRegisterImpl* operator->() const { return _ptr; }
+};
+
+constexpr XMMRegister xnoreg = XMMRegister();
+
+inline constexpr XMMRegister as_XMMRegister(int encoding) {
+  if (0 <= encoding && encoding < XMMRegisterImpl::number_of_registers) {
+    return XMMRegister(as_XMMRegisterImpl(encoding), false);
+  }
+  return xnoreg;
+}
+
+inline XMMRegister XMMRegisterImpl::successor() const {
+  return as_XMMRegister(encoding() + 1);
+}
+
+// The XMM registers, for P3 and up chips
+constexpr XMMRegister xmm0  = as_XMMRegister( 0);
+constexpr XMMRegister xmm1  = as_XMMRegister( 1);
+constexpr XMMRegister xmm2  = as_XMMRegister( 2);
+constexpr XMMRegister xmm3  = as_XMMRegister( 3);
+constexpr XMMRegister xmm4  = as_XMMRegister( 4);
+constexpr XMMRegister xmm5  = as_XMMRegister( 5);
+constexpr XMMRegister xmm6  = as_XMMRegister( 6);
+constexpr XMMRegister xmm7  = as_XMMRegister( 7);
+#ifdef _LP64
+constexpr XMMRegister xmm8  = as_XMMRegister( 8);
+constexpr XMMRegister xmm9  = as_XMMRegister( 9);
+constexpr XMMRegister xmm10 = as_XMMRegister(10);
+constexpr XMMRegister xmm11 = as_XMMRegister(11);
+constexpr XMMRegister xmm12 = as_XMMRegister(12);
+constexpr XMMRegister xmm13 = as_XMMRegister(13);
+constexpr XMMRegister xmm14 = as_XMMRegister(14);
+constexpr XMMRegister xmm15 = as_XMMRegister(15);
+constexpr XMMRegister xmm16 = as_XMMRegister(16);
+constexpr XMMRegister xmm17 = as_XMMRegister(17);
+constexpr XMMRegister xmm18 = as_XMMRegister(18);
+constexpr XMMRegister xmm19 = as_XMMRegister(19);
+constexpr XMMRegister xmm20 = as_XMMRegister(20);
+constexpr XMMRegister xmm21 = as_XMMRegister(21);
+constexpr XMMRegister xmm22 = as_XMMRegister(22);
+constexpr XMMRegister xmm23 = as_XMMRegister(23);
+constexpr XMMRegister xmm24 = as_XMMRegister(24);
+constexpr XMMRegister xmm25 = as_XMMRegister(25);
+constexpr XMMRegister xmm26 = as_XMMRegister(26);
+constexpr XMMRegister xmm27 = as_XMMRegister(27);
+constexpr XMMRegister xmm28 = as_XMMRegister(28);
+constexpr XMMRegister xmm29 = as_XMMRegister(29);
+constexpr XMMRegister xmm30 = as_XMMRegister(30);
+constexpr XMMRegister xmm31 = as_XMMRegister(31);
+#endif // _LP64
+
+
+// The implementation of AVX-512 opmask registers.
+class KRegister;
+
+class KRegisterImpl: public AbstractRegisterImpl {
+  static constexpr KRegisterImpl* first();
+
+ public:
   enum {
     number_of_registers = 8,
     // opmask registers are 64bit wide on both 32 and 64 bit targets.
@@ -242,33 +328,70 @@ public:
     max_slots_per_register = 2
   };
 
+  // derived registers, offsets, and addresses
+  inline KRegister successor() const;
+
   // construction
-  friend constexpr KRegister as_KRegister(int encoding);
+  inline friend constexpr KRegisterImpl* as_KRegisterImpl(int encoding);
 
   inline VMReg as_VMReg() const;
 
-  // derived registers, offsets, and addresses
-  KRegister successor() const                          { return as_KRegister(encoding() + 1); }
-
   // accessors
-  int   raw_encoding() const                      { return this - first(); }
-  int   encoding() const                          { assert(is_valid(), "invalid register (%d)", (int)raw_encoding()); return raw_encoding(); }
-  bool  is_valid() const                          { return 0 <= raw_encoding() && raw_encoding() < number_of_registers; }
+  int   raw_encoding() const { return this - first(); }
+  int   encoding() const     { assert(is_valid(), "invalid register"); return raw_encoding(); }
+  bool  is_valid() const     { return 0 <= raw_encoding() && raw_encoding() < number_of_registers; }
   const char* name() const;
 };
 
-REGISTER_IMPL_DECLARATION(KRegister, KRegisterImpl, KRegisterImpl::number_of_registers);
+//REGISTER_IMPL_DECLARATION(KRegister, KRegisterImpl, KRegisterImpl::number_of_registers);
+inline constexpr KRegisterImpl* as_KRegisterImpl(int encoding) {
+  return KRegisterImpl::first() + encoding;
+}
+extern KRegisterImpl all_KRegisterImpls[KRegisterImpl::number_of_registers + 1] INTERNAL_VISIBILITY;
+inline constexpr KRegisterImpl* KRegisterImpl::first() { return all_KRegisterImpls + 1; }
 
-// The Mask registers, for AVX3 enabled and up chips
-CONSTANT_REGISTER_DECLARATION(KRegister, knoreg, (-1));
-CONSTANT_REGISTER_DECLARATION(KRegister, k0, (0));
-CONSTANT_REGISTER_DECLARATION(KRegister, k1, (1));
-CONSTANT_REGISTER_DECLARATION(KRegister, k2, (2));
-CONSTANT_REGISTER_DECLARATION(KRegister, k3, (3));
-CONSTANT_REGISTER_DECLARATION(KRegister, k4, (4));
-CONSTANT_REGISTER_DECLARATION(KRegister, k5, (5));
-CONSTANT_REGISTER_DECLARATION(KRegister, k6, (6));
-CONSTANT_REGISTER_DECLARATION(KRegister, k7, (7));
+
+class KRegister {
+  friend class KRegisterImpl;
+
+  const KRegisterImpl* _ptr;
+
+  constexpr KRegister(const KRegisterImpl* ptr, bool unused) : _ptr(ptr) {}
+
+public:
+  inline friend constexpr KRegister as_KRegister(int encoding);
+
+  constexpr KRegister() : _ptr(as_KRegisterImpl(-1)) {} // xnoreg
+
+  int operator==(const KRegister r) const { return _ptr == r._ptr; }
+  int operator!=(const KRegister r) const { return _ptr != r._ptr; }
+
+  const KRegisterImpl* operator->() const { return _ptr; }
+};
+
+constexpr KRegister knoreg = KRegister();
+
+inline constexpr KRegister as_KRegister(int encoding) {
+  if (0 <= encoding && encoding < KRegisterImpl::number_of_registers) {
+    return KRegister(as_KRegisterImpl(encoding), false);
+  }
+  return knoreg;
+}
+
+inline KRegister KRegisterImpl::successor() const {
+  return as_KRegister(encoding() + 1);
+}
+
+// The Mask registers, for AVX-512 enabled and up chips
+constexpr KRegister k0 = as_KRegister(0);
+constexpr KRegister k1 = as_KRegister(1);
+constexpr KRegister k2 = as_KRegister(2);
+constexpr KRegister k3 = as_KRegister(3);
+constexpr KRegister k4 = as_KRegister(4);
+constexpr KRegister k5 = as_KRegister(5);
+constexpr KRegister k6 = as_KRegister(6);
+constexpr KRegister k7 = as_KRegister(7);
+
 
 // Need to know the total number of registers of all sorts for SharedInfo.
 // Define a class that exports it.
@@ -328,3 +451,4 @@ typedef AbstractRegSet<Register> RegSet;
 typedef AbstractRegSet<XMMRegister> XMMRegSet;
 
 #endif // CPU_X86_REGISTER_X86_HPP
+
