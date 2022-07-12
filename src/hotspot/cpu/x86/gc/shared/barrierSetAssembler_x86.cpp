@@ -361,7 +361,7 @@ void BarrierSetAssembler::c2i_entry_barrier(MacroAssembler* masm) {
 #endif
 
   __ bind(bad_call);
-  __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()));
+  __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()), rscratch1);
   __ bind(method_live);
 
 #ifndef _LP64

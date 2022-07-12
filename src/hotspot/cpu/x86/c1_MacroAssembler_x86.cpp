@@ -297,7 +297,7 @@ void C1_MacroAssembler::inline_cache_check(Register receiver, Register iCache) {
   // if icache check fails, then jump to runtime routine
   // Note: RECEIVER must still contain the receiver!
   jump_cc(Assembler::notEqual,
-          RuntimeAddress(SharedRuntime::get_ic_miss_stub()));
+          RuntimeAddress(SharedRuntime::get_ic_miss_stub()), rscratch1);
   const int ic_cmp_size = LP64_ONLY(10) NOT_LP64(9);
   assert(UseCompressedClassPointers || offset() - start_offset == ic_cmp_size, "check alignment in emit_method_entry");
 }

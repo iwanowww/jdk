@@ -178,22 +178,22 @@
 
 #ifdef _LP64
 // The 64 bit code is at most SSE2 compliant
-ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_ONEHALF[] =
+ATTRIBUTE_ALIGNED(16) juint _ONEHALF[] =
 {
     0x00000000UL, 0x3fe00000UL, 0x00000000UL, 0x3fe00000UL
 };
 
-ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_P_2[] =
+ATTRIBUTE_ALIGNED(16) juint _P_2[] =
 {
     0x1a600000UL, 0x3d90b461UL, 0x1a600000UL, 0x3d90b461UL
 };
 
-ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_SC_4[] =
+ATTRIBUTE_ALIGNED(16) juint _SC_4[] =
 {
     0xa556c734UL, 0x3ec71de3UL, 0x1a01a01aUL, 0x3efa01a0UL
 };
 
-ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_Ctable[] =
+ATTRIBUTE_ALIGNED(16) juint _Ctable[] =
 {
     0x00000000UL, 0x00000000UL, 0x00000000UL, 0x00000000UL, 0x00000000UL,
     0x00000000UL, 0x00000000UL, 0x3ff00000UL, 0x176d6d31UL, 0xbf73b92eUL,
@@ -300,22 +300,22 @@ ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_Ctable[] =
     0x00000000UL, 0x3ff00000UL
 };
 
-ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_SC_2[] =
+ATTRIBUTE_ALIGNED(16) juint _SC_2[] =
 {
     0x11111111UL, 0x3f811111UL, 0x55555555UL, 0x3fa55555UL
 };
 
-ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_SC_3[] =
+ATTRIBUTE_ALIGNED(16) juint _SC_3[] =
 {
     0x1a01a01aUL, 0xbf2a01a0UL, 0x16c16c17UL, 0xbf56c16cUL
 };
 
-ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_SC_1[] =
+ATTRIBUTE_ALIGNED(16) juint _SC_1[] =
 {
     0x55555555UL, 0xbfc55555UL, 0x00000000UL, 0xbfe00000UL
 };
 
-ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_PI_INV_TABLE[] =
+ATTRIBUTE_ALIGNED(16) juint _PI_INV_TABLE[] =
 {
     0x00000000UL, 0x00000000UL, 0xa2f9836eUL, 0x4e441529UL, 0xfc2757d1UL,
     0xf534ddc0UL, 0xdb629599UL, 0x3c439041UL, 0xfe5163abUL, 0xdebbc561UL,
@@ -328,27 +328,22 @@ ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_PI_INV_TABLE[] =
     0xf0cfbc21UL
 };
 
-ATTRIBUTE_ALIGNED(8) juint StubRoutines::x86::_PI_4[] =
+ATTRIBUTE_ALIGNED(8) juint _PI_4[] =
 {
     0x40000000UL, 0x3fe921fbUL, 0x18469899UL, 0x3e64442dUL
 };
 
-ATTRIBUTE_ALIGNED(8) juint StubRoutines::x86::_PI32INV[] =
+ATTRIBUTE_ALIGNED(8) juint _PI32INV[] =
 {
     0x6dc9c883UL, 0x40245f30UL
 };
 
-ATTRIBUTE_ALIGNED(8) juint _SHIFTER[] =
-{
-    0x00000000UL, 0x43380000UL
-};
-
-ATTRIBUTE_ALIGNED(8) juint StubRoutines::x86::_SIGN_MASK[] =
+ATTRIBUTE_ALIGNED(8) juint _SIGN_MASK[] =
 {
     0x00000000UL, 0x80000000UL
 };
 
-ATTRIBUTE_ALIGNED(8) juint StubRoutines::x86::_P_3[] =
+ATTRIBUTE_ALIGNED(8) juint _P_3[] =
 {
     0x2e037073UL, 0x3b63198aUL
 };
@@ -368,72 +363,73 @@ ATTRIBUTE_ALIGNED(8) juint _TWO_POW_M55[] =
     0x00000000UL, 0x3c800000UL
 };
 
-ATTRIBUTE_ALIGNED(8) juint StubRoutines::x86::_P_1[] =
+ATTRIBUTE_ALIGNED(8) juint _P_1[] =
 {
     0x54400000UL, 0x3fb921fbUL
 };
 
-ATTRIBUTE_ALIGNED(8) juint StubRoutines::x86::_NEG_ZERO[] =
+ATTRIBUTE_ALIGNED(8) juint _NEG_ZERO[] =
 {
     0x00000000UL, 0x80000000UL
 };
 
-void MacroAssembler::fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xmm2, XMMRegister xmm3, XMMRegister xmm4, XMMRegister xmm5, XMMRegister xmm6, XMMRegister xmm7, Register eax, Register ebx, Register ecx, Register edx, Register tmp1, Register tmp2, Register tmp3, Register tmp4) {
+address MacroAssembler::ONEHALF      = (address)_ONEHALF;
+address MacroAssembler::SIGN_MASK    = (address)_SIGN_MASK;
+address MacroAssembler::TWO_POW_55   = (address)_TWO_POW_55;
+address MacroAssembler::TWO_POW_M55  = (address)_TWO_POW_M55;
+address MacroAssembler::NEG_ZERO     = (address)_NEG_ZERO;
+address MacroAssembler::Ctable       = (address)_Ctable;
+address MacroAssembler::SC_1         = (address)_SC_1;
+address MacroAssembler::SC_2         = (address)_SC_2;
+address MacroAssembler::SC_3         = (address)_SC_3;
+address MacroAssembler::SC_4         = (address)_SC_4;
+address MacroAssembler::PI_4         = (address)_PI_4;
+address MacroAssembler::PI32INV      = (address)_PI32INV;
+address MacroAssembler::PI_INV_TABLE = (address)_PI_INV_TABLE;
+address MacroAssembler::P_1          = (address)_P_1;
+address MacroAssembler::P_3          = (address)_P_3;
+address MacroAssembler::P_2          = (address)_P_2;
+
+void MacroAssembler::fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xmm2, XMMRegister xmm3,
+                              XMMRegister xmm4, XMMRegister xmm5, XMMRegister xmm6, XMMRegister xmm7,
+                              Register eax, Register ebx, Register ecx, Register edx, Register tmp1) {
   Label L_2TAG_PACKET_0_0_1, L_2TAG_PACKET_1_0_1, L_2TAG_PACKET_2_0_1, L_2TAG_PACKET_3_0_1;
   Label L_2TAG_PACKET_4_0_1, L_2TAG_PACKET_5_0_1, L_2TAG_PACKET_6_0_1, L_2TAG_PACKET_7_0_1;
   Label L_2TAG_PACKET_8_0_1, L_2TAG_PACKET_9_0_1, L_2TAG_PACKET_10_0_1, L_2TAG_PACKET_11_0_1;
   Label L_2TAG_PACKET_13_0_1, L_2TAG_PACKET_14_0_1;
-  Label L_2TAG_PACKET_12_0_1, B1_4, start;
+  Label L_2TAG_PACKET_12_0_1, B1_4;
 
-  assert_different_registers(tmp1, tmp2, tmp3, tmp4, eax, ebx, ecx, edx);
-  address ONEHALF = StubRoutines::x86::_ONEHALF_addr();
-  address P_2 = StubRoutines::x86::_P_2_addr();
-  address SC_4 = StubRoutines::x86::_SC_4_addr();
-  address Ctable = StubRoutines::x86::_Ctable_addr();
-  address SC_2 = StubRoutines::x86::_SC_2_addr();
-  address SC_3 = StubRoutines::x86::_SC_3_addr();
-  address SC_1 = StubRoutines::x86::_SC_1_addr();
-  address PI_INV_TABLE = StubRoutines::x86::_PI_INV_TABLE_addr();
-  address PI_4 = (address)StubRoutines::x86::_PI_4_addr();
-  address PI32INV = (address)StubRoutines::x86::_PI32INV_addr();
-  address SHIFTER = (address)_SHIFTER;
-  address SIGN_MASK = (address)StubRoutines::x86::_SIGN_MASK_addr();
-  address P_3 = (address)StubRoutines::x86::_P_3_addr();
-  address ALL_ONES = (address)_ALL_ONES;
-  address TWO_POW_55 = (address)_TWO_POW_55;
-  address TWO_POW_M55 = (address)_TWO_POW_M55;
-  address P_1 = (address)StubRoutines::x86::_P_1_addr();
-  address NEG_ZERO = (address)StubRoutines::x86::_NEG_ZERO_addr();
+  assert_different_registers(tmp1, eax, ebx, ecx, edx);
 
-  bind(start);
+  address ALL_ONES     = (address)_ALL_ONES;
+
   push(rbx);
   subq(rsp, 16);
   movsd(Address(rsp, 8), xmm0);
   movl(eax, Address(rsp, 12));
-  movq(xmm1, ExternalAddress(PI32INV));    //0x6dc9c883UL, 0x40245f30UL
-  movq(xmm2, ExternalAddress(SHIFTER));    //0x00000000UL, 0x43380000UL
+  movq(xmm1, ExternalAddress(PI32INV), tmp1 /*rscratch*/);    //0x6dc9c883UL, 0x40245f30UL
+  movq(xmm2, ExternalAddress(SHIFTER), tmp1 /*rscratch*/);    //0x00000000UL, 0x43380000UL
   andl(eax, 2147418112);
   subl(eax, 808452096);
   cmpl(eax, 281346048);
   jcc(Assembler::above, L_2TAG_PACKET_0_0_1);
   mulsd(xmm1, xmm0);
-  movdqu(xmm5, ExternalAddress(ONEHALF));    //0x00000000UL, 0x3fe00000UL, 0x00000000UL, 0x3fe00000UL
-  movq(xmm4, ExternalAddress(SIGN_MASK));    //0x00000000UL, 0x80000000UL
+  movdqu(xmm5, ExternalAddress(ONEHALF), tmp1 /*rscratch*/);    //0x00000000UL, 0x3fe00000UL, 0x00000000UL, 0x3fe00000UL
+  movq(xmm4, ExternalAddress(SIGN_MASK), tmp1 /*rscratch*/);    //0x00000000UL, 0x80000000UL
   pand(xmm4, xmm0);
   por(xmm5, xmm4);
   addpd(xmm1, xmm5);
   cvttsd2sil(edx, xmm1);
   cvtsi2sdl(xmm1, edx);
-  movdqu(xmm6, ExternalAddress(P_2));    //0x1a600000UL, 0x3d90b461UL, 0x1a600000UL, 0x3d90b461UL
+  movdqu(xmm6, ExternalAddress(P_2), tmp1 /*rscratch*/);    //0x1a600000UL, 0x3d90b461UL, 0x1a600000UL, 0x3d90b461UL
   mov64(r8, 0x3fb921fb54400000);
   movdq(xmm3, r8);
-  movdqu(xmm5, ExternalAddress(SC_4));    //0xa556c734UL, 0x3ec71de3UL, 0x1a01a01aUL, 0x3efa01a0UL
+  movdqu(xmm5, ExternalAddress(SC_4), tmp1 /*rscratch*/);    //0xa556c734UL, 0x3ec71de3UL, 0x1a01a01aUL, 0x3efa01a0UL
   pshufd(xmm4, xmm0, 68);
   mulsd(xmm3, xmm1);
   if (VM_Version::supports_sse3()) {
     movddup(xmm1, xmm1);
-  }
-  else {
+  } else {
     movlhps(xmm1, xmm1);
   }
   andl(edx, 63);
@@ -441,14 +437,13 @@ void MacroAssembler::fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
   lea(rax, ExternalAddress(Ctable));
   addq(rax, rdx);
   mulpd(xmm6, xmm1);
-  mulsd(xmm1, ExternalAddress(P_3));    //0x2e037073UL, 0x3b63198aUL
+  mulsd(xmm1, ExternalAddress(P_3), tmp1 /*rscratch*/);    //0x2e037073UL, 0x3b63198aUL
   subsd(xmm4, xmm3);
   movq(xmm7, Address(rax, 8));
   subsd(xmm0, xmm3);
   if (VM_Version::supports_sse3()) {
     movddup(xmm3, xmm4);
-  }
-  else {
+  } else {
     movdqu(xmm3, xmm4);
     movlhps(xmm3, xmm3);
   }
@@ -462,7 +457,7 @@ void MacroAssembler::fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
   mulpd(xmm5, xmm0);
   mulpd(xmm0, xmm0);
   subsd(xmm3, xmm6);
-  movdqu(xmm6, ExternalAddress(SC_2));    //0x11111111UL, 0x3f811111UL, 0x55555555UL, 0x3fa55555UL
+  movdqu(xmm6, ExternalAddress(SC_2), tmp1 /*rscratch*/);    //0x11111111UL, 0x3f811111UL, 0x55555555UL, 0x3fa55555UL
   subsd(xmm1, xmm3);
   movq(xmm3, Address(rax, 24));
   addsd(xmm2, xmm3);
@@ -472,9 +467,9 @@ void MacroAssembler::fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
   mulsd(xmm3, xmm4);
   mulpd(xmm2, xmm0);
   mulpd(xmm0, xmm0);
-  addpd(xmm5, ExternalAddress(SC_3));    //0x1a01a01aUL, 0xbf2a01a0UL, 0x16c16c17UL, 0xbf56c16cUL
+  addpd(xmm5, ExternalAddress(SC_3), tmp1 /*rscratch*/);    //0x1a01a01aUL, 0xbf2a01a0UL, 0x16c16c17UL, 0xbf56c16cUL
   mulsd(xmm4, Address(rax, 0));
-  addpd(xmm6, ExternalAddress(SC_1));    //0x55555555UL, 0xbfc55555UL, 0x00000000UL, 0xbfe00000UL
+  addpd(xmm6, ExternalAddress(SC_1), tmp1 /*rscratch*/);    //0x55555555UL, 0xbfc55555UL, 0x00000000UL, 0xbfe00000UL
   mulpd(xmm5, xmm0);
   movdqu(xmm0, xmm3);
   addsd(xmm3, Address(rax, 8));
@@ -503,14 +498,14 @@ void MacroAssembler::fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
   shrl(eax, 20);
   cmpl(eax, 3325);
   jcc(Assembler::notEqual, L_2TAG_PACKET_2_0_1);
-  mulsd(xmm0, ExternalAddress(ALL_ONES));    //0xffffffffUL, 0x3fefffffUL
+  mulsd(xmm0, ExternalAddress(ALL_ONES), tmp1 /*rscratch*/);    //0xffffffffUL, 0x3fefffffUL
   jmp(B1_4);
 
   bind(L_2TAG_PACKET_2_0_1);
-  movq(xmm3, ExternalAddress(TWO_POW_55));    //0x00000000UL, 0x43600000UL
+  movq(xmm3, ExternalAddress(TWO_POW_55), tmp1 /*rscratch*/);    //0x00000000UL, 0x43600000UL
   mulsd(xmm3, xmm0);
   subsd(xmm3, xmm0);
-  mulsd(xmm3, ExternalAddress(TWO_POW_M55));    //0x00000000UL, 0x3c800000UL
+  mulsd(xmm3, ExternalAddress(TWO_POW_M55), tmp1 /*rscratch*/);    //0x00000000UL, 0x3c800000UL
   jmp(B1_4);
 
   bind(L_2TAG_PACKET_1_0_1);
@@ -657,8 +652,8 @@ void MacroAssembler::fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
   orl(edx, rsi);
   xorl(edx, ebx);
   pinsrw(xmm4, edx, 3);
-  movq(xmm2, ExternalAddress(PI_4));    //0x40000000UL, 0x3fe921fbUL, 0x18469899UL, 0x3e64442dUL
-  movq(xmm6, ExternalAddress(8 + PI_4));    //0x3fe921fbUL, 0x18469899UL, 0x3e64442dUL
+  movq(xmm2, ExternalAddress(PI_4), tmp1 /*rscratch*/);    //0x40000000UL, 0x3fe921fbUL, 0x18469899UL, 0x3e64442dUL
+  movq(xmm6, ExternalAddress(8 + PI_4), tmp1 /*rscratch*/);    //0x3fe921fbUL, 0x18469899UL, 0x3e64442dUL
   xorpd(xmm5, xmm5);
   subl(edx, 1008);
   pinsrw(xmm5, edx, 3);
@@ -682,17 +677,17 @@ void MacroAssembler::fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
   addsd(xmm6, xmm2);
 
   bind(L_2TAG_PACKET_12_0_1);
-  movq(xmm1, ExternalAddress(PI32INV));    //0x6dc9c883UL, 0x40245f30UL
+  movq(xmm1, ExternalAddress(PI32INV), tmp1 /*rscratch*/);    //0x6dc9c883UL, 0x40245f30UL
   mulsd(xmm1, xmm0);
-  movq(xmm5, ExternalAddress(ONEHALF));    //0x00000000UL, 0x3fe00000UL, 0x00000000UL, 0x3fe00000UL
-  movq(xmm4, ExternalAddress(SIGN_MASK));    //0x00000000UL, 0x80000000UL
+  movq(xmm5, ExternalAddress(ONEHALF), tmp1 /*rscratch*/);    //0x00000000UL, 0x3fe00000UL, 0x00000000UL, 0x3fe00000UL
+  movq(xmm4, ExternalAddress(SIGN_MASK), tmp1 /*rscratch*/);    //0x00000000UL, 0x80000000UL
   pand(xmm4, xmm0);
   por(xmm5, xmm4);
   addpd(xmm1, xmm5);
   cvttsd2sil(edx, xmm1);
   cvtsi2sdl(xmm1, edx);
-  movq(xmm3, ExternalAddress(P_1));    //0x54400000UL, 0x3fb921fbUL
-  movdqu(xmm2, ExternalAddress(P_2));    //0x1a600000UL, 0x3d90b461UL, 0x1a600000UL, 0x3d90b461UL
+  movq(xmm3, ExternalAddress(P_1), tmp1 /*rscratch*/);    //0x54400000UL, 0x3fb921fbUL
+  movdqu(xmm2, ExternalAddress(P_2), tmp1 /*rscratch*/);    //0x1a600000UL, 0x3d90b461UL, 0x1a600000UL, 0x3d90b461UL
   mulsd(xmm3, xmm1);
   unpcklpd(xmm1, xmm1);
   shll(eax, 3);
@@ -700,13 +695,13 @@ void MacroAssembler::fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
   movdqu(xmm4, xmm0);
   addl(edx, eax);
   andl(edx, 63);
-  movdqu(xmm5, ExternalAddress(SC_4));    //0x54400000UL, 0x3fb921fbUL
+  movdqu(xmm5, ExternalAddress(SC_4), tmp1 /*rscratch*/);    //0x54400000UL, 0x3fb921fbUL
   lea(rax, ExternalAddress(Ctable));
   shll(edx, 5);
   addq(rax, rdx);
   mulpd(xmm2, xmm1);
   subsd(xmm0, xmm3);
-  mulsd(xmm1, ExternalAddress(P_3));    //0x2e037073UL, 0x3b63198aUL
+  mulsd(xmm1, ExternalAddress(P_3), tmp1 /*rscratch*/);    //0x2e037073UL, 0x3b63198aUL
   subsd(xmm4, xmm3);
   movq(xmm7, Address(rax, 8));
   unpcklpd(xmm0, xmm0);
@@ -725,15 +720,15 @@ void MacroAssembler::fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
   addsd(xmm2, xmm3);
   subsd(xmm7, xmm2);
   subsd(xmm1, xmm6);
-  movdqu(xmm6, ExternalAddress(SC_2));    //0x11111111UL, 0x3f811111UL, 0x55555555UL, 0x3fa55555UL
+  movdqu(xmm6, ExternalAddress(SC_2), tmp1 /*rscratch*/);    //0x11111111UL, 0x3f811111UL, 0x55555555UL, 0x3fa55555UL
   mulsd(xmm2, xmm4);
   mulpd(xmm6, xmm0);
   mulsd(xmm3, xmm4);
   mulpd(xmm2, xmm0);
   mulpd(xmm0, xmm0);
-  addpd(xmm5, ExternalAddress(SC_3));    //0x1a01a01aUL, 0xbf2a01a0UL, 0x16c16c17UL, 0xbf56c16cUL
+  addpd(xmm5, ExternalAddress(SC_3), tmp1 /*rscratch*/);    //0x1a01a01aUL, 0xbf2a01a0UL, 0x16c16c17UL, 0xbf56c16cUL
   mulsd(xmm4, Address(rax, 0));
-  addpd(xmm6, ExternalAddress(SC_1));    //0x55555555UL, 0xbfc55555UL, 0x00000000UL, 0xbfe00000UL
+  addpd(xmm6, ExternalAddress(SC_1), tmp1 /*rscratch*/);    //0x55555555UL, 0xbfc55555UL, 0x00000000UL, 0xbfe00000UL
   mulpd(xmm5, xmm0);
   movdqu(xmm0, xmm3);
   addsd(xmm3, Address(rax, 8));
@@ -837,7 +832,7 @@ void MacroAssembler::fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
 
   bind(L_2TAG_PACKET_3_0_1);
   movq(xmm0, Address(rsp, 8));
-  mulsd(xmm0, ExternalAddress(NEG_ZERO));    //0x00000000UL, 0x80000000UL
+  mulsd(xmm0, ExternalAddress(NEG_ZERO), tmp1 /*rscratch*/);    //0x00000000UL, 0x80000000UL
   movq(Address(rsp, 0), xmm0);
 
   bind(L_2TAG_PACKET_14_0_1);
@@ -1228,15 +1223,15 @@ void MacroAssembler::libm_reduce_pi04l(Register eax, Register ecx, Register edx,
 
   assert_different_registers(ebx, eax, ecx, edx, esi, edi, ebp, esp);
 
-  address zero_none = (address)_zero_none;
-  address _4onpi_d = (address)__4onpi_d;
-  address TWO_32H = (address)_TWO_32H;
-  address pi04_3d = (address)_pi04_3d;
-  address pi04_5d = (address)_pi04_5d;
-  address SCALE = (address)_SCALE;
-  address zeros = (address)_zeros;
-  address pi04_2d = (address)_pi04_2d;
-  address TWO_12H = (address)_TWO_12H;
+  address zero_none  = (address)_zero_none;
+  address _4onpi_d   = (address)__4onpi_d;
+  address TWO_32H    = (address)_TWO_32H;
+  address pi04_3d    = (address)_pi04_3d;
+  address pi04_5d    = (address)_pi04_5d;
+  address SCALE      = (address)_SCALE;
+  address zeros      = (address)_zeros;
+  address pi04_2d    = (address)_pi04_2d;
+  address TWO_12H    = (address)_TWO_12H;
   address _4onpi_31l = (address)__4onpi_31l;
 
   bind(B1_1);
@@ -1624,23 +1619,23 @@ void MacroAssembler::libm_reduce_pi04l(Register eax, Register ecx, Register edx,
   ret(0);
 }
 
-ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_L_2il0floatpacket_0[] =
+ATTRIBUTE_ALIGNED(16) juint _L_2il0floatpacket_0[] =
 {
     0xffffffffUL, 0x7fffffffUL, 0x00000000UL, 0x00000000UL
 };
 
-ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_Pi4Inv[] =
+ATTRIBUTE_ALIGNED(16) juint _Pi4Inv[] =
 {
     0x6dc9c883UL, 0x3ff45f30UL
 };
 
-ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_Pi4x3[] =
+ATTRIBUTE_ALIGNED(16) juint _Pi4x3[] =
 {
     0x54443000UL, 0xbfe921fbUL, 0x3b39a000UL, 0x3d373dcbUL, 0xe0e68948UL,
     0xba845c06UL
 };
 
-ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_Pi4x4[] =
+ATTRIBUTE_ALIGNED(16) juint _Pi4x4[] =
 {
     0x54400000UL, 0xbfe921fbUL, 0x1a600000UL, 0xbdc0b461UL, 0x2e000000UL,
     0xbb93198aUL, 0x252049c1UL, 0xb96b839aUL
@@ -1664,7 +1659,7 @@ ATTRIBUTE_ALIGNED(16) jushort _CP[] =
     0xbfda, 0x0000, 0x3ac6, 0x0ba0, 0x07ce, 0xd585, 0x3fd2, 0x0000
 };
 
-ATTRIBUTE_ALIGNED(16) juint StubRoutines::x86::_ones[] =
+ATTRIBUTE_ALIGNED(16) juint _ones[] =
 {
     0x00000000UL, 0x3ff00000UL, 0x00000000UL, 0xbff00000UL
 };
@@ -1677,13 +1672,13 @@ void MacroAssembler::libm_sincos_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
 
   assert_different_registers(ebx, eax, ecx, edx, esi, edi, ebp, esp);
 
-  address L_2il0floatpacket_0 = StubRoutines::x86::_L_2il0floatpacket_0_addr();
-  address Pi4Inv = StubRoutines::x86::_Pi4Inv_addr();
-  address Pi4x3 = StubRoutines::x86::_Pi4x3_addr();
-  address Pi4x4 = StubRoutines::x86::_Pi4x4_addr();
-  address ones = StubRoutines::x86::_ones_addr();
-  address CP = (address)_CP;
-  address SP = (address)_SP;
+  address L_2il0floatpacket_0 = (address)_L_2il0floatpacket_0;
+  address Pi4Inv              = (address)_Pi4Inv;
+  address Pi4x3               = (address)_Pi4x3;
+  address Pi4x4               = (address)_Pi4x4;
+  address ones                = (address)_ones;
+  address CP                  = (address)_CP;
+  address SP                  = (address)_SP;
 
   bind(B1_1);
   push(ebp);
@@ -1706,7 +1701,7 @@ void MacroAssembler::libm_sincos_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   movl(esi, Address(ebp, 12));
   movl(eax, esi);
   andl(eax, 2147483647);
-  andps(xmm1, ExternalAddress(L_2il0floatpacket_0));    //0xffffffffUL, 0x7fffffffUL, 0x00000000UL, 0x00000000UL
+  andps(xmm1, ExternalAddress(L_2il0floatpacket_0), tmp1 /*rscratch*/);    //0xffffffffUL, 0x7fffffffUL, 0x00000000UL, 0x00000000UL
   shrl(esi, 31);
   movl(Address(esp, 40), eax);
   cmpl(eax, 1104150528);
@@ -1714,7 +1709,7 @@ void MacroAssembler::libm_sincos_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   jcc(Assembler::aboveEqual, B1_11);
 
   bind(B1_4);
-  movsd(xmm0, ExternalAddress(Pi4Inv));    //0x6dc9c883UL, 0x3ff45f30UL
+  movsd(xmm0, ExternalAddress(Pi4Inv), tmp1 /*rscratch*/);    //0x6dc9c883UL, 0x3ff45f30UL
   mulsd(xmm0, xmm1);
   movzwl(edx, Address(esp, 30));
   movl(eax, edx);
@@ -2314,11 +2309,12 @@ ATTRIBUTE_ALIGNED(16) juint _static_const_table_sin[] =
 void MacroAssembler::fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xmm2, XMMRegister xmm3, XMMRegister xmm4, XMMRegister xmm5, XMMRegister xmm6, XMMRegister xmm7, Register eax, Register ebx, Register edx) {
 
   Label L_2TAG_PACKET_0_0_2, L_2TAG_PACKET_1_0_2, L_2TAG_PACKET_2_0_2, L_2TAG_PACKET_3_0_2;
-  Label L_2TAG_PACKET_4_0_2, start;
+  Label L_2TAG_PACKET_4_0_2;
+
   assert_different_registers(eax, ebx, edx);
+
   address static_const_table_sin = (address)_static_const_table_sin;
 
-  bind(start);
   subl(rsp, 120);
   movl(Address(rsp, 56), ebx);
   lea(ebx, ExternalAddress(static_const_table_sin));
@@ -2440,4 +2436,4 @@ void MacroAssembler::fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
   bind(L_2TAG_PACKET_1_0_2);
   movl(ebx, Address(rsp, 56));
 }
-#endif
+#endif // _LP64

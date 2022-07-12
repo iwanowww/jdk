@@ -109,14 +109,14 @@ void OptoRuntime::generate_exception_blob() {
   // registers of the frame being removed.
   //
   __ movptr(Address(rsp, thread_off * wordSize), rcx); // Thread is first argument
-  __ set_last_Java_frame(rcx, noreg, noreg, NULL);
+  __ set_last_Java_frame(rcx, noreg, noreg, NULL, noreg);
 
   __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, OptoRuntime::handle_exception_C)));
 
   // No registers to map, rbp is known implicitly
   oop_maps->add_gc_map( __ pc() - start,  new OopMap( framesize, 0 ));
   __ get_thread(rcx);
-  __ reset_last_Java_frame(rcx, false);
+  __ reset_last_Java_frame(rcx, false, noreg);
 
   // Restore callee-saved registers
   __ movptr(rbp, Address(rsp, rbp_off * wordSize));

@@ -76,11 +76,11 @@ int StubAssembler::call_RT(Register oop_result1, Register metadata_result, addre
 
   int call_offset = -1;
   if (!align_stack) {
-    set_last_Java_frame(thread, noreg, rbp, NULL);
+    set_last_Java_frame(thread, noreg, rbp, NULL, rscratch1);
   } else {
     address the_pc = pc();
     call_offset = offset();
-    set_last_Java_frame(thread, noreg, rbp, the_pc);
+    set_last_Java_frame(thread, noreg, rbp, the_pc, rscratch1);
     andptr(rsp, -(StackAlignmentInBytes));    // Align stack
   }
 
@@ -103,7 +103,7 @@ int StubAssembler::call_RT(Register oop_result1, Register metadata_result, addre
   }
   pop(rax);
 #endif
-  reset_last_Java_frame(thread, true);
+  reset_last_Java_frame(thread, true, rscratch1);
 
   // discard thread and arguments
   NOT_LP64(addptr(rsp, num_rt_args()*BytesPerWord));
@@ -116,27 +116,27 @@ int StubAssembler::call_RT(Register oop_result1, Register metadata_result, addre
     movptr(rax, Address(thread, Thread::pending_exception_offset()));
     // make sure that the vm_results are cleared
     if (oop_result1->is_valid()) {
-      movptr(Address(thread, JavaThread::vm_result_offset()), NULL_WORD);
+      movptr(Address(thread, JavaThread::vm_result_offset()), NULL_WORD, rscratch1);
     }
     if (metadata_result->is_valid()) {
-      movptr(Address(thread, JavaThread::vm_result_2_offset()), NULL_WORD);
+      movptr(Address(thread, JavaThread::vm_result_2_offset()), NULL_WORD, rscratch1);
     }
     if (frame_size() == no_frame_size) {
       leave();
-      jump(RuntimeAddress(StubRoutines::forward_exception_entry()));
+      jump(RuntimeAddress(StubRoutines::forward_exception_entry()), rscratch1);
     } else if (_stub_id == Runtime1::forward_exception_id) {
       should_not_reach_here();
     } else {
-      jump(RuntimeAddress(Runtime1::entry_for(Runtime1::forward_exception_id)));
+      jump(RuntimeAddress(Runtime1::entry_for(Runtime1::forward_exception_id)), rscratch1);
     }
     bind(L);
   }
   // get oop results if there are any and reset the values in the thread
   if (oop_result1->is_valid()) {
-    get_vm_result(oop_result1, thread);
+    get_vm_result(oop_result1, thread, rscratch1);
   }
   if (metadata_result->is_valid()) {
-    get_vm_result_2(metadata_result, thread);
+    get_vm_result_2(metadata_result, thread, rscratch1);
   }
 
   assert(call_offset >= 0, "Should be set");
@@ -684,14 +684,14 @@ OopMapSet* Runtime1::generate_handle_exception(StubID id, StubAssembler *sasm) {
 
     // load and clear pending exception oop into RAX
     __ movptr(exception_oop, Address(thread, Thread::pending_exception_offset()));
-    __ movptr(Address(thread, Thread::pending_exception_offset()), NULL_WORD);
+    __ movptr(Address(thread, Thread::pending_exception_offset()), NULL_WORD, rscratch1);
 
     // load issuing PC (the return address for this stub) into rdx
     __ movptr(exception_pc, Address(rbp, 1*BytesPerWord));
 
     // make sure that the vm_results are cleared (may be unnecessary)
-    __ movptr(Address(thread, JavaThread::vm_result_offset()),   NULL_WORD);
-    __ movptr(Address(thread, JavaThread::vm_result_2_offset()), NULL_WORD);
+    __ movptr(Address(thread, JavaThread::vm_result_offset()),   NULL_WORD, rscratch1);
+    __ movptr(Address(thread, JavaThread::vm_result_2_offset()), NULL_WORD, rscratch1);
     break;
   case handle_exception_nofpu_id:
   case handle_exception_id:
@@ -885,7 +885,7 @@ OopMapSet* Runtime1::generate_patching(StubAssembler* sasm, address target) {
   __ get_thread(thread);
   __ push(thread);
 #endif // _LP64
-  __ set_last_Java_frame(thread, noreg, rbp, NULL);
+  __ set_last_Java_frame(thread, noreg, rbp, NULL, rscratch1);
   // do the call
   __ call(RuntimeAddress(target));
   OopMapSet* oop_maps = new OopMapSet();
@@ -903,7 +903,7 @@ OopMapSet* Runtime1::generate_patching(StubAssembler* sasm, address target) {
   }
   __ pop(rax);
 #endif
-  __ reset_last_Java_frame(thread, true);
+  __ reset_last_Java_frame(thread, true, rscratch1);
 #ifndef _LP64
   __ pop(rcx); // discard thread arg
   __ pop(rcx); // discard dummy
@@ -917,14 +917,14 @@ OopMapSet* Runtime1::generate_patching(StubAssembler* sasm, address target) {
 
     __ testptr(rax, rax);                                   // have we deoptimized?
     __ jump_cc(Assembler::equal,
-               RuntimeAddress(Runtime1::entry_for(Runtime1::forward_exception_id)));
+               RuntimeAddress(Runtime1::entry_for(Runtime1::forward_exception_id)), rscratch1);
 
     // the deopt blob expects exceptions in the special fields of
     // JavaThread, so copy and clear pending exception.
 
     // load and clear pending exception
     __ movptr(rax, Address(thread, Thread::pending_exception_offset()));
-    __ movptr(Address(thread, Thread::pending_exception_offset()), NULL_WORD);
+    __ movptr(Address(thread, Thread::pending_exception_offset()), NULL_WORD, rscratch1);
 
     // check that there is really a valid exception
     __ verify_not_null_oop(rax);
@@ -960,7 +960,7 @@ OopMapSet* Runtime1::generate_patching(StubAssembler* sasm, address target) {
     // registers and must leave throwing pc on the stack.  A patch may
     // have values live in registers so the entry point with the
     // exception in tls.
-    __ jump(RuntimeAddress(deopt_blob->unpack_with_exception_in_tls()));
+    __ jump(RuntimeAddress(deopt_blob->unpack_with_exception_in_tls()), rscratch1);
 
     __ bind(L);
   }
@@ -978,7 +978,7 @@ OopMapSet* Runtime1::generate_patching(StubAssembler* sasm, address target) {
   // registers, pop all of our frame but the return address and jump to the deopt blob
   restore_live_registers(sasm);
   __ leave();
-  __ jump(RuntimeAddress(deopt_blob->unpack_with_reexecution()));
+  __ jump(RuntimeAddress(deopt_blob->unpack_with_reexecution()), rscratch1);
 
   __ bind(cont);
   restore_live_registers(sasm);
@@ -1278,7 +1278,7 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         __ ret(0);
 
         __ bind(miss);
-        __ movptr(Address(rsp, (result_off) * VMRegImpl::stack_slot_size), NULL_WORD); // result
+        __ movptr(Address(rsp, (result_off) * VMRegImpl::stack_slot_size), NULL_WORD, rscratch1); // result
         __ pop(rax);
         __ pop(rcx);
         __ pop(rsi);
@@ -1344,7 +1344,7 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         DeoptimizationBlob* deopt_blob = SharedRuntime::deopt_blob();
         assert(deopt_blob != NULL, "deoptimization blob must have been created");
         __ leave();
-        __ jump(RuntimeAddress(deopt_blob->unpack_with_reexecution()));
+        __ jump(RuntimeAddress(deopt_blob->unpack_with_reexecution()), rscratch1);
       }
       break;
 
@@ -1396,7 +1396,7 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
 #ifdef _LP64
         Label done;
         __ cvttsd2siq(rax, Address(rsp, wordSize));
-        __ cmp64(rax, ExternalAddress((address) StubRoutines::x86::double_sign_flip()));
+        __ cmp64(rax, ExternalAddress((address) StubRoutines::x86::double_sign_flip()), rscratch1);
         __ jccb(Assembler::notEqual, done);
         __ movq(rax, Address(rsp, wordSize));
         __ subptr(rsp, 8);
@@ -1494,7 +1494,7 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         DeoptimizationBlob* deopt_blob = SharedRuntime::deopt_blob();
         assert(deopt_blob != NULL, "deoptimization blob must have been created");
 
-        __ jump(RuntimeAddress(deopt_blob->unpack_with_reexecution()));
+        __ jump(RuntimeAddress(deopt_blob->unpack_with_reexecution()), rscratch1);
       }
       break;
 

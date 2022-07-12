@@ -49,10 +49,10 @@ void ConversionStub::emit_code(LIR_Assembler* ce) {
 
   if (input()->is_single_xmm()) {
     __ comiss(input()->as_xmm_float_reg(),
-              ExternalAddress((address)&float_zero));
+              ExternalAddress((address)&float_zero), noreg);
   } else if (input()->is_double_xmm()) {
     __ comisd(input()->as_xmm_double_reg(),
-              ExternalAddress((address)&double_zero));
+              ExternalAddress((address)&double_zero), noreg);
   } else {
     __ push(rax);
     __ ftst();
@@ -102,7 +102,7 @@ void C1SafepointPollStub::emit_code(LIR_Assembler* ce) {
          "polling page return stub not created yet");
 
   address stub = SharedRuntime::polling_page_return_handler_blob()->entry_point();
-  __ jump(RuntimeAddress(stub));
+  __ jump(RuntimeAddress(stub), rscratch1);
 }
 
 void CounterOverflowStub::emit_code(LIR_Assembler* ce) {
@@ -544,7 +544,7 @@ void ArrayCopyStub::emit_code(LIR_Assembler* ce) {
 
 #ifndef PRODUCT
   if (PrintC1Statistics) {
-    __ incrementl(ExternalAddress((address)&Runtime1::_arraycopy_slowcase_cnt));
+    __ incrementl(ExternalAddress((address)&Runtime1::_arraycopy_slowcase_cnt), rscratch1);
   }
 #endif
 

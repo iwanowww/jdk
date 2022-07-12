@@ -70,10 +70,11 @@ public:
 #endif
 
   // Generic instructions support for use in .ad files C2 code generation
-  void vabsnegd(int opcode, XMMRegister dst, XMMRegister src, Register scr);
-  void vabsnegd(int opcode, XMMRegister dst, XMMRegister src, int vector_len, Register scr);
-  void vabsnegf(int opcode, XMMRegister dst, XMMRegister src, Register scr);
-  void vabsnegf(int opcode, XMMRegister dst, XMMRegister src, int vector_len, Register scr);
+  void vabsnegd(int opcode, XMMRegister dst, XMMRegister src,                 Register rscratch);
+  void vabsnegd(int opcode, XMMRegister dst, XMMRegister src, int vector_len, Register rscratch);
+
+  void vabsnegf(int opcode, XMMRegister dst, XMMRegister src,                 Register rscratch);
+  void vabsnegf(int opcode, XMMRegister dst, XMMRegister src, int vector_len, Register rscratch);
 
   void pminmax(int opcode, BasicType elem_bt, XMMRegister dst, XMMRegister src,
                XMMRegister tmp = xnoreg);
@@ -99,20 +100,24 @@ public:
 
   void vector_mask_compress(KRegister dst, KRegister src, Register rtmp1, Register rtmp2, int mask_len);
 
-  void vextendbw(bool sign, XMMRegister dst, XMMRegister src, int vector_len);
   void vextendbw(bool sign, XMMRegister dst, XMMRegister src);
-  void vextendbd(bool sign, XMMRegister dst, XMMRegister src, int vector_len);
-  void vextendwd(bool sign, XMMRegister dst, XMMRegister src, int vector_len);
+  void vextendbw(bool sign, XMMRegister dst, XMMRegister src, int vlen_enc);
+  void vextendbd(bool sign, XMMRegister dst, XMMRegister src, int vlen_enc);
+  void vextendwd(bool sign, XMMRegister dst, XMMRegister src, int vlen_enc);
 
   void vshiftd(int opcode, XMMRegister dst, XMMRegister shift);
-  void vshiftd_imm(int opcode, XMMRegister dst, int shift);
   void vshiftd(int opcode, XMMRegister dst, XMMRegister src, XMMRegister shift, int vlen_enc);
-  void vshiftd_imm(int opcode, XMMRegister dst, XMMRegister nds, int shift, int vector_len);
-  void vshiftw(int opcode, XMMRegister dst, XMMRegister shift);
+
+  void vshiftd_imm(int opcode, XMMRegister dst,                  int shift);
+  void vshiftd_imm(int opcode, XMMRegister dst, XMMRegister nds, int shift, int vlen_enc);
+
+  void vshiftw(int opcode, XMMRegister dst,                  XMMRegister shift);
   void vshiftw(int opcode, XMMRegister dst, XMMRegister src, XMMRegister shift, int vlen_enc);
-  void vshiftq(int opcode, XMMRegister dst, XMMRegister shift);
-  void vshiftq_imm(int opcode, XMMRegister dst, int shift);
+
+  void vshiftq(int opcode, XMMRegister dst,                  XMMRegister shift);
   void vshiftq(int opcode, XMMRegister dst, XMMRegister src, XMMRegister shift, int vlen_enc);
+
+  void vshiftq_imm(int opcode, XMMRegister dst,                  int shift);
   void vshiftq_imm(int opcode, XMMRegister dst, XMMRegister nds, int shift, int vector_len);
 
   void vprotate_imm(int opcode, BasicType etype, XMMRegister dst, XMMRegister src, int shift, int vector_len);
@@ -158,7 +163,7 @@ public:
   void load_vector_mask(KRegister dst, XMMRegister src, XMMRegister xtmp, Register tmp, bool novlbwdq, int vlen_enc);
 
   void load_vector(XMMRegister dst, Address src, int vlen_in_bytes);
-  void load_vector(XMMRegister dst, AddressLiteral src, int vlen_in_bytes, Register rscratch = rscratch1);
+  void load_vector(XMMRegister dst, AddressLiteral src, int vlen_in_bytes, Register rscratch);
   void load_constant_vector(BasicType bt, XMMRegister dst, InternalAddress src, int vlen);
   void load_iota_indices(XMMRegister dst, Register scratch, int vlen_in_bytes);
 

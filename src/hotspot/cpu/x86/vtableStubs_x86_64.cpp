@@ -70,7 +70,7 @@ VtableStub* VtableStubs::create_vtable_stub(int vtable_index) {
 
 #if (!defined(PRODUCT) && defined(COMPILER2))
   if (CountCompiledCalls) {
-    __ incrementq(ExternalAddress((address) SharedRuntime::nof_megamorphic_calls_addr()));
+    __ incrementq(ExternalAddress((address) SharedRuntime::nof_megamorphic_calls_addr()), r10 /*rscratch*/);
   }
 #endif
 
@@ -164,7 +164,7 @@ VtableStub* VtableStubs::create_itable_stub(int itable_index) {
 
 #if (!defined(PRODUCT) && defined(COMPILER2))
   if (CountCompiledCalls) {
-    __ incrementq(ExternalAddress((address) SharedRuntime::nof_megamorphic_calls_addr()));
+    __ incrementq(ExternalAddress((address) SharedRuntime::nof_megamorphic_calls_addr()), r10 /*rscratch*/);
   }
 #endif // PRODUCT
 
@@ -253,7 +253,7 @@ VtableStub* VtableStubs::create_itable_stub(int itable_index) {
   // We force resolving of the call site by jumping to the "handle
   // wrong method" stub, and so let the interpreter runtime do all the
   // dirty work.
-  __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()));
+  __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()), noreg /*rscratch*/); // stub
 
   masm->flush();
   slop_bytes += index_dependent_slop; // add'l slop for size variance due to large itable offsets
