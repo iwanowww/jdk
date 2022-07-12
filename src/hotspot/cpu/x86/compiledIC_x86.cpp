@@ -58,7 +58,7 @@ address CompiledStaticCall::emit_to_interp_stub(CodeBuffer &cbuf, address mark) 
   // Static stub relocation also tags the Method* in the code-stream.
   __ mov_metadata(rbx, (Metadata*) NULL);  // Method is zapped till fixup time.
   // This is recognized as unresolved by relocs/nativeinst/ic code.
-  __ jump(RuntimeAddress(__ pc()));
+  __ jump(RuntimeAddress(__ pc()), noreg /*rscratch*/);
 
   assert(__ pc() - base <= to_interp_stub_size(), "wrong stub size");
 

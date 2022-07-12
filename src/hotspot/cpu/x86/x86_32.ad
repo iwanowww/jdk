@@ -698,7 +698,7 @@ void MachEpilogNode::emit(CodeBuffer &cbuf, PhaseRegAlloc *ra_) const {
   emit_opcode(cbuf, 0x58 | EBP_enc);
 
   if (StackReservedPages > 0 && C->has_reserved_stack_access()) {
-    __ reserved_stack_check();
+    __ reserved_stack_check(noreg);
   }
 
   if (do_polling() && C->is_method_compilation()) {
@@ -1368,7 +1368,7 @@ void MachUEPNode::emit(CodeBuffer &cbuf, PhaseRegAlloc *ra_) const {
 #endif
   masm.cmpptr(rax, Address(rcx, oopDesc::klass_offset_in_bytes()));
   masm.jump_cc(Assembler::notEqual,
-               RuntimeAddress(SharedRuntime::get_ic_miss_stub()));
+               RuntimeAddress(SharedRuntime::get_ic_miss_stub()), noreg);
   /* WARNING these NOPs are critical so that verified entry point is properly
      aligned for patching by NativeJump::patch_verified_entry() */
   int nops_cnt = 2;
@@ -6073,7 +6073,7 @@ instruct loadConF(regF dst, immF con) %{
   ins_cost(125);
   format %{ "MOVSS  $dst,[$constantaddress]\t# load from constant table: float=$con" %}
   ins_encode %{
-    __ movflt($dst$$XMMRegister, $constantaddress($con));
+    __ movflt($dst$$XMMRegister, $constantaddress($con), noreg);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -6137,7 +6137,7 @@ instruct loadConD(regD dst, immD con) %{
   ins_cost(125);
   format %{ "MOVSD  $dst,[$constantaddress]\t# load from constant table: double=$con" %}
   ins_encode %{
-    __ movdbl($dst$$XMMRegister, $constantaddress($con));
+    __ movdbl($dst$$XMMRegister, $constantaddress($con), noreg);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -12677,7 +12677,7 @@ instruct jumpXtnd(rRegI switch_val) %{
   ins_encode %{
     // Jump to Address(table_base + switch_reg)
     Address index(noreg, $switch_val$$Register, Address::times_1);
-    __ jump(ArrayAddress($constantaddress, index));
+    __ jump(ArrayAddress($constantaddress, index), noreg);
   %}
   ins_pipe(pipe_jmp);
 %}

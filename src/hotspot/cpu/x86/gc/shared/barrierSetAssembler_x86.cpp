@@ -267,12 +267,12 @@ void BarrierSetAssembler::eden_allocate(MacroAssembler* masm,
     // if end < obj then we wrapped around => object too long => slow case
     __ cmpptr(end, obj);
     __ jcc(Assembler::below, slow_case);
-    __ cmpptr(end, ExternalAddress((address) Universe::heap()->end_addr()));
+    __ cmpptr(end, ExternalAddress((address) Universe::heap()->end_addr()), rscratch1);
     __ jcc(Assembler::above, slow_case);
     // Compare obj with the top addr, and if still equal, store the new top addr in
     // end at the address of the top addr pointer. Sets ZF if was equal, and clears
     // it otherwise. Use lock prefix for atomicity on MPs.
-    __ locked_cmpxchgptr(end, heap_top);
+    __ locked_cmpxchgptr(end, heap_top, rscratch1);
     __ jcc(Assembler::notEqual, retry);
     incr_allocated_bytes(masm, thread, var_size_in_bytes, con_size_in_bytes, thread->is_valid() ? noreg : t1);
   }
@@ -385,7 +385,7 @@ void BarrierSetAssembler::c2i_entry_barrier(MacroAssembler* masm) {
 #endif
 
   __ bind(bad_call);
-  __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()));
+  __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()), rscratch1);
   __ bind(method_live);
 
 #ifndef _LP64

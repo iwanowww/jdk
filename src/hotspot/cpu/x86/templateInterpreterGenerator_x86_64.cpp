@@ -433,7 +433,7 @@ address TemplateInterpreterGenerator::generate_math_entry(AbstractInterpreter::M
   } else if (kind == Interpreter::java_lang_math_abs) {
     assert(StubRoutines::x86::double_sign_mask() != NULL, "not initialized");
     __ movdbl(xmm0, Address(rsp, wordSize));
-    __ andpd(xmm0, ExternalAddress(StubRoutines::x86::double_sign_mask()));
+    __ andpd(xmm0, __ as_Address(ExternalAddress(StubRoutines::x86::double_sign_mask()))); // stub
   } else {
     ShouldNotReachHere();
   }

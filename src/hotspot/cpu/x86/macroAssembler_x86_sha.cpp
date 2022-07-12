@@ -35,18 +35,17 @@ void MacroAssembler::fast_sha1(XMMRegister abcd, XMMRegister e0, XMMRegister e1,
   XMMRegister msg1, XMMRegister msg2, XMMRegister msg3, XMMRegister shuf_mask,
   Register buf, Register state, Register ofs, Register limit, Register rsp, bool multi_block) {
 
-  Label start, done_hash, loop0;
+  Label done_hash, loop0;
 
   address upper_word_mask = StubRoutines::x86::upper_word_mask_addr();
   address shuffle_byte_flip_mask = StubRoutines::x86::shuffle_byte_flip_mask_addr();
 
-  bind(start);
   movdqu(abcd, Address(state, 0));
   pinsrd(e0, Address(state, 16), 3);
-  movdqu(shuf_mask, ExternalAddress(upper_word_mask)); // 0xFFFFFFFF000000000000000000000000
+  movdqu(shuf_mask, as_Address(ExternalAddress(upper_word_mask))); // 0xFFFFFFFF000000000000000000000000
   pand(e0, shuf_mask);
   pshufd(abcd, abcd, 0x1B);
-  movdqu(shuf_mask, ExternalAddress(shuffle_byte_flip_mask)); //0x000102030405060708090a0b0c0d0e0f
+  movdqu(shuf_mask, as_Address(ExternalAddress(shuffle_byte_flip_mask))); //0x000102030405060708090a0b0c0d0e0f
 
   bind(loop0);
   // Save hash values for addition after rounds
@@ -248,12 +247,11 @@ void MacroAssembler::fast_sha256(XMMRegister msg, XMMRegister state0, XMMRegiste
   Register buf, Register state, Register ofs, Register limit, Register rsp,
   bool multi_block) {
 #endif
-  Label start, done_hash, loop0;
+  Label done_hash, loop0;
 
   address K256 = StubRoutines::x86::k256_addr();
   address pshuffle_byte_flip_mask = StubRoutines::x86::pshuffle_byte_flip_mask_addr();
 
-  bind(start);
   movdqu(state0, Address(state, 0));
   movdqu(state1, Address(state, 16));
 
@@ -264,7 +262,7 @@ void MacroAssembler::fast_sha256(XMMRegister msg, XMMRegister state0, XMMRegiste
   pblendw(state1, msgtmp4, 0xF0);
 
 #ifdef _LP64
-  movdqu(shuf_mask, ExternalAddress(pshuffle_byte_flip_mask));
+  movdqu(shuf_mask, as_Address(ExternalAddress(pshuffle_byte_flip_mask)));
 #endif
   lea(rax, ExternalAddress(K256));
 
@@ -277,7 +275,7 @@ void MacroAssembler::fast_sha256(XMMRegister msg, XMMRegister state0, XMMRegiste
 #ifdef _LP64
   pshufb(msg, shuf_mask);
 #else
-  pshufb(msg, ExternalAddress(pshuffle_byte_flip_mask));
+  pshufb(msg, ExternalAddress(pshuffle_byte_flip_mask), noreg);
 #endif
   movdqa(msgtmp0, msg);
   paddd(msg, Address(rax, 0));
@@ -290,7 +288,7 @@ void MacroAssembler::fast_sha256(XMMRegister msg, XMMRegister state0, XMMRegiste
 #ifdef _LP64
   pshufb(msg, shuf_mask);
 #else
-  pshufb(msg, ExternalAddress(pshuffle_byte_flip_mask));
+  pshufb(msg, ExternalAddress(pshuffle_byte_flip_mask), noreg);
 #endif
   movdqa(msgtmp1, msg);
   paddd(msg, Address(rax, 16));
@@ -304,7 +302,7 @@ void MacroAssembler::fast_sha256(XMMRegister msg, XMMRegister state0, XMMRegiste
 #ifdef _LP64
   pshufb(msg, shuf_mask);
 #else
-  pshufb(msg, ExternalAddress(pshuffle_byte_flip_mask));
+  pshufb(msg, ExternalAddress(pshuffle_byte_flip_mask), noreg);
 #endif
   movdqa(msgtmp2, msg);
   paddd(msg, Address(rax, 32));
@@ -318,7 +316,7 @@ void MacroAssembler::fast_sha256(XMMRegister msg, XMMRegister state0, XMMRegiste
 #ifdef _LP64
   pshufb(msg, shuf_mask);
 #else
-  pshufb(msg, ExternalAddress(pshuffle_byte_flip_mask));
+  pshufb(msg, ExternalAddress(pshuffle_byte_flip_mask), noreg);
 #endif
   movdqa(msgtmp3, msg);
   paddd(msg, Address(rax, 48));
@@ -821,9 +819,9 @@ enum {
   movl(h, Address(CTX, 4*7));
 
   pshuffle_byte_flip_mask_addr = pshuffle_byte_flip_mask;
-  vmovdqu(BYTE_FLIP_MASK, ExternalAddress(pshuffle_byte_flip_mask_addr +0)); //[PSHUFFLE_BYTE_FLIP_MASK wrt rip]
-  vmovdqu(SHUF_00BA, ExternalAddress(pshuffle_byte_flip_mask_addr + 32));     //[_SHUF_00BA wrt rip]
-  vmovdqu(SHUF_DC00, ExternalAddress(pshuffle_byte_flip_mask_addr + 64));     //[_SHUF_DC00 wrt rip]
+  vmovdqu(BYTE_FLIP_MASK, as_Address(ExternalAddress(pshuffle_byte_flip_mask_addr +  0))); // [PSHUFFLE_BYTE_FLIP_MASK wrt rip]
+  vmovdqu(SHUF_00BA,      as_Address(ExternalAddress(pshuffle_byte_flip_mask_addr + 32))); // [_SHUF_00BA wrt rip]
+  vmovdqu(SHUF_DC00,      as_Address(ExternalAddress(pshuffle_byte_flip_mask_addr + 64))); // [_SHUF_DC00 wrt rip]
 
   movl(g, Address(CTX, 4*6));
 
@@ -984,9 +982,9 @@ bind(only_one_block);
 
 
   pshuffle_byte_flip_mask_addr = pshuffle_byte_flip_mask;
-  vmovdqu(BYTE_FLIP_MASK, ExternalAddress(pshuffle_byte_flip_mask_addr + 0)); //[PSHUFFLE_BYTE_FLIP_MASK wrt rip]
-  vmovdqu(SHUF_00BA, ExternalAddress(pshuffle_byte_flip_mask_addr + 32));     //[_SHUF_00BA wrt rip]
-  vmovdqu(SHUF_DC00, ExternalAddress(pshuffle_byte_flip_mask_addr + 64));     //[_SHUF_DC00 wrt rip]
+  vmovdqu(BYTE_FLIP_MASK, as_Address(ExternalAddress(pshuffle_byte_flip_mask_addr +  0))); // [PSHUFFLE_BYTE_FLIP_MASK wrt rip]
+  vmovdqu(SHUF_00BA,      as_Address(ExternalAddress(pshuffle_byte_flip_mask_addr + 32))); // [_SHUF_00BA wrt rip]
+  vmovdqu(SHUF_DC00,      as_Address(ExternalAddress(pshuffle_byte_flip_mask_addr + 64))); // [_SHUF_DC00 wrt rip]
 
   movl(g, Address(CTX, 4*6));   // 0x1f83d9ab
 
@@ -1376,8 +1374,8 @@ void MacroAssembler::sha512_AVX2(XMMRegister msg, XMMRegister state0, XMMRegiste
     movq(h, Address(CTX, 8 * 7));
 
     pshuffle_byte_flip_mask_addr = pshuffle_byte_flip_mask_sha512;
-    vmovdqu(BYTE_FLIP_MASK, ExternalAddress(pshuffle_byte_flip_mask_addr + 0)); //PSHUFFLE_BYTE_FLIP_MASK wrt rip
-    vmovdqu(YMM_MASK_LO, ExternalAddress(pshuffle_byte_flip_mask_addr + 32));
+    vmovdqu(BYTE_FLIP_MASK, as_Address(ExternalAddress(pshuffle_byte_flip_mask_addr +  0))); // PSHUFFLE_BYTE_FLIP_MASK wrt rip
+    vmovdqu(YMM_MASK_LO,    as_Address(ExternalAddress(pshuffle_byte_flip_mask_addr + 32)));
 
     movq(g, Address(CTX, 8 * 6));
 

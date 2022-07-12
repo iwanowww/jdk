@@ -89,7 +89,7 @@ void C2_MacroAssembler::rtm_abort_ratio_calculation(Register tmpReg,
 
   if (RTMLockingCalculationDelay > 0) {
     // Delay calculation
-    movptr(tmpReg, ExternalAddress((address) RTMLockingCounters::rtm_calculation_flag_addr()), tmpReg);
+    movptr(tmpReg, ExternalAddress((address) RTMLockingCounters::rtm_calculation_flag_addr()));
     testptr(tmpReg, tmpReg);
     jccb(Assembler::equal, L_done);
   }
@@ -427,14 +427,14 @@ void C2_MacroAssembler::rtm_inflated_locking(Register objReg, Register boxReg, R
 
 // obj: object to lock
 // box: on-stack box address (displaced header location) - KILLED
-// rax,: tmp -- KILLED
+// rax: tmp -- KILLED
 // scr: tmp -- KILLED
 void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmpReg,
-                                 Register scrReg, Register cx1Reg, Register cx2Reg,
-                                 RTMLockingCounters* rtm_counters,
-                                 RTMLockingCounters* stack_rtm_counters,
-                                 Metadata* method_data,
-                                 bool use_rtm, bool profile_rtm) {
+                                  Register scrReg, Register cx1Reg, Register cx2Reg,
+                                  RTMLockingCounters* rtm_counters,
+                                  RTMLockingCounters* stack_rtm_counters,
+                                  Metadata* method_data,
+                                  bool use_rtm, bool profile_rtm) {
   // Ensure the register assignments are disjoint
   assert(tmpReg == rax, "");
 
@@ -805,45 +805,45 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
 //-------------------------------------------------------------------------------------------
 // Generic instructions support for use in .ad files C2 code generation
 
-void C2_MacroAssembler::vabsnegd(int opcode, XMMRegister dst, XMMRegister src, Register scr) {
+void C2_MacroAssembler::vabsnegd(int opcode, XMMRegister dst, XMMRegister src, Register rscratch) {
   if (dst != src) {
     movdqu(dst, src);
   }
   if (opcode == Op_AbsVD) {
-    andpd(dst, ExternalAddress(StubRoutines::x86::vector_double_sign_mask()), scr);
+    andpd(dst, ExternalAddress(StubRoutines::x86::vector_double_sign_mask()), rscratch);
   } else {
     assert((opcode == Op_NegVD),"opcode should be Op_NegD");
-    xorpd(dst, ExternalAddress(StubRoutines::x86::vector_double_sign_flip()), scr);
+    xorpd(dst, ExternalAddress(StubRoutines::x86::vector_double_sign_flip()), rscratch);
   }
 }
 
-void C2_MacroAssembler::vabsnegd(int opcode, XMMRegister dst, XMMRegister src, int vector_len, Register scr) {
+void C2_MacroAssembler::vabsnegd(int opcode, XMMRegister dst, XMMRegister src, int vector_len, Register rscratch) {
   if (opcode == Op_AbsVD) {
-    vandpd(dst, src, ExternalAddress(StubRoutines::x86::vector_double_sign_mask()), vector_len, scr);
+    vandpd(dst, src, ExternalAddress(StubRoutines::x86::vector_double_sign_mask()), vector_len, rscratch);
   } else {
     assert((opcode == Op_NegVD),"opcode should be Op_NegD");
-    vxorpd(dst, src, ExternalAddress(StubRoutines::x86::vector_double_sign_flip()), vector_len, scr);
+    vxorpd(dst, src, ExternalAddress(StubRoutines::x86::vector_double_sign_flip()), vector_len, rscratch);
   }
 }
 
-void C2_MacroAssembler::vabsnegf(int opcode, XMMRegister dst, XMMRegister src, Register scr) {
+void C2_MacroAssembler::vabsnegf(int opcode, XMMRegister dst, XMMRegister src, Register rscratch) {
   if (dst != src) {
     movdqu(dst, src);
   }
   if (opcode == Op_AbsVF) {
-    andps(dst, ExternalAddress(StubRoutines::x86::vector_float_sign_mask()), scr);
+    andps(dst, ExternalAddress(StubRoutines::x86::vector_float_sign_mask()), rscratch);
   } else {
     assert((opcode == Op_NegVF),"opcode should be Op_NegF");
-    xorps(dst, ExternalAddress(StubRoutines::x86::vector_float_sign_flip()), scr);
+    xorps(dst, ExternalAddress(StubRoutines::x86::vector_float_sign_flip()), rscratch);
   }
 }
 
-void C2_MacroAssembler::vabsnegf(int opcode, XMMRegister dst, XMMRegister src, int vector_len, Register scr) {
+void C2_MacroAssembler::vabsnegf(int opcode, XMMRegister dst, XMMRegister src, int vector_len, Register rscratch) {
   if (opcode == Op_AbsVF) {
-    vandps(dst, src, ExternalAddress(StubRoutines::x86::vector_float_sign_mask()), vector_len, scr);
+    vandps(dst, src, ExternalAddress(StubRoutines::x86::vector_float_sign_mask()), vector_len, rscratch);
   } else {
     assert((opcode == Op_NegVF),"opcode should be Op_NegF");
-    vxorps(dst, src, ExternalAddress(StubRoutines::x86::vector_float_sign_flip()), vector_len, scr);
+    vxorps(dst, src, ExternalAddress(StubRoutines::x86::vector_float_sign_flip()), vector_len, rscratch);
   }
 }
 
@@ -1274,7 +1274,7 @@ void C2_MacroAssembler::varshiftq(int opcode, XMMRegister dst, XMMRegister src, 
         }
         evpsravq(dst, src, shift, vlen_enc);
       } else {
-        vmovdqu(tmp, ExternalAddress(StubRoutines::x86::vector_long_sign_mask()));
+        vmovdqu(tmp, ExternalAddress(StubRoutines::x86::vector_long_sign_mask()), rscratch1);
         vpsrlvq(dst, src, shift, vlen_enc);
         vpsrlvq(tmp, tmp, shift, vlen_enc);
         vpxor(dst, dst, tmp, vlen_enc);
@@ -1499,19 +1499,19 @@ void C2_MacroAssembler::load_vector(XMMRegister dst, AddressLiteral src, int vle
   }
 }
 
-void C2_MacroAssembler::load_iota_indices(XMMRegister dst, Register scratch, int vlen_in_bytes) {
+void C2_MacroAssembler::load_iota_indices(XMMRegister dst, Register rscratch, int vlen_in_bytes) {
   ExternalAddress addr(StubRoutines::x86::vector_iota_indices());
   if (vlen_in_bytes <= 4) {
-    movdl(dst, addr);
+    movdl(dst, addr, rscratch);
   } else if (vlen_in_bytes == 8) {
-    movq(dst, addr);
+    movq(dst, addr, rscratch);
   } else if (vlen_in_bytes == 16) {
-    movdqu(dst, addr, scratch);
+    movdqu(dst, addr, rscratch);
   } else if (vlen_in_bytes == 32) {
-    vmovdqu(dst, addr, scratch);
+    vmovdqu(dst, addr, rscratch);
   } else {
     assert(vlen_in_bytes == 64, "%d", vlen_in_bytes);
-    evmovdqub(dst, k0, addr, false /*merge*/, Assembler::AVX_512bit, scratch);
+    evmovdqub(dst, k0, addr, false /*merge*/, Assembler::AVX_512bit, rscratch);
   }
 }
 

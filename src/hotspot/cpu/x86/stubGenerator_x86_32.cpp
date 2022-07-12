@@ -75,7 +75,7 @@ class StubGenerator: public StubCodeGenerator {
 #define inc_counter_np(counter) ((void)0)
 #else
   void inc_counter_np_(int& counter) {
-    __ incrementl(ExternalAddress((address)&counter));
+    __ incrementl(ExternalAddress((address)&counter), noreg);
   }
 #define inc_counter_np(counter) \
   BLOCK_COMMENT("inc_counter " #counter); \
@@ -163,9 +163,9 @@ class StubGenerator: public StubCodeGenerator {
       __ movl(rax, mxcsr_save);
       __ andl(rax, MXCSR_MASK);    // Only check control and mask bits
       ExternalAddress mxcsr_std(StubRoutines::x86::addr_mxcsr_std());
-      __ cmp32(rax, mxcsr_std);
+      __ cmp32(rax, mxcsr_std, noreg);
       __ jcc(Assembler::equal, skip_ldmx);
-      __ ldmxcsr(mxcsr_std);
+      __ ldmxcsr(mxcsr_std, noreg);
       __ bind(skip_ldmx);
     }
 
@@ -343,13 +343,13 @@ class StubGenerator: public StubCodeGenerator {
 #endif
     // set pending exception
     __ verify_oop(rax);
-    __ movptr(Address(rcx, Thread::pending_exception_offset()), rax          );
-    __ lea(Address(rcx, Thread::exception_file_offset   ()),
-           ExternalAddress((address)__FILE__));
-    __ movl(Address(rcx, Thread::exception_line_offset   ()), __LINE__ );
+    __ movptr(Address(rcx, Thread::pending_exception_offset()), rax);
+    __ lea(Address(rcx, Thread::exception_file_offset()),
+           ExternalAddress((address)__FILE__), noreg);
+    __ movl(Address(rcx, Thread::exception_line_offset()), __LINE__ );
     // complete return to VM
     assert(StubRoutines::_call_stub_return_address != NULL, "_call_stub_return_address must have been generated before");
-    __ jump(RuntimeAddress(StubRoutines::_call_stub_return_address));
+    __ jump(RuntimeAddress(StubRoutines::_call_stub_return_address), noreg);
 
     return start;
   }
@@ -452,12 +452,12 @@ class StubGenerator: public StubCodeGenerator {
       __ stmxcsr(mxcsr_save);
       __ movl(rax, mxcsr_save);
       __ andl(rax, MXCSR_MASK);
-      __ cmp32(rax, mxcsr_std);
+      __ cmp32(rax, mxcsr_std, noreg);
       __ jcc(Assembler::equal, ok_ret);
 
       __ warn("MXCSR changed by native JNI code.");
 
-      __ ldmxcsr(mxcsr_std);
+      __ ldmxcsr(mxcsr_std, noreg);
 
       __ bind(ok_ret);
       __ addptr(rsp, wordSize);
@@ -491,7 +491,7 @@ class StubGenerator: public StubCodeGenerator {
       __ movl(rax, fpu_cntrl_wrd_save);
       __ andl(rax, FPU_CNTRL_WRD_MASK);
       ExternalAddress fpu_std(StubRoutines::x86::addr_fpu_cntrl_wrd_std());
-      __ cmp32(rax, fpu_std);
+      __ cmp32(rax, fpu_std, noreg);
       __ jcc(Assembler::equal, ok_ret);
 
       __ warn("Floating point control word changed by native JNI code.");
@@ -858,7 +858,7 @@ class StubGenerator: public StubCodeGenerator {
 
     Label exit, error;
     __ pushf();
-    __ incrementl(ExternalAddress((address) StubRoutines::verify_oop_count_addr()));
+    __ incrementl(ExternalAddress((address) StubRoutines::verify_oop_count_addr()), noreg);
     __ push(rdx);                                // save rdx
     // make sure object is 'reasonable'
     __ movptr(rax, Address(rsp, 4 * wordSize));    // get object
@@ -1192,9 +1192,9 @@ class StubGenerator: public StubCodeGenerator {
     RuntimeAddress nooverlap(nooverlap_target);
     __ cmpptr(dst, src);
     __ lea(end, Address(src, count, sf, 0)); // src + count * elem_size
-    __ jump_cc(Assembler::belowEqual, nooverlap);
+    __ jump_cc(Assembler::belowEqual, nooverlap, noreg);
     __ cmpptr(dst, end);
-    __ jump_cc(Assembler::aboveEqual, nooverlap);
+    __ jump_cc(Assembler::aboveEqual, nooverlap, noreg);
 
     if (t == T_OBJECT) {
       __ testl(count, count);
@@ -1391,11 +1391,11 @@ class StubGenerator: public StubCodeGenerator {
     // arrays overlap test
     __ cmpptr(to, from);
     RuntimeAddress nooverlap(nooverlap_target);
-    __ jump_cc(Assembler::belowEqual, nooverlap);
+    __ jump_cc(Assembler::belowEqual, nooverlap, noreg);
     __ lea(end_from, Address(from, count, Address::times_8, 0));
     __ cmpptr(to, end_from);
     __ movptr(from, Address(rsp, 8));  // from
-    __ jump_cc(Assembler::aboveEqual, nooverlap);
+    __ jump_cc(Assembler::aboveEqual, nooverlap, noreg);
 
     {
       // UnsafeCopyMemory page error: continue after ucm
@@ -1692,24 +1692,24 @@ class StubGenerator: public StubCodeGenerator {
     __ jccb(Assembler::zero, L_int_aligned);
 
     __ testl(bits, BytesPerShort-1);
-    __ jump_cc(Assembler::notZero, RuntimeAddress(byte_copy_entry));
+    __ jump_cc(Assembler::notZero, RuntimeAddress(byte_copy_entry), noreg);
 
     __ BIND(L_short_aligned);
     __ shrptr(count, LogBytesPerShort); // size => short_count
     __ movl(count_arg, count);          // update 'count'
-    __ jump(RuntimeAddress(short_copy_entry));
+    __ jump(RuntimeAddress(short_copy_entry), noreg);
 
     __ BIND(L_int_aligned);
     __ shrptr(count, LogBytesPerInt); // size => int_count
     __ movl(count_arg, count);          // update 'count'
-    __ jump(RuntimeAddress(int_copy_entry));
+    __ jump(RuntimeAddress(int_copy_entry), noreg);
 
     __ BIND(L_long_aligned);
     __ shrptr(count, LogBytesPerLong); // size => qword_count
     __ movl(count_arg, count);          // update 'count'
     __ pop(rdi); // Do pops here since jlong_arraycopy stub does not do it.
     __ pop(rsi);
-    __ jump(RuntimeAddress(long_copy_entry));
+    __ jump(RuntimeAddress(long_copy_entry), noreg);
 
     return start;
   }
@@ -1943,18 +1943,18 @@ class StubGenerator: public StubCodeGenerator {
     BLOCK_COMMENT("choose copy loop based on element size");
     __ cmpl(rdi_elsize, 0);
 
-    __ jump_cc(Assembler::equal, RuntimeAddress(entry_jbyte_arraycopy));
+    __ jump_cc(Assembler::equal, RuntimeAddress(entry_jbyte_arraycopy), noreg);
     __ cmpl(rdi_elsize, LogBytesPerShort);
-    __ jump_cc(Assembler::equal, RuntimeAddress(entry_jshort_arraycopy));
+    __ jump_cc(Assembler::equal, RuntimeAddress(entry_jshort_arraycopy), noreg);
     __ cmpl(rdi_elsize, LogBytesPerInt);
-    __ jump_cc(Assembler::equal, RuntimeAddress(entry_jint_arraycopy));
+    __ jump_cc(Assembler::equal, RuntimeAddress(entry_jint_arraycopy), noreg);
 #ifdef ASSERT
     __ cmpl(rdi_elsize, LogBytesPerLong);
     __ jccb(Assembler::notEqual, L_failed);
 #endif
     __ pop(rdi); // Do pops here since jlong_arraycopy stub does not do it.
     __ pop(rsi);
-    __ jump(RuntimeAddress(entry_jlong_arraycopy));
+    __ jump(RuntimeAddress(entry_jlong_arraycopy), noreg);
 
   __ BIND(L_failed);
     __ xorptr(rax, rax);
@@ -1988,7 +1988,7 @@ class StubGenerator: public StubCodeGenerator {
     __ movptr(FROM,  from);   // src_addr
     __ movptr(TO,    to);     // dst_addr
     __ movl(COUNT, count);  // count
-    __ jump(RuntimeAddress(entry_oop_arraycopy));
+    __ jump(RuntimeAddress(entry_oop_arraycopy), noreg);
 
   __ BIND(L_checkcast_copy);
     // live at this point:  rcx_src_klass, dst[_pos], src[_pos]
@@ -2067,7 +2067,7 @@ class StubGenerator: public StubCodeGenerator {
       __ lea(to, Address(dst, dst_pos, Address::times_ptr,
                           arrayOopDesc::base_offset_in_bytes(T_OBJECT)));
       __ movptr(to_arg, to);
-      __ jump(RuntimeAddress(entry_checkcast_arraycopy));
+      __ jump(RuntimeAddress(entry_checkcast_arraycopy), noreg);
     }
 
     return start;
@@ -2209,7 +2209,7 @@ class StubGenerator: public StubCodeGenerator {
     if (xmm_shuf_mask != xnoreg) {
       __ pshufb(xmmdst, xmm_shuf_mask);
     } else {
-      __ pshufb(xmmdst, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+      __ pshufb(xmmdst, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), noreg);
     }
   }
 
@@ -2290,7 +2290,7 @@ class StubGenerator: public StubCodeGenerator {
     // keylen could be only {11, 13, 15} * 4 = {44, 52, 60}
     __ movl(keylen, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
 
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), noreg);
     __ movdqu(xmm_result, Address(from, 0));  // get 16 bytes of input
     __ movptr(to, to_param);
 
@@ -2389,7 +2389,7 @@ class StubGenerator: public StubCodeGenerator {
     // keylen could be only {11, 13, 15} * 4 = {44, 52, 60}
     __ movl(keylen, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
 
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), noreg);
     __ movdqu(xmm_result, Address(from, 0));
     __ movptr(to, to_param);
 
@@ -2522,7 +2522,7 @@ class StubGenerator: public StubCodeGenerator {
     __ movptr(len_reg , len_param);
 
     const XMMRegister xmm_key_shuf_mask = xmm_temp;  // used temporarily to swap key bytes up front
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), noreg);
     // load up xmm regs 2 thru 7 with keys 0-5
     for (int rnum = XMM_REG_NUM_KEY_FIRST, offset = 0x00; rnum  <= XMM_REG_NUM_KEY_LAST; rnum++) {
       load_key(as_XMMRegister(rnum), key, offset, xmm_key_shuf_mask);
@@ -2690,7 +2690,7 @@ class StubGenerator: public StubCodeGenerator {
     __ movptr(rvec , rvec_param);
     __ movptr(len_reg , len_param);
 
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), noreg);
     __ movdqu(xmm_prev_block_cipher, Address(rvec, 0x00)); // initialize with initial rvec
 
     __ xorptr(pos, pos);
@@ -2909,11 +2909,11 @@ class StubGenerator: public StubCodeGenerator {
 
     // initialize counter with initial counter
     __ movdqu(xmm_curr_counter, Address(counter, 0x00));
-    __ movdqu(xmm_counter_shuf_mask, ExternalAddress(StubRoutines::x86::counter_shuffle_mask_addr()));
+    __ movdqu(xmm_counter_shuf_mask, ExternalAddress(StubRoutines::x86::counter_shuffle_mask_addr()), noreg);
     __ pshufb(xmm_curr_counter, xmm_counter_shuf_mask); //counter is shuffled for increase
 
     // key length could be only {11, 13, 15} * 4 = {44, 52, 60}
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), noreg);
     __ movl(rax, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
     __ cmpl(rax, 52);
     __ jcc(Assembler::equal, L_key192_top);
@@ -2939,8 +2939,8 @@ class StubGenerator: public StubCodeGenerator {
       __ cmpptr(len_reg, PARALLEL_FACTOR * AESBlockSize); // see if at least PARALLEL_FACTOR blocks left
       __ jcc(Assembler::less, L_singleBlockLoopTop[k]);
 
-      __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
-      __ movdqu(xmm_counter_shuf_mask, ExternalAddress(StubRoutines::x86::counter_shuffle_mask_addr()));
+      __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), noreg);
+      __ movdqu(xmm_counter_shuf_mask, ExternalAddress(StubRoutines::x86::counter_shuffle_mask_addr()), noreg);
 
       //load, then increase counters
       CTR_DoFour(movdqa, xmm_curr_counter);
@@ -2992,8 +2992,8 @@ class StubGenerator: public StubCodeGenerator {
       __ BIND(L_singleBlockLoopTop[k]);
       __ cmpptr(len_reg, 0);
       __ jcc(Assembler::equal, L_exit);
-      __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
-      __ movdqu(xmm_counter_shuf_mask, ExternalAddress(StubRoutines::x86::counter_shuffle_mask_addr()));
+      __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), noreg);
+      __ movdqu(xmm_counter_shuf_mask, ExternalAddress(StubRoutines::x86::counter_shuffle_mask_addr()), noreg);
       __ movdqa(xmm_result0, xmm_curr_counter);
       load_key(xmm_key, key, 0x00, xmm_key_shuf_mask);
       __ push(rbx);//rbx is used for increasing counter
@@ -3078,7 +3078,7 @@ class StubGenerator: public StubCodeGenerator {
     }
 
     __ BIND(L_exit);
-    __ movdqu(xmm_counter_shuf_mask, ExternalAddress(StubRoutines::x86::counter_shuffle_mask_addr()));
+    __ movdqu(xmm_counter_shuf_mask, ExternalAddress(StubRoutines::x86::counter_shuffle_mask_addr()), noreg);
     __ pshufb(xmm_curr_counter, xmm_counter_shuf_mask); //counter is shuffled back.
     __ movdqu(Address(counter, 0), xmm_curr_counter); //save counter back
     handleSOERegisters(false /*restoring*/);
@@ -3326,14 +3326,14 @@ class StubGenerator: public StubCodeGenerator {
     __ movptr(blocks, blocks_param);
 
     __ movdqu(xmm_temp0, Address(state, 0));
-    __ pshufb(xmm_temp0, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()));
+    __ pshufb(xmm_temp0, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), noreg);
 
     __ movdqu(xmm_temp1, Address(subkeyH, 0));
-    __ pshufb(xmm_temp1, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()));
+    __ pshufb(xmm_temp1, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), noreg);
 
     __ BIND(L_ghash_loop);
     __ movdqu(xmm_temp2, Address(data, 0));
-    __ pshufb(xmm_temp2, ExternalAddress(StubRoutines::x86::ghash_byte_swap_mask_addr()));
+    __ pshufb(xmm_temp2, ExternalAddress(StubRoutines::x86::ghash_byte_swap_mask_addr()), noreg);
 
     __ pxor(xmm_temp0, xmm_temp2);
 
@@ -3419,7 +3419,7 @@ class StubGenerator: public StubCodeGenerator {
 
     __ BIND(L_exit);
        // Byte swap 16-byte result
-    __ pshufb(xmm_temp6, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()));
+    __ pshufb(xmm_temp6, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), noreg);
     __ movdqu(Address(state, 0), xmm_temp6);   // store the result
 
     handleSOERegisters(false);  // restore registers
@@ -3927,7 +3927,7 @@ class StubGenerator: public StubCodeGenerator {
     }
 
     // Set up last_Java_sp and last_Java_fp
-    __ set_last_Java_frame(java_thread, rsp, rbp, NULL);
+    __ set_last_Java_frame(java_thread, rsp, rbp, NULL, noreg);
 
     // Call runtime
     BLOCK_COMMENT("call runtime_entry");
@@ -3941,7 +3941,7 @@ class StubGenerator: public StubCodeGenerator {
     // however can use the register value directly if it is callee saved.
     __ get_thread(java_thread);
 
-    __ reset_last_Java_frame(java_thread, true);
+    __ reset_last_Java_frame(java_thread, true, noreg);
 
     __ leave(); // required for proper stackwalking of RuntimeStub frame
 
@@ -3953,7 +3953,7 @@ class StubGenerator: public StubCodeGenerator {
     __ should_not_reach_here();
     __ bind(L);
 #endif /* ASSERT */
-    __ jump(RuntimeAddress(StubRoutines::forward_exception_entry()));
+    __ jump(RuntimeAddress(StubRoutines::forward_exception_entry()), noreg);
 
 
     RuntimeStub* stub = RuntimeStub::new_runtime_stub(name, &code, frame_complete, framesize, oop_maps, false);
