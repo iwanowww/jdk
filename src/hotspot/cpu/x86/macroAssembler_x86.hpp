@@ -1084,6 +1084,14 @@ public:
                 Register rax, Register rcx, Register rdx, Register tmp1, Register tmp2,
                 Register tmp3, Register tmp4, Register tmp5);
 #else
+ private:
+  static address ONES;
+  static address L_2IL0FLOATPACKET_0;
+  static address PI4_INV;
+  static address PI4X3;
+  static address PI4X4;
+
+ public:
   void fast_log(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xmm2, XMMRegister xmm3,
                 XMMRegister xmm4, XMMRegister xmm5, XMMRegister xmm6, XMMRegister xmm7,
                 Register rax, Register rcx, Register rdx, Register tmp1);
@@ -1845,20 +1853,9 @@ public:
   void movptr(Register     dst, AddressLiteral src);
   void movptr(Register     dst, intptr_t       src);
   void movptr(Address      dst, Register       src);
-  void movptr(Address      dst, intptr_t       src, Register rscratch);
+  void movptr(Address      dst, intptr_t       imm, Register rscratch);
+  void movptr(Address      dst, int32_t        imm32);
   void movptr(ArrayAddress dst, Register       src, Register rscratch);
-
-#ifdef _LP64
-  // Generally the next two are only used for moving NULL
-  // Although there are situations in initializing the mark word where
-  // they could be used. They are dangerous.
-
-  // They only exist on LP64 so that int32_t and intptr_t are not the same
-  // and we have ambiguous declarations.
-
-  void movptr(Address  dst, int32_t imm32);
-  void movptr(Register dst, int32_t imm32);
-#endif // _LP64
 
   void movptr(Register dst, RegisterOrConstant src) {
     if (src.is_constant()) movptr(dst, src.as_constant());

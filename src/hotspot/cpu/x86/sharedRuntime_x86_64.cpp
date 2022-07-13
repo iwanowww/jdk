@@ -2180,7 +2180,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     // Save pending exception around call to VM (which contains an EXCEPTION_MARK)
     // NOTE that obj_reg == rbx currently
     __ movptr(rbx, Address(r15_thread, in_bytes(Thread::pending_exception_offset())));
-    __ movptr(Address(r15_thread, in_bytes(Thread::pending_exception_offset())), (int32_t)NULL_WORD);
+    __ movptr(Address(r15_thread, in_bytes(Thread::pending_exception_offset())), NULL_WORD);
 
     // args are (oop obj, BasicLock* lock, JavaThread* thread)
     __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_unlocking_C)));
@@ -2347,7 +2347,7 @@ void SharedRuntime::generate_deopt_blob() {
     implicit_exception_uncommon_trap_offset = __ pc() - start;
 
     __ pushptr(Address(r15_thread, in_bytes(JavaThread::jvmci_implicit_exception_pc_offset())));
-    __ movptr(Address(r15_thread, in_bytes(JavaThread::jvmci_implicit_exception_pc_offset())), (int32_t)NULL_WORD);
+    __ movptr(Address(r15_thread, in_bytes(JavaThread::jvmci_implicit_exception_pc_offset())), NULL_WORD);
 
     uncommon_trap_offset = __ pc() - start;
 
@@ -2411,7 +2411,7 @@ void SharedRuntime::generate_deopt_blob() {
 
   __ movptr(rdx, Address(r15_thread, JavaThread::exception_pc_offset()));
   __ movptr(Address(rbp, wordSize), rdx);
-  __ movptr(Address(r15_thread, JavaThread::exception_pc_offset()), (int32_t)NULL_WORD);
+  __ movptr(Address(r15_thread, JavaThread::exception_pc_offset()), NULL_WORD);
 
 #ifdef ASSERT
   // verify that there is really an exception oop in JavaThread
@@ -2473,8 +2473,8 @@ void SharedRuntime::generate_deopt_blob() {
   __ movptr(rax, Address(r15_thread, JavaThread::exception_oop_offset()));
   // QQQ this is useless it was NULL above
   __ movptr(rdx, Address(r15_thread, JavaThread::exception_pc_offset()));
-  __ movptr(Address(r15_thread, JavaThread::exception_oop_offset()), (int32_t)NULL_WORD);
-  __ movptr(Address(r15_thread, JavaThread::exception_pc_offset()), (int32_t)NULL_WORD);
+  __ movptr(Address(r15_thread, JavaThread::exception_oop_offset()), NULL_WORD);
+  __ movptr(Address(r15_thread, JavaThread::exception_pc_offset()), NULL_WORD);
 
   __ verify_oop(rax);
 
@@ -2556,7 +2556,7 @@ void SharedRuntime::generate_deopt_blob() {
   __ enter();                           // Save old & set new ebp
   __ subptr(rsp, rbx);                  // Prolog
   // This value is corrected by layout_activation_impl
-  __ movptr(Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize), (int32_t)NULL_WORD );
+  __ movptr(Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize), NULL_WORD );
   __ movptr(Address(rbp, frame::interpreter_frame_sender_sp_offset * wordSize), sender_sp); // Make it walkable
   __ mov(sender_sp, rsp);               // Pass sender_sp to next frame
   __ addptr(rsi, wordSize);             // Bump array pointer (sizes)
@@ -2757,7 +2757,7 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   __ movptr(Address(rbp, frame::interpreter_frame_sender_sp_offset * wordSize),
             sender_sp);            // Make it walkable
   // This value is corrected by layout_activation_impl
-  __ movptr(Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize), (int32_t)NULL_WORD );
+  __ movptr(Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize), NULL_WORD);
   __ mov(sender_sp, rsp);          // Pass sender_sp to next frame
   __ addptr(rsi, wordSize);        // Bump array pointer (sizes)
   __ addptr(rcx, wordSize);        // Bump array pointer (pcs)

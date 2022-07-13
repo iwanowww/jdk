@@ -177,13 +177,6 @@
 #ifdef _LP64
 // The 64 bit code is at most SSE2 compliant
 
-ATTRIBUTE_ALIGNED(8) juint _ONE[] =
-{
-  0x00000000UL, 0x3ff00000UL
-};
-
-address MacroAssembler::ONE = (address)_ONE;
-
 void MacroAssembler::fast_cos(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xmm2, XMMRegister xmm3,
                               XMMRegister xmm4, XMMRegister xmm5, XMMRegister xmm6, XMMRegister xmm7,
                               Register eax, Register ecx, Register edx, Register r8,
@@ -195,8 +188,6 @@ void MacroAssembler::fast_cos(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
   Label L_2TAG_PACKET_12_0_1, L_2TAG_PACKET_13_0_1, B1_2, B1_4, start;
 
   assert_different_registers(eax, ecx, edx, r8, r9, r10, r11, rscratch);
-
-  address ONE = (address)_ONE;
 
   bind(start);
   push(rbx);

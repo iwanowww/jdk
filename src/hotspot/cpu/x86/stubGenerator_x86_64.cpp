@@ -529,7 +529,7 @@ class StubGenerator: public StubCodeGenerator {
     // make sure this code is only executed if there is a pending exception
     {
       Label L;
-      __ cmpptr(Address(r15_thread, Thread::pending_exception_offset()), (int32_t) NULL);
+      __ cmpptr(Address(r15_thread, Thread::pending_exception_offset()), (int32_t) NULL_WORD);
       __ jcc(Assembler::notEqual, L);
       __ stop("StubRoutines::forward exception: no pending exception (1)");
       __ bind(L);
@@ -547,7 +547,7 @@ class StubGenerator: public StubCodeGenerator {
     // setup rax & rdx, remove return address & clear pending exception
     __ pop(rdx);
     __ movptr(rax, Address(r15_thread, Thread::pending_exception_offset()));
-    __ movptr(Address(r15_thread, Thread::pending_exception_offset()), (int32_t)NULL_WORD);
+    __ movptr(Address(r15_thread, Thread::pending_exception_offset()), NULL_WORD);
 
 #ifdef ASSERT
     // make sure exception is set

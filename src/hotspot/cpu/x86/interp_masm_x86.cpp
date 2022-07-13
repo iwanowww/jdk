@@ -1326,7 +1326,7 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg) {
     movptr(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
 
     // Free entry
-    movptr(Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()), (int32_t)NULL_WORD);
+    movptr(Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()), NULL_WORD);
 
     // Load the old header from BasicLock structure
     movptr(header_reg, Address(swap_reg,

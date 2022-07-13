@@ -283,8 +283,7 @@ void C2_MacroAssembler::rtm_inflated_locking(Register objReg, Register boxReg, R
   Label L_rtm_retry, L_decrement_retry, L_on_abort;
   int owner_offset = OM_OFFSET_NO_MONITOR_VALUE_TAG(owner);
 
-  // Without cast to int32_t this style of movptr will destroy r10 which is typically obj.
-  movptr(Address(boxReg, 0), (int32_t)intptr_t(markWord::unused_mark().value()));
+  movptr(Address(boxReg, 0), markWord::unused_mark().value());
   movptr(boxReg, tmpReg); // Save ObjectMonitor address
 
   if (RTMRetryCount > 0) {
@@ -564,8 +563,7 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
   lock();
   cmpxchgptr(r15_thread, Address(scrReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)));
   // Unconditionally set box->_displaced_header = markWord::unused_mark().
-  // Without cast to int32_t this style of movptr will destroy r10 which is typically obj.
-  movptr(Address(boxReg, 0), (int32_t)intptr_t(markWord::unused_mark().value()));
+  movptr(Address(boxReg, 0), markWord::unused_mark().value());
   // Propagate ICC.ZF from CAS above into DONE_LABEL.
   jcc(Assembler::equal, DONE_LABEL);           // CAS above succeeded; propagate ZF = 1 (success)
 
@@ -732,8 +730,7 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
   movptr(boxReg, Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(cxq)));
   orptr(boxReg, Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(EntryList)));
   jccb  (Assembler::notZero, CheckSucc);
-  // Without cast to int32_t this style of movptr will destroy r10 which is typically obj.
-  movptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), (int32_t)NULL_WORD);
+  movptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), NULL_WORD);
   jmpb  (DONE_LABEL);
 
   // Try to avoid passing control into the slow_path ...
@@ -747,8 +744,7 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
   jccb  (Assembler::zero, LGoSlowPath);
 
   xorptr(boxReg, boxReg);
-  // Without cast to int32_t this style of movptr will destroy r10 which is typically obj.
-  movptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), (int32_t)NULL_WORD);
+  movptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), NULL_WORD);
 
   // Memory barrier/fence
   // Dekker pivot point -- fulcrum : ST Owner; MEMBAR; LD Succ
