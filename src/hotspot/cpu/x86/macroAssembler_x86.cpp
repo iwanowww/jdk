@@ -338,23 +338,13 @@ void MacroAssembler::movptr(Register dst, ArrayAddress src) {
 }
 
 // src should NEVER be a real pointer. Use AddressLiteral for true pointers
-void MacroAssembler::movptr(Address dst, intptr_t src, Register rscratch) {
+void MacroAssembler::movptr(Address dst, intptr_t imm, Register rscratch) {
   assert(rscratch == noreg, "not used");
-  movl(dst, src);
+  movl(dst, imm);
 }
 
-void MacroAssembler::pop_callee_saved_registers() {
-  pop(rcx);
-  pop(rdx);
-  pop(rdi);
-  pop(rsi);
-}
-
-void MacroAssembler::push_callee_saved_registers() {
-  push(rsi);
-  push(rdi);
-  push(rdx);
-  push(rcx);
+void MacroAssembler::movptr(Address dst, int32_t imm32) {
+  movptr(dst, imm32, noreg);
 }
 
 void MacroAssembler::pushoop(jobject obj, Register rscratch) {
@@ -729,11 +719,6 @@ void MacroAssembler::movptr(Address dst, intptr_t src, Register rscratch) {
 // These are mostly for initializing NULL
 void MacroAssembler::movptr(Address dst, int32_t src) {
   movslq(dst, src);
-}
-
-// It is used mostly for initializing NULL
-void MacroAssembler::movptr(Register dst, int32_t src) {
-  mov64(dst, (intptr_t)src);
 }
 
 void MacroAssembler::pushoop(jobject obj, Register rscratch) {

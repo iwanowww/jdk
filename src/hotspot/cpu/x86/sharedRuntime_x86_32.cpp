@@ -1667,7 +1667,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   // argument registers at this point (what if we save/restore them there are no oop?
 
   {
-    SkipIfEqual skip_if(masm, &DTraceMethodProbes, 0);
+    SkipIfEqual skip_if(masm, &DTraceMethodProbes, 0, noreg);
     __ mov_metadata(rax, method());
     __ call_VM_leaf(
          CAST_FROM_FN_PTR(address, SharedRuntime::dtrace_method_entry),
@@ -1903,7 +1903,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   }
 
   {
-    SkipIfEqual skip_if(masm, &DTraceMethodProbes, 0);
+    SkipIfEqual skip_if(masm, &DTraceMethodProbes, 0, noreg);
     // Tell dtrace about this method exit
     save_native_result(masm, ret_type, stack_slots);
     __ mov_metadata(rax, method());

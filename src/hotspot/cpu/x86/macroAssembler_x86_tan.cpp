@@ -1020,6 +1020,7 @@ void MacroAssembler::fast_tan(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
 }
 #else
 // The 32 bit code is at most SSE2 compliant
+
 ATTRIBUTE_ALIGNED(16) jushort _TP[] =
 {
     0x4cd6, 0xaf6c, 0xc710, 0xc662, 0xbffd, 0x0000, 0x4b06, 0xb0ac, 0xd3b2, 0xcc2c,
@@ -1054,11 +1055,6 @@ void MacroAssembler::libm_tancot_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
 
   assert_different_registers(ebx, eax, ecx, edx, esi, edi, ebp, esp);
 
-  address L_2il0floatpacket_0 = StubRoutines::x86::_L_2il0floatpacket_0_addr();
-  address Pi4Inv = StubRoutines::x86::_Pi4Inv_addr();
-  address Pi4x3 = StubRoutines::x86::_Pi4x3_addr();
-  address Pi4x4 = StubRoutines::x86::_Pi4x4_addr();
-  address ones = StubRoutines::x86::_ones_addr();
   address TP = (address)_TP;
   address TQ = (address)_TQ;
   address GP = (address)_GP;
@@ -1092,9 +1088,9 @@ void MacroAssembler::libm_tancot_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   movzwl(ecx, Address(esp, 38));
   movl(edx, ecx);
   andl(edx, 768);
-  andps(xmm1, ExternalAddress(L_2il0floatpacket_0), noreg);    //0xffffffffUL, 0x7fffffffUL, 0x00000000UL, 0x00000000UL
+  andps(xmm1, ExternalAddress(L_2IL0FLOATPACKET_0), noreg);    //0xffffffffUL, 0x7fffffffUL, 0x00000000UL, 0x00000000UL
   cmpl(edx, 768);
-  movsd(xmm0, ExternalAddress(Pi4Inv), noreg);    ////0x6dc9c883UL, 0x3ff45f30UL
+  movsd(xmm0, ExternalAddress(PI4_INV), noreg);    ////0x6dc9c883UL, 0x3ff45f30UL
   mulsd(xmm0, xmm1);
   movsd(Address(ebp, 8), xmm1);
   movsd(Address(esp, 0), xmm0);
@@ -1149,28 +1145,28 @@ void MacroAssembler::libm_tancot_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   jcc(Assembler::aboveEqual, B1_10);
 
   bind(B1_9);
-  fld_d(ExternalAddress(Pi4x3));    //0x54443000UL, 0xbfe921fbUL
+  fld_d(ExternalAddress(PI4X3));    //0x54443000UL, 0xbfe921fbUL
   fmul(1);
   faddp(2);
-  fld_d(ExternalAddress(8 + Pi4x3));    //0x3b39a000UL, 0x3d373dcbUL
+  fld_d(ExternalAddress(8 + PI4X3));    //0x3b39a000UL, 0x3d373dcbUL
   fmul(1);
   faddp(2);
-  fld_d(ExternalAddress(16 + Pi4x3));    //0xe0e68948UL, 0xba845c06UL
+  fld_d(ExternalAddress(16 + PI4X3));    //0xe0e68948UL, 0xba845c06UL
   fmulp(1);
   faddp(1);
   jmp(B1_17);
 
   bind(B1_10);
-  fld_d(ExternalAddress(Pi4x4));    //0x54400000UL, 0xbfe921fbUL
+  fld_d(ExternalAddress(PI4X4));    //0x54400000UL, 0xbfe921fbUL
   fmul(1);
   faddp(2);
-  fld_d(ExternalAddress(8 + Pi4x4));    //0x1a600000UL, 0xbdc0b461UL
+  fld_d(ExternalAddress(8 + PI4X4));    //0x1a600000UL, 0xbdc0b461UL
   fmul(1);
   faddp(2);
-  fld_d(ExternalAddress(16 + Pi4x4));    //0x2e000000UL, 0xbb93198aUL
+  fld_d(ExternalAddress(16 + PI4X4));    //0x2e000000UL, 0xbb93198aUL
   fmul(1);
   faddp(2);
-  fld_d(ExternalAddress(24 + Pi4x4));    //0x252049c1UL, 0xb96b839aUL
+  fld_d(ExternalAddress(24 + PI4X4));    //0x252049c1UL, 0xb96b839aUL
   fmulp(1);
   faddp(1);
   jmp(B1_17);
@@ -1195,7 +1191,7 @@ void MacroAssembler::libm_tancot_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   bind(B1_15);
   movsd(xmm0, Address(ebp, 8));
   addl(esp, -32);
-  andps(xmm0, ExternalAddress(L_2il0floatpacket_0), noreg);    //0xffffffffUL, 0x7fffffffUL, 0x00000000UL, 0x00000000UL
+  andps(xmm0, ExternalAddress(L_2IL0FLOATPACKET_0), noreg);    //0xffffffffUL, 0x7fffffffUL, 0x00000000UL, 0x00000000UL
   lea(eax, Address(esp, 32));
   movsd(Address(eax, 16), xmm0);
   fld_d(Address(eax, 16));
@@ -1220,7 +1216,7 @@ void MacroAssembler::libm_tancot_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   jcc(Assembler::notEqual, B1_24);
 
   bind(B1_18);
-  fld_d(ExternalAddress(ones));
+  fld_d(ExternalAddress(ONES));
   incl(edx);
   fdiv(1);
   testb(edx, 2);
@@ -1306,7 +1302,7 @@ void MacroAssembler::libm_tancot_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   xorl(eax, 1);
   fxch(2);
   fmul(3);
-  fld_d(Address(ones, RelocationHolder::none).plus_disp(eax, Address::times_8));
+  fld_d(Address(ONES, RelocationHolder::none).plus_disp(eax, Address::times_8));
   fmula(2);
   fmula(3);
   fxch(3);
@@ -1328,7 +1324,7 @@ void MacroAssembler::libm_tancot_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   fxch(1);
   fmul(2);
   movl(eax, Address(esp, 44));
-  fld_d(Address(ones, RelocationHolder::none).plus_disp(eax, Address::times_8));
+  fld_d(Address(ONES, RelocationHolder::none).plus_disp(eax, Address::times_8));
   fmula(1);
   fmula(3);
   fxch(3);
@@ -1373,7 +1369,7 @@ void MacroAssembler::libm_tancot_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   jcc(Assembler::equal, B1_27);
 
   bind(B1_26);
-  fld_d(ExternalAddress(ones));
+  fld_d(ExternalAddress(ONES));
   fdiv(2);
   fld_s(1);
   fmul(2);
@@ -1425,7 +1421,7 @@ void MacroAssembler::libm_tancot_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   fmulp(3);
   fxch(1);
   faddp(2);
-  fld_d(Address(ones, RelocationHolder::none).plus_disp(eax, Address::times_8));
+  fld_d(Address(ONES, RelocationHolder::none).plus_disp(eax, Address::times_8));
   fmula(2);
   fmulp(1);
   faddp(1);
@@ -1459,7 +1455,7 @@ void MacroAssembler::libm_tancot_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   fdivrp(1);
   fmulp(1);
   fmul(1);
-  fld_d(Address(ones, RelocationHolder::none).plus_disp(eax, Address::times_8));
+  fld_d(Address(ONES, RelocationHolder::none).plus_disp(eax, Address::times_8));
   fmula(1);
   fmulp(2);
   faddp(1);
@@ -1522,7 +1518,7 @@ void MacroAssembler::libm_tancot_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   fdivrp(1);
   fmulp(1);
   fmul(1);
-  fld_d(Address(ones, RelocationHolder::none).plus_disp(eax, Address::times_8));
+  fld_d(Address(ONES, RelocationHolder::none).plus_disp(eax, Address::times_8));
   fmula(1);
   fmulp(2);
   faddp(1);
@@ -1531,7 +1527,7 @@ void MacroAssembler::libm_tancot_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   jmp(B1_35);
 
   bind(B1_34);
-  fld_d(ExternalAddress(ones));
+  fld_d(ExternalAddress(ONES));
   fdiv(2);
   fld_s(1);
   fmul(2);
@@ -1582,7 +1578,7 @@ void MacroAssembler::libm_tancot_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   fmulp(3);
   fxch(1);
   faddp(2);
-  fld_d(Address(ones, RelocationHolder::none).plus_disp(eax, Address::times_8));
+  fld_d(Address(ONES, RelocationHolder::none).plus_disp(eax, Address::times_8));
   fmula(2);
   fmulp(1);
   faddp(1);

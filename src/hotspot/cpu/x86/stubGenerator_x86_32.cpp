@@ -4011,7 +4011,7 @@ class StubGenerator: public StubCodeGenerator {
   static void jfr_prologue(address the_pc, MacroAssembler* masm) {
     Register java_thread = rdi;
     __ get_thread(java_thread);
-    __ set_last_Java_frame(java_thread, rsp, rbp, the_pc);
+    __ set_last_Java_frame(java_thread, rsp, rbp, the_pc, noreg);
     __ movptr(Address(rsp, 0), java_thread);
   }
 
@@ -4019,7 +4019,7 @@ class StubGenerator: public StubCodeGenerator {
   static void jfr_epilogue(MacroAssembler* masm) {
     Register java_thread = rdi;
     __ get_thread(java_thread);
-    __ reset_last_Java_frame(java_thread, true);
+    __ reset_last_Java_frame(java_thread, true, noreg);
     Label null_jobject;
     __ testptr(rax, rax);
     __ jcc(Assembler::zero, null_jobject);
@@ -4118,15 +4118,6 @@ class StubGenerator: public StubCodeGenerator {
       StubRoutines::_updateBytesCRC32C = generate_updateBytesCRC32C(supports_clmul);
     }
     if (VM_Version::supports_sse2() && UseLibmIntrinsic && InlineIntrinsics) {
-      if (vmIntrinsics::is_intrinsic_available(vmIntrinsics::_dsin) ||
-          vmIntrinsics::is_intrinsic_available(vmIntrinsics::_dcos) ||
-          vmIntrinsics::is_intrinsic_available(vmIntrinsics::_dtan)) {
-        StubRoutines::x86::_L_2il0floatpacket_0_adr = (address)StubRoutines::x86::_L_2il0floatpacket_0;
-        StubRoutines::x86::_Pi4Inv_adr = (address)StubRoutines::x86::_Pi4Inv;
-        StubRoutines::x86::_Pi4x3_adr = (address)StubRoutines::x86::_Pi4x3;
-        StubRoutines::x86::_Pi4x4_adr = (address)StubRoutines::x86::_Pi4x4;
-        StubRoutines::x86::_ones_adr = (address)StubRoutines::x86::_ones;
-      }
       if (vmIntrinsics::is_intrinsic_available(vmIntrinsics::_dexp)) {
         StubRoutines::_dexp = generate_libmExp();
       }
