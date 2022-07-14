@@ -718,26 +718,27 @@ public:
   // Arithmetics
 
 
-  void addptr(Address dst, int32_t src) { LP64_ONLY(addq(dst, src)) NOT_LP64(addl(dst, src)) ; }
   void addptr(Address dst, Register src);
 
   void addptr(Register dst, Address src) { LP64_ONLY(addq(dst, src)) NOT_LP64(addl(dst, src)); }
-  void addptr(Register dst, int32_t src);
   void addptr(Register dst, Register src);
   void addptr(Register dst, RegisterOrConstant src) {
     if (src.is_constant()) addptr(dst, (int) src.as_constant());
     else                   addptr(dst,       src.as_register());
   }
 
-  void andptr(Register dst, int32_t src);
+  void addptr(Register dst, intptr_t imm32) { LP64_ONLY(addq(dst, checked_cast<int32_t>(imm32))) NOT_LP64(addl(dst, imm32)); }
+  void addptr(Address  dst, intptr_t imm32) { LP64_ONLY(addq(dst, checked_cast<int32_t>(imm32))) NOT_LP64(addl(dst, imm32)); }
+
+  void andptr(Register dst, intptr_t imm32) { LP64_ONLY(andq(dst, checked_cast<int32_t>(imm32))) NOT_LP64(andl(dst, imm32)); }
+
   void andptr(Register src1, Register src2) { LP64_ONLY(andq(src1, src2)) NOT_LP64(andl(src1, src2)) ; }
 
   void cmp8(AddressLiteral src1, int imm, Register rscratch);
 
-  // renamed to drag out the casting of address to int32_t/intptr_t
-  void cmp32(Register src1, int32_t imm);
+  void cmp32(Register src1, intptr_t imm32);
 
-  void cmp32(AddressLiteral src1, int32_t imm, Register rscratch);
+  void cmp32(AddressLiteral src1, intptr_t imm32, Register rscratch);
   // compare reg - mem, or reg - &mem
   void cmp32(Register src1, AddressLiteral src2, Register rscratch);
 
@@ -762,8 +763,8 @@ public:
   void cmpptr(Register src1, Address src2) { LP64_ONLY(cmpq(src1, src2)) NOT_LP64(cmpl(src1, src2)) ; }
   // void cmpptr(Address src1, Register src2) { LP64_ONLY(cmpq(src1, src2)) NOT_LP64(cmpl(src1, src2)) ; }
 
-  void cmpptr(Register src1, int32_t src2) { LP64_ONLY(cmpq(src1, src2)) NOT_LP64(cmpl(src1, src2)) ; }
-  void cmpptr(Address src1, int32_t src2) { LP64_ONLY(cmpq(src1, src2)) NOT_LP64(cmpl(src1, src2)) ; }
+  void cmpptr(Register src1, intptr_t imm32) { LP64_ONLY(cmpq(src1, checked_cast<int32_t>(imm32))) NOT_LP64(cmpl(src1, imm32)); }
+  void cmpptr(Address  src1, intptr_t imm32) { LP64_ONLY(cmpq(src1, checked_cast<int32_t>(imm32))) NOT_LP64(cmpl(src1, imm32)); }
 
   // cmp64 to avoild hiding cmpq
   void cmp64(Register src1, AddressLiteral src, Register rscratch);
@@ -774,36 +775,38 @@ public:
 
 
   void imulptr(Register dst, Register src) { LP64_ONLY(imulq(dst, src)) NOT_LP64(imull(dst, src)); }
-  void imulptr(Register dst, Register src, int imm32) { LP64_ONLY(imulq(dst, src, imm32)) NOT_LP64(imull(dst, src, imm32)); }
+  void imulptr(Register dst, Register src, intptr_t imm32) {
+    LP64_ONLY(imulq(dst, src, checked_cast<int32_t>(imm32))) NOT_LP64(imull(dst, src, imm32));
+  }
 
 
   void negptr(Register dst) { LP64_ONLY(negq(dst)) NOT_LP64(negl(dst)); }
 
   void notptr(Register dst) { LP64_ONLY(notq(dst)) NOT_LP64(notl(dst)); }
 
-  void shlptr(Register dst, int32_t shift);
+  void shlptr(Register dst, intptr_t imm8);
   void shlptr(Register dst) { LP64_ONLY(shlq(dst)) NOT_LP64(shll(dst)); }
 
-  void shrptr(Register dst, int32_t shift);
+  void shrptr(Register dst, intptr_t imm8);
   void shrptr(Register dst) { LP64_ONLY(shrq(dst)) NOT_LP64(shrl(dst)); }
 
   void sarptr(Register dst) { LP64_ONLY(sarq(dst)) NOT_LP64(sarl(dst)); }
-  void sarptr(Register dst, int32_t src) { LP64_ONLY(sarq(dst, src)) NOT_LP64(sarl(dst, src)); }
+  void sarptr(Register dst, intptr_t imm32) { LP64_ONLY(sarq(dst, checked_cast<int32_t>(imm32))) NOT_LP64(sarl(dst, imm32)); }
 
-  void subptr(Address dst, int32_t src) { LP64_ONLY(subq(dst, src)) NOT_LP64(subl(dst, src)); }
+  void subptr(Address dst, intptr_t imm32) { LP64_ONLY(subq(dst, checked_cast<int32_t>(imm32))) NOT_LP64(subl(dst, imm32)); }
 
   void subptr(Register dst, Address src) { LP64_ONLY(subq(dst, src)) NOT_LP64(subl(dst, src)); }
-  void subptr(Register dst, int32_t src);
+  void subptr(Register dst, intptr_t imm32);
   // Force generation of a 4 byte immediate value even if it fits into 8bit
-  void subptr_imm32(Register dst, int32_t src);
+  void subptr_imm32(Register dst, intptr_t imm32);
   void subptr(Register dst, Register src);
   void subptr(Register dst, RegisterOrConstant src) {
     if (src.is_constant()) subptr(dst, (int) src.as_constant());
     else                   subptr(dst,       src.as_register());
   }
 
-  void sbbptr(Address dst, int32_t src) { LP64_ONLY(sbbq(dst, src)) NOT_LP64(sbbl(dst, src)); }
-  void sbbptr(Register dst, int32_t src) { LP64_ONLY(sbbq(dst, src)) NOT_LP64(sbbl(dst, src)); }
+  void sbbptr(Address  dst, intptr_t imm32) { LP64_ONLY(sbbq(dst, checked_cast<int32_t>(imm32))) NOT_LP64(sbbl(dst, imm32)); }
+  void sbbptr(Register dst, intptr_t imm32) { LP64_ONLY(sbbq(dst, checked_cast<int32_t>(imm32))) NOT_LP64(sbbl(dst, imm32)); }
 
   void xchgptr(Register src1, Register src2) { LP64_ONLY(xchgq(src1, src2)) NOT_LP64(xchgl(src1, src2)) ; }
   void xchgptr(Register src1, Address src2) { LP64_ONLY(xchgq(src1, src2)) NOT_LP64(xchgl(src1, src2)) ; }
@@ -836,14 +839,14 @@ public:
   using Assembler::testl;
   void testl(Register dst, AddressLiteral src); // src should be reachable
 
-  void orptr(Register dst, Address src) { LP64_ONLY(orq(dst, src)) NOT_LP64(orl(dst, src)); }
-  void orptr(Register dst, Register src) { LP64_ONLY(orq(dst, src)) NOT_LP64(orl(dst, src)); }
-  void orptr(Register dst, int32_t src) { LP64_ONLY(orq(dst, src)) NOT_LP64(orl(dst, src)); }
-  void orptr(Address dst, int32_t imm32) { LP64_ONLY(orq(dst, imm32)) NOT_LP64(orl(dst, imm32)); }
+  void orptr(Register dst, Address    src) { LP64_ONLY(orq(dst, src)) NOT_LP64(orl(dst, src)); }
+  void orptr(Register dst, Register   src) { LP64_ONLY(orq(dst, src)) NOT_LP64(orl(dst, src)); }
+  void orptr(Register dst, intptr_t imm32) { LP64_ONLY(orq(dst, checked_cast<int32_t>(imm32))) NOT_LP64(orl(dst, imm32)); }
+  void orptr(Address  dst, intptr_t imm32) { LP64_ONLY(orq(dst, checked_cast<int32_t>(imm32))) NOT_LP64(orl(dst, imm32)); }
 
-  void testptr(Register src, int32_t imm32) {  LP64_ONLY(testq(src, imm32)) NOT_LP64(testl(src, imm32)); }
-  void testptr(Register src1, Address src2) { LP64_ONLY(testq(src1, src2)) NOT_LP64(testl(src1, src2)); }
-  void testptr(Register src1, Register src2);
+  void testptr(Register  src, intptr_t imm32) { LP64_ONLY(testq(src, checked_cast<int32_t>(imm32))) NOT_LP64(testl(src, imm32)); }
+  void testptr(Register src1, Address   src2) { LP64_ONLY(testq(src1, src2)) NOT_LP64(testl(src1, src2)); }
+  void testptr(Register src1, Register  src2);
 
   void xorptr(Register dst, Register src) { LP64_ONLY(xorq(dst, src)) NOT_LP64(xorl(dst, src)); }
   void xorptr(Register dst, Address src) { LP64_ONLY(xorq(dst, src)) NOT_LP64(xorl(dst, src)); }
@@ -1851,8 +1854,9 @@ public:
   void movptr(Register     dst, intptr_t       src);
   void movptr(Address      dst, Register       src);
   void movptr(Address      dst, intptr_t       imm, Register rscratch);
-  void movptr(Address      dst, int32_t        imm32);
   void movptr(ArrayAddress dst, Register       src, Register rscratch);
+
+  void movptr(Address dst, intptr_t imm32);
 
   void movptr(Register dst, RegisterOrConstant src) {
     if (src.is_constant()) movptr(dst, src.as_constant());

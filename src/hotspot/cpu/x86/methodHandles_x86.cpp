@@ -672,7 +672,8 @@ void MethodHandles::trace_method_handle(MacroAssembler* _masm, const char* adapt
   __ push(rbx);               // pusha saved_regs
   __ push(rcx);               // mh
   __ push(rcx);               // slot for adaptername
-  __ movptr(Address(rsp, 0), (intptr_t) adaptername);
+  __ movptr(Address(rsp, 0), (intptr_t) adaptername, rscratch1);
+  //__ movptr_imm32(Address(rsp, 0), (intptr_t) adaptername);
   __ super_call_VM_leaf(CAST_FROM_FN_PTR(address, trace_method_handle_stub_wrapper), rsp);
   __ increment(rsp, sizeof(MethodHandleStubArguments));
 

@@ -288,7 +288,7 @@ address TemplateInterpreterGenerator::generate_deopt_entry_for(TosState state, i
   // handle exceptions
   {
     Label L;
-    __ cmpptr(Address(thread, Thread::pending_exception_offset()), (int32_t) NULL_WORD);
+    __ cmpptr(Address(thread, Thread::pending_exception_offset()), NULL_WORD);
     __ jcc(Assembler::zero, L);
     __ call_VM(noreg,
                CAST_FROM_FN_PTR(address,
@@ -509,7 +509,7 @@ void TemplateInterpreterGenerator::generate_stack_overflow_check(void) {
 #ifdef ASSERT
   Label limit_okay;
   // Verify that thread stack overflow limit is non-zero.
-  __ cmpptr(stack_limit, (int32_t)NULL_WORD);
+  __ cmpptr(stack_limit, NULL_WORD);
   __ jcc(Assembler::notEqual, limit_okay);
   __ stop("stack overflow limit is zero");
   __ bind(limit_okay);
@@ -751,13 +751,13 @@ void TemplateInterpreterGenerator::bang_stack_shadow_pages(bool native_call) {
 
 #ifdef ASSERT
   Label L_good_limit;
-  __ cmpptr(Address(thread, JavaThread::shadow_zone_safe_limit()), (int32_t)NULL_WORD);
+  __ cmpptr(Address(thread, JavaThread::shadow_zone_safe_limit()), NULL_WORD);
   __ jcc(Assembler::notEqual, L_good_limit);
   __ stop("shadow zone safe limit is not initialized");
   __ bind(L_good_limit);
 
   Label L_good_watermark;
-  __ cmpptr(Address(thread, JavaThread::shadow_zone_growth_watermark()), (int32_t)NULL_WORD);
+  __ cmpptr(Address(thread, JavaThread::shadow_zone_growth_watermark()), NULL_WORD);
   __ jcc(Assembler::notEqual, L_good_watermark);
   __ stop("shadow zone growth watermark is not initialized");
   __ bind(L_good_watermark);
@@ -1215,7 +1215,7 @@ address TemplateInterpreterGenerator::generate_native_entry(bool synchronized) {
   // handle exceptions (exception handling will handle unlocking!)
   {
     Label L;
-    __ cmpptr(Address(thread, Thread::pending_exception_offset()), (int32_t) NULL_WORD);
+    __ cmpptr(Address(thread, Thread::pending_exception_offset()), NULL_WORD);
     __ jcc(Assembler::zero, L);
     // Note: At some point we may want to unify this with the code
     // used in call_VM_base(); i.e., we should use the

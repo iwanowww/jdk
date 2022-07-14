@@ -266,7 +266,7 @@ void InterpreterMacroAssembler::call_VM_leaf_base(address entry_point,
 #ifdef ASSERT
   {
     Label L;
-    cmpptr(Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize), (int32_t)NULL_WORD);
+    cmpptr(Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize), NULL_WORD);
     jcc(Assembler::equal, L);
     stop("InterpreterMacroAssembler::call_VM_leaf_base:"
          " last_sp != NULL");
@@ -298,7 +298,7 @@ void InterpreterMacroAssembler::call_VM_base(Register oop_result,
 #ifdef ASSERT
   {
     Label L;
-    cmpptr(Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize), (int32_t)NULL_WORD);
+    cmpptr(Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize), NULL_WORD);
     jcc(Assembler::equal, L);
     stop("InterpreterMacroAssembler::call_VM_base:"
          " last_sp != NULL");
@@ -838,10 +838,8 @@ void InterpreterMacroAssembler::dispatch_base(TosState state,
     Label L;
     mov(rcx, rbp);
     subptr(rcx, rsp);
-    int32_t min_frame_size =
-      (frame::link_offset - frame::interpreter_frame_initial_sp_offset) *
-      wordSize;
-    cmpptr(rcx, (int32_t)min_frame_size);
+    int32_t min_frame_size = (frame::link_offset - frame::interpreter_frame_initial_sp_offset) * wordSize;
+    cmpptr(rcx, min_frame_size);
     jcc(Assembler::greaterEqual, L);
     stop("broken stack frame");
     bind(L);
@@ -1120,7 +1118,7 @@ void InterpreterMacroAssembler::remove_activation(
 
     bind(loop);
     // check if current entry is used
-    cmpptr(Address(rmon, BasicObjectLock::obj_offset_in_bytes()), (int32_t) NULL_WORD);
+    cmpptr(Address(rmon, BasicObjectLock::obj_offset_in_bytes()), NULL_WORD);
     jcc(Assembler::notEqual, exception);
 
     addptr(rmon, entry_size); // otherwise advance to next entry
@@ -1455,11 +1453,11 @@ void InterpreterMacroAssembler::increment_mdp_data_at(Address data,
 
   if (decrement) {
     // Decrement the register.  Set condition codes.
-    addptr(data, (int32_t) -DataLayout::counter_increment);
+    addptr(data, -DataLayout::counter_increment);
     // If the decrement causes the counter to overflow, stay negative
     Label L;
     jcc(Assembler::negative, L);
-    addptr(data, (int32_t) DataLayout::counter_increment);
+    addptr(data, DataLayout::counter_increment);
     bind(L);
   } else {
     assert(DataLayout::counter_increment == 1,
@@ -1467,7 +1465,7 @@ void InterpreterMacroAssembler::increment_mdp_data_at(Address data,
     // Increment the register.  Set carry flag.
     addptr(data, DataLayout::counter_increment);
     // If the increment causes the counter to overflow, pull back by 1.
-    sbbptr(data, (int32_t)0);
+    sbbptr(data, 0);
   }
 }
 

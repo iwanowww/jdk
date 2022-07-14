@@ -622,7 +622,7 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
     // Locked by current thread if difference with current SP is less than one page.
     subptr(tmpReg, rsp);
     // Next instruction set ZFlag == 1 (Success) if difference is less then one page.
-    andptr(tmpReg, (int32_t) (NOT_LP64(0xFFFFF003) LP64_ONLY(7 - os::vm_page_size())) );
+    andptr(tmpReg, NOT_LP64(0xFFFFF003) LP64_ONLY(7 - os::vm_page_size()));
     movptr(Address(boxReg, 0), tmpReg);
   } else {
     // Clear ZF so that we take the slow path at the DONE label. objReg is known to be not 0.
@@ -786,7 +786,7 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
 #endif
 
   if (!UseHeavyMonitors) {
-    cmpptr(Address(boxReg, 0), (int32_t)NULL_WORD);                   // Examine the displaced header
+    cmpptr(Address(boxReg, 0), NULL_WORD);                            // Examine the displaced header
     jcc   (Assembler::zero, COUNT);                                   // 0 indicates recursive stack-lock
   }
   movptr(tmpReg, Address(objReg, oopDesc::mark_offset_in_bytes()));   // Examine the object's markword
@@ -885,7 +885,7 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
   // Effectively: if (succ == null) goto slow path
   // The code reduces the window for a race, however,
   // and thus benefits performance.
-  cmpptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(succ)), (int32_t)NULL_WORD);
+  cmpptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(succ)), NULL_WORD);
   jccb  (Assembler::zero, LGoSlowPath);
 
   xorptr(boxReg, boxReg);
@@ -900,7 +900,7 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
   // (mov box,0; xchgq box, &m->Owner; LD _succ) .
   lock(); addl(Address(rsp, 0), 0);
 
-  cmpptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(succ)), (int32_t)NULL_WORD);
+  cmpptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(succ)), NULL_WORD);
   jccb  (Assembler::notZero, LSuccess);
 
   // Rare inopportune interleaving - race.
@@ -2653,7 +2653,7 @@ void C2_MacroAssembler::string_indexofC8(Register str1, Register str2,
     cmpl(cnt1, cnt2);
     jcc(Assembler::negative, RET_NOT_FOUND);  // Left less then substring
 
-    addptr(result, (1<<scale1));
+    addptr(result, (1ULL << scale1));
 
   } // (int_cnt2 > 8)
 
@@ -2959,7 +2959,7 @@ void C2_MacroAssembler::string_indexof(Register str1, Register str2,
     cmpl(cnt1, cnt2);
     jcc(Assembler::negative, RET_NOT_FOUND);  // Left less then substring
 
-    addptr(result, (1<<scale1));
+    addptr(result, (1ULL << scale1));
   } // non constant
 
   // Scan string for start of substr in 16-byte vectors

@@ -707,18 +707,19 @@ void MacroAssembler::movptr(Register dst, ArrayAddress src) {
 }
 
 // src should NEVER be a real pointer. Use AddressLiteral for true pointers
-void MacroAssembler::movptr(Address dst, intptr_t src, Register rscratch) {
-  if (is_simm32(src)) {
-    movptr(dst, checked_cast<int32_t>(src));
+void MacroAssembler::movptr(Address dst, intptr_t imm, Register rscratch) {
+  if (is_simm32(imm)) {
+    movslq(dst, imm); 
   } else {
-    mov64(rscratch, src);
+    assert(rscratch != noreg, "");
+    mov64(rscratch, imm);
     movq(dst, rscratch);
   }
 }
 
 // These are mostly for initializing NULL
-void MacroAssembler::movptr(Address dst, int32_t src) {
-  movslq(dst, src);
+void MacroAssembler::movptr(Address dst, intptr_t imm32) {
+  movptr(dst, checked_cast<int32_t>(imm32), noreg);
 }
 
 void MacroAssembler::pushoop(jobject obj, Register rscratch) {
@@ -1083,7 +1084,7 @@ void MacroAssembler::object_move(OopMap* map,
       *receiver_offset = (offset_in_older_frame + framesize_in_slots) * VMRegImpl::stack_slot_size;
     }
 
-    cmpptr(Address(rbp, reg2offset_in(src.first())), (int32_t)NULL_WORD);
+    cmpptr(Address(rbp, reg2offset_in(src.first())), NULL_WORD);
     lea(rHandle, Address(rbp, reg2offset_in(src.first())));
     // conditionally move a NULL
     cmovptr(Assembler::equal, rHandle, Address(rbp, reg2offset_in(src.first())));
@@ -1119,7 +1120,7 @@ void MacroAssembler::object_move(OopMap* map,
       *receiver_offset = offset;
     }
 
-    cmpptr(rOop, (int32_t)NULL_WORD);
+    cmpptr(rOop, NULL_WORD);
     lea(rHandle, Address(rsp, offset));
     // conditionally move a NULL from the handle area where it was just stored
     cmovptr(Assembler::equal, rHandle, Address(rsp, offset));
@@ -1134,10 +1135,6 @@ void MacroAssembler::object_move(OopMap* map,
 #endif // _LP64
 
 // Now versions that are common to 32/64 bit
-
-void MacroAssembler::addptr(Register dst, int32_t imm32) {
-  LP64_ONLY(addq(dst, imm32)) NOT_LP64(addl(dst, imm32));
-}
 
 void MacroAssembler::addptr(Register dst, Register src) {
   LP64_ONLY(addq(dst, src)) NOT_LP64(addl(dst, src));
@@ -1242,10 +1239,6 @@ void MacroAssembler::andps(XMMRegister dst, AddressLiteral src, Register rscratc
     lea(rscratch, src);
     Assembler::andps(dst, Address(rscratch, 0));
   }
-}
-
-void MacroAssembler::andptr(Register dst, int32_t imm32) {
-  LP64_ONLY(andq(dst, imm32)) NOT_LP64(andl(dst, imm32));
 }
 
 void MacroAssembler::atomic_incl(Address counter_addr) {
@@ -1613,7 +1606,7 @@ void MacroAssembler::call_VM_base(Register oop_result,
 
   if (check_exceptions) {
     // check for pending exceptions (java_thread is set upon return)
-    cmpptr(Address(java_thread, Thread::pending_exception_offset()), (int32_t) NULL_WORD);
+    cmpptr(Address(java_thread, Thread::pending_exception_offset()), NULL_WORD);
 #ifndef _LP64
     jump_cc(Assembler::notEqual,
             RuntimeAddress(StubRoutines::forward_exception_entry()), noreg);
@@ -1758,13 +1751,14 @@ void MacroAssembler::check_and_handle_earlyret(Register java_thread) {
 void MacroAssembler::check_and_handle_popframe(Register java_thread) {
 }
 
-void MacroAssembler::cmp32(AddressLiteral src1, int32_t imm, Register rscratch) {
+void MacroAssembler::cmp32(AddressLiteral src1, intptr_t imm32, Register rscratch) {
   assert(always_reachable(src1) || rscratch != noreg, "missing scratch register");
+  assert(is_simm32(imm32), "");
   if (reachable(src1)) {
-    cmpl(as_Address_unchecked(src1), imm);
+    cmpl(as_Address_unchecked(src1), imm32);
   } else {
     lea(rscratch, src1);
-    cmpl(Address(rscratch, 0), imm);
+    cmpl(Address(rscratch, 0), imm32);
   }
 }
 
@@ -1779,8 +1773,9 @@ void MacroAssembler::cmp32(Register src1, AddressLiteral src2, Register rscratch
   }
 }
 
-void MacroAssembler::cmp32(Register src1, int32_t imm) {
-  Assembler::cmpl(src1, imm);
+void MacroAssembler::cmp32(Register src1, intptr_t imm32) {
+  assert(is_simm32(imm32), "");
+  Assembler::cmpl(src1, imm32);
 }
 
 void MacroAssembler::cmp32(Register src1, Address src2) {
@@ -3092,12 +3087,12 @@ void MacroAssembler::set_last_Java_frame(Register java_thread,
   movptr(Address(java_thread, JavaThread::last_Java_sp_offset()), last_java_sp);
 }
 
-void MacroAssembler::shlptr(Register dst, int imm8) {
-  LP64_ONLY(shlq(dst, imm8)) NOT_LP64(shll(dst, imm8));
+void MacroAssembler::shlptr(Register dst, intptr_t imm8) {
+  LP64_ONLY(shlq(dst, checked_cast<int8_t>(imm8))) NOT_LP64(shll(dst, checked_cast<int8_t>(imm8)));
 }
 
-void MacroAssembler::shrptr(Register dst, int imm8) {
-  LP64_ONLY(shrq(dst, imm8)) NOT_LP64(shrl(dst, imm8));
+void MacroAssembler::shrptr(Register dst, intptr_t imm8) {
+  LP64_ONLY(shrq(dst, checked_cast<int8_t>(imm8))) NOT_LP64(shrl(dst, checked_cast<int8_t>(imm8)));
 }
 
 void MacroAssembler::sign_extend_byte(Register reg) {
@@ -3788,12 +3783,13 @@ void MacroAssembler::resolve_jobject(Register value,
   bind(done);
 }
 
-void MacroAssembler::subptr(Register dst, int32_t imm32) {
-  LP64_ONLY(subq(dst, imm32)) NOT_LP64(subl(dst, imm32));
+void MacroAssembler::subptr(Register dst, intptr_t imm32) {
+  LP64_ONLY(subq(dst, checked_cast<int32_t>(imm32))) NOT_LP64(subl(dst, imm32));
 }
 
 // Force generation of a 4 byte immediate value even if it fits into 8bit
-void MacroAssembler::subptr_imm32(Register dst, int32_t imm32) {
+void MacroAssembler::subptr_imm32(Register dst, intptr_t imm32) {
+  assert(is_simm32(imm32), "");
   LP64_ONLY(subq_imm32(dst, imm32)) NOT_LP64(subl_imm32(dst, imm32));
 }
 

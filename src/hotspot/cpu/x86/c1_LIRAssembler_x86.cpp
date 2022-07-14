@@ -319,7 +319,7 @@ void LIR_Assembler::osr_entry() {
       // verify the interpreter's monitor has a non-null object
       {
         Label L;
-        __ cmpptr(Address(OSR_buf, slot_offset + 1*BytesPerWord), (int32_t)NULL_WORD);
+        __ cmpptr(Address(OSR_buf, slot_offset + 1*BytesPerWord), NULL_WORD);
         __ jcc(Assembler::notZero, L);
         __ stop("locked object is NULL");
         __ bind(L);
@@ -440,8 +440,8 @@ int LIR_Assembler::emit_unwind_handler() {
   Register thread = NOT_LP64(rsi) LP64_ONLY(r15_thread);
   NOT_LP64(__ get_thread(thread));
   __ movptr(rax, Address(thread, JavaThread::exception_oop_offset()));
-  __ movptr(Address(thread, JavaThread::exception_oop_offset()), (intptr_t)NULL_WORD, rscratch1);
-  __ movptr(Address(thread, JavaThread::exception_pc_offset()),  (intptr_t)NULL_WORD, rscratch1);
+  __ movptr(Address(thread, JavaThread::exception_oop_offset()), NULL_WORD, rscratch1);
+  __ movptr(Address(thread, JavaThread::exception_pc_offset()),  NULL_WORD, rscratch1);
 
   __ bind(_unwind_handler_entry);
   __ verify_not_null_oop(rax);
@@ -698,7 +698,9 @@ void LIR_Assembler::const2stack(LIR_Opr src, LIR_Opr dest) {
     case T_DOUBLE:
 #ifdef _LP64
       __ movptr(frame_map()->address_for_slot(dest->double_stack_ix(),
-                                            lo_word_offset_in_bytes), (intptr_t)c->as_jlong_bits());
+                                              lo_word_offset_in_bytes),
+                (intptr_t)c->as_jlong_bits(),
+                rscratch1);
 #else
       __ movptr(frame_map()->address_for_slot(dest->double_stack_ix(),
                                               lo_word_offset_in_bytes), c->as_jint_lo_bits());
@@ -770,7 +772,7 @@ void LIR_Assembler::const2mem(LIR_Opr src, LIR_Opr dest, BasicType type, CodeEmi
 #ifdef _LP64
       if (is_literal_address(addr)) {
         ShouldNotReachHere();
-        __ movptr(as_Address(addr, r15_thread), (intptr_t)c->as_jlong_bits());
+        __ movptr(as_Address(addr, r15_thread), (intptr_t)c->as_jlong_bits(), rscratch1);
       } else {
         __ movptr(r10, (intptr_t)c->as_jlong_bits());
         null_check_here = code_offset();
@@ -1659,7 +1661,7 @@ void LIR_Assembler::type_profile_helper(Register mdo,
   for (uint i = 0; i < ReceiverTypeData::row_limit(); i++) {
     Label next_test;
     Address recv_addr(mdo, md->byte_offset_of_slot(data, ReceiverTypeData::receiver_offset(i)));
-    __ cmpptr(recv_addr, (intptr_t)NULL_WORD);
+    __ cmpptr(recv_addr, NULL_WORD);
     __ jccb(Assembler::notEqual, next_test);
     __ movptr(recv_addr, recv);
     __ movptr(Address(mdo, md->byte_offset_of_slot(data, ReceiverTypeData::receiver_count_offset(i))), DataLayout::counter_increment);
@@ -1711,7 +1713,7 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
 
   assert_different_registers(obj, k_RInfo, klass_RInfo);
 
-  __ cmpptr(obj, (int32_t)NULL_WORD);
+  __ cmpptr(obj, NULL_WORD);
   if (op->should_profile()) {
     Label not_null;
     __ jccb(Assembler::notEqual, not_null);
@@ -1857,7 +1859,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
     Label *success_target = op->should_profile() ? &profile_cast_success : &done;
     Label *failure_target = op->should_profile() ? &profile_cast_failure : stub->entry();
 
-    __ cmpptr(value, (int32_t)NULL_WORD);
+    __ cmpptr(value, NULL_WORD);
     if (op->should_profile()) {
       Label not_null;
       __ jccb(Assembler::notEqual, not_null);
@@ -2662,7 +2664,7 @@ void LIR_Assembler::comp_op(LIR_Condition condition, LIR_Opr opr1, LIR_Opr opr2,
         assert(condition == lir_cond_equal || condition == lir_cond_notEqual, "oops");
         Metadata* m = c->as_metadata();
         if (m == NULL) {
-          __ cmpptr(reg1, (int32_t)0);
+          __ cmpptr(reg1, NULL_WORD);
         } else {
           ShouldNotReachHere();
         }
@@ -2670,7 +2672,7 @@ void LIR_Assembler::comp_op(LIR_Condition condition, LIR_Opr opr1, LIR_Opr opr2,
         // In 64bit oops are single register
         jobject o = c->as_jobject();
         if (o == NULL) {
-          __ cmpptr(reg1, (int32_t)NULL_WORD);
+          __ cmpptr(reg1, NULL_WORD);
         } else {
           __ cmpoop(reg1, o, rscratch1);
         }
@@ -2707,7 +2709,7 @@ void LIR_Assembler::comp_op(LIR_Condition condition, LIR_Opr opr1, LIR_Opr opr2,
       // cpu register - constant 0
       assert(opr2->as_jlong() == (jlong)0, "only handles zero");
 #ifdef _LP64
-      __ cmpptr(xlo, (int32_t)opr2->as_jlong());
+      __ cmpptr(xlo, opr2->as_jlong());
 #else
       assert(condition == lir_cond_equal || condition == lir_cond_notEqual, "only handles equals case");
       __ orl(xhi, xlo);
@@ -3683,7 +3685,7 @@ void LIR_Assembler::emit_profile_type(LIR_OpProfileType* op) {
         __ jccb(Assembler::notZero, next); // already unknown. Nothing to do anymore.
 
         if (TypeEntries::is_type_none(current_klass)) {
-          __ cmpptr(mdo_addr, 0);
+          __ cmpptr(mdo_addr, NULL_WORD);
           __ jccb(Assembler::equal, none);
           __ cmpptr(mdo_addr, TypeEntries::null_seen);
           __ jccb(Assembler::equal, none);
@@ -3726,7 +3728,7 @@ void LIR_Assembler::emit_profile_type(LIR_OpProfileType* op) {
         {
           Label ok;
           __ push(tmp);
-          __ cmpptr(mdo_addr, 0);
+          __ cmpptr(mdo_addr, NULL_WORD);
           __ jcc(Assembler::equal, ok);
           __ cmpptr(mdo_addr, TypeEntries::null_seen);
           __ jcc(Assembler::equal, ok);
