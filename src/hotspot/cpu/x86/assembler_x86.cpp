@@ -12162,15 +12162,13 @@ void Assembler::set_byte_if_not_zero(Register dst) {
 // This should only be used by 64bit instructions that can use rip-relative
 // it cannot be used by instructions that want an immediate value.
 
-bool Assembler::reachable(AddressLiteral adr) {
+static bool is_reachable_from(address pc, address target, relocInfo::relocType relocType) {
   int64_t disp;
-  relocInfo::relocType relocType = adr.reloc();
 
   // None will force a 64bit literal to the code stream. Likely a placeholder
   // for something that will be patched later and we need to certain it will
   // always be reachable.
   if (relocType == relocInfo::none) {
-    assert(!always_reachable(adr), "sanity");
     return false;
   }
   if (relocType == relocInfo::internal_word_type) {
@@ -12190,7 +12188,6 @@ bool Assembler::reachable(AddressLiteral adr) {
       relocType != relocInfo::poll_return_type &&  // these are really external_word but need special
       relocType != relocInfo::poll_type &&         // relocs to identify them
       relocType != relocInfo::runtime_call_type ) {
-    assert(!always_reachable(adr), "sanity");
     return false;
   }
 
@@ -12200,8 +12197,7 @@ bool Assembler::reachable(AddressLiteral adr) {
     // Flipping stuff in the codecache to be unreachable causes issues
     // with things like inline caches where the additional instructions
     // are not handled.
-    if (!CodeCache::contains(adr._target)) {
-      assert(!always_reachable(adr), "sanity");
+    if (!CodeCache::contains(target)) {
       return false;
     }
   }
@@ -12210,18 +12206,16 @@ bool Assembler::reachable(AddressLiteral adr) {
   // anywhere in the codeCache then we are always reachable.
   // This would have to change if we ever save/restore shared code
   // to be more pessimistic.
-  disp = (int64_t)adr._target - ((int64_t)CodeCache::low_bound() + sizeof(int));
+  disp = (int64_t)target - ((int64_t)CodeCache::low_bound() + sizeof(int));
   if (!is_simm32(disp)) {
-    assert(!always_reachable(adr), "sanity");
     return false;
   }
-  disp = (int64_t)adr._target - ((int64_t)CodeCache::high_bound() + sizeof(int));
+  disp = (int64_t)target - ((int64_t)CodeCache::high_bound() + sizeof(int));
   if (!is_simm32(disp)) {
-    assert(!always_reachable(adr), "sanity");
     return false;
   }
 
-  disp = (int64_t)adr._target - ((int64_t)pc() + sizeof(int));
+  disp = (int64_t)target - ((int64_t)pc + sizeof(int));
 
   // Because rip relative is a disp + address_of_next_instruction and we
   // don't know the value of address_of_next_instruction we apply a fudge factor
@@ -12236,12 +12230,18 @@ bool Assembler::reachable(AddressLiteral adr) {
   } else {
     disp += fudge;
   }
-  if (is_simm32(disp)) {
-    return true;
-  } else {
-    assert(!always_reachable(adr), "sanity");
-    return false;
+  return is_simm32(disp);
+}
+
+bool Assembler::reachable(AddressLiteral adr, bool requires_always_reachable) {
+  if (requires_always_reachable) {
+    assert(always_reachable(adr), "requirement");
   }
+  bool is_reachable = is_reachable_from(pc(), adr.target(), adr.reloc());
+  if (!is_reachable) {
+    assert(!always_reachable(adr), "sanity");
+  }
+  return is_reachable;
 }
 
 #ifdef ASSERT

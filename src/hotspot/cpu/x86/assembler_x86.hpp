@@ -814,7 +814,9 @@ private:
 #ifdef ASSERT
   bool always_reachable(AddressLiteral adr) NOT_LP64( { return true; } );
 #endif // ASSERT
-  bool        reachable(AddressLiteral adr) NOT_LP64( { return true; } );
+  bool        reachable(AddressLiteral adr, bool requires_always_reachable) NOT_LP64( { return true; } );
+
+  bool        reachable(AddressLiteral adr, Register rscratch) { return reachable(adr, rscratch == noreg); }
 
   // These are all easily abused and hence protected
 
