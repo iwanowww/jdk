@@ -1753,12 +1753,11 @@ void MacroAssembler::check_and_handle_popframe(Register java_thread) {
 
 void MacroAssembler::cmp32(AddressLiteral src1, intptr_t imm32, Register rscratch) {
   assert(always_reachable(src1) || rscratch != noreg, "missing scratch register");
-  assert(is_simm32(imm32), "");
   if (reachable(src1)) {
-    cmpl(as_Address_unchecked(src1), imm32);
+    cmpl(as_Address_unchecked(src1), checked_cast<int32_t>(imm32));
   } else {
     lea(rscratch, src1);
-    cmpl(Address(rscratch, 0), imm32);
+    cmpl(Address(rscratch, 0), checked_cast<int32_t>(imm32));
   }
 }
 
@@ -1774,8 +1773,7 @@ void MacroAssembler::cmp32(Register src1, AddressLiteral src2, Register rscratch
 }
 
 void MacroAssembler::cmp32(Register src1, intptr_t imm32) {
-  assert(is_simm32(imm32), "");
-  Assembler::cmpl(src1, imm32);
+  Assembler::cmpl(src1, checked_cast<int32_t>(imm32));
 }
 
 void MacroAssembler::cmp32(Register src1, Address src2) {
