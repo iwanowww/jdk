@@ -12100,11 +12100,11 @@ static bool is_reachable_from(address pc, address target, relocInfo::relocType r
   // This would have to change if we ever save/restore shared code
   // to be more pessimistic.
   disp = (int64_t)target - ((int64_t)CodeCache::low_bound() + sizeof(int));
-  if (!is_simm32(disp)) {
+  if (!Assembler::is_simm32(disp)) {
     return false;
   }
   disp = (int64_t)target - ((int64_t)CodeCache::high_bound() + sizeof(int));
-  if (!is_simm32(disp)) {
+  if (!Assembler::is_simm32(disp)) {
     return false;
   }
 
@@ -12123,7 +12123,7 @@ static bool is_reachable_from(address pc, address target, relocInfo::relocType r
   } else {
     disp += fudge;
   }
-  return is_simm32(disp);
+  return Assembler::is_simm32(disp);
 }
 
 bool Assembler::reachable(AddressLiteral adr, bool requires_always_reachable) {

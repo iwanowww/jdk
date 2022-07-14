@@ -230,7 +230,7 @@ Address LIR_Assembler::as_Address(LIR_Address* addr, Register tmp) {
   if (addr->base()->is_illegal()) {
     assert(addr->index()->is_illegal(), "must be illegal too");
     AddressLiteral laddr((address)addr->disp(), relocInfo::none);
-    if (! __ reachable(laddr)) {
+    if (! __ reachable(laddr, tmp)) {
       __ movptr(tmp, laddr.addr());
       Address res(tmp, 0);
       return res;

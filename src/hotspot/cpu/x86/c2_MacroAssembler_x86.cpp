@@ -1487,7 +1487,7 @@ void C2_MacroAssembler::load_vector(XMMRegister dst, Address src, int vlen_in_by
 }
 
 void C2_MacroAssembler::load_vector(XMMRegister dst, AddressLiteral src, int vlen_in_bytes, Register rscratch) {
-  if (reachable(src)) {
+  if (reachable(src, rscratch)) {
     load_vector(dst, as_Address(src), vlen_in_bytes);
   } else {
     lea(rscratch, src);
