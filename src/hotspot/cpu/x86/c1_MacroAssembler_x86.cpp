@@ -249,7 +249,7 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
   assert(!(BytesPerWord & 1), "must be a multiple of 2 for masking code to work");
 
   // check for negative or excessive length
-  cmpptr(len, (int32_t)max_array_allocation_length);
+  cmpptr(len, max_array_allocation_length);
   jcc(Assembler::above, slow_case);
 
   const Register arr_size = t2; // okay to be the same

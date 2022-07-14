@@ -316,7 +316,7 @@ class StubGenerator: public StubCodeGenerator {
     // make sure we have no pending exceptions
     {
       Label L;
-      __ cmpptr(Address(r15_thread, Thread::pending_exception_offset()), (int32_t)NULL_WORD);
+      __ cmpptr(Address(r15_thread, Thread::pending_exception_offset()), NULL_WORD);
       __ jcc(Assembler::equal, L);
       __ stop("StubRoutines::call_stub: entered with pending exception");
       __ bind(L);
@@ -529,7 +529,7 @@ class StubGenerator: public StubCodeGenerator {
     // make sure this code is only executed if there is a pending exception
     {
       Label L;
-      __ cmpptr(Address(r15_thread, Thread::pending_exception_offset()), (int32_t) NULL_WORD);
+      __ cmpptr(Address(r15_thread, Thread::pending_exception_offset()), NULL_WORD);
       __ jcc(Assembler::notEqual, L);
       __ stop("StubRoutines::forward exception: no pending exception (1)");
       __ bind(L);
@@ -7362,16 +7362,6 @@ address generate_avx_ghash_processBlocks() {
 
     address start = __ pc();
 
-    const XMMRegister x0 = xmm0;
-    const XMMRegister x1 = xmm1;
-    const XMMRegister x2 = xmm2;
-    const XMMRegister x3 = xmm3;
-
-    const XMMRegister x4 = xmm4;
-    const XMMRegister x5 = xmm5;
-    const XMMRegister x6 = xmm6;
-    const XMMRegister x7 = xmm7;
-
     BLOCK_COMMENT("Entry:");
     __ enter(); // required for proper stackwalking of RuntimeStub frame
 
@@ -7382,7 +7372,7 @@ address generate_avx_ghash_processBlocks() {
     __ push(r12);
 
     __ fast_cos(xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7,
-                rax, rcx, rdx, rbx, r8, r9, r10, r11);
+                rax, rcx, rdx, r8, r9, r10, r11, rbx);
 
     __ pop(r12);
 #ifdef _WIN64
@@ -7401,12 +7391,6 @@ address generate_avx_ghash_processBlocks() {
     StubCodeMark mark(this, "StubRoutines", "libmTan");
 
     address start = __ pc();
-
-    const Register tmp1 = r8;
-    const Register tmp2 = r9;
-    const Register tmp3 = r10;
-    const Register tmp4 = r11;
-    const Register tmp5 = r12;
 
     BLOCK_COMMENT("Entry:");
     __ enter(); // required for proper stackwalking of RuntimeStub frame
@@ -7773,8 +7757,7 @@ address generate_avx_ghash_processBlocks() {
     // check for pending exceptions
 #ifdef ASSERT
     Label L;
-    __ cmpptr(Address(r15_thread, Thread::pending_exception_offset()),
-            (int32_t) NULL_WORD);
+    __ cmpptr(Address(r15_thread, Thread::pending_exception_offset()), NULL_WORD);
     __ jcc(Assembler::notEqual, L);
     __ should_not_reach_here();
     __ bind(L);
@@ -8209,7 +8192,7 @@ OopMap* continuation_enter_setup(MacroAssembler* masm, int& stack_slots) {
   assert(in_bytes(ContinuationEntry::chunk_offset()) % VMRegImpl::stack_slot_size == 0, "");
 
   stack_slots += checked_cast<int>(ContinuationEntry::size()) / wordSize;
-  __ subptr(rsp, checked_cast<int32_t>(ContinuationEntry::size()));
+  __ subptr(rsp, ContinuationEntry::size());
 
   int frame_size = (checked_cast<int>(ContinuationEntry::size()) + wordSize) / VMRegImpl::stack_slot_size;
   OopMap* map = new OopMap(frame_size, 0);
@@ -8282,7 +8265,7 @@ void continuation_enter_cleanup(MacroAssembler* masm) {
 
   __ movptr(rbx, Address(rsp, ContinuationEntry::parent_offset()));
   __ movptr(Address(r15_thread, JavaThread::cont_entry_offset()), rbx);
-  __ addptr(rsp, (int32_t)ContinuationEntry::size());
+  __ addptr(rsp, ContinuationEntry::size());
 }
 
 #undef __
