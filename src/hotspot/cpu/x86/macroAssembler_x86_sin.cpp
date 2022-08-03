@@ -1579,7 +1579,7 @@ void MacroAssembler::libm_sincos_huge(XMMRegister xmm0, XMMRegister xmm1, Regist
   fstp_x(Address(esp, 0));
   movl(Address(esp, 12), 0);
   movl(Address(esp, 16), eax);
-  call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dlibm_reduce_pi04l())));
+  call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dlibm_reduce_pi04l())), noreg);
 
   bind(B1_46);
   addl(esp, 32);
@@ -2188,7 +2188,7 @@ void MacroAssembler::fast_sin(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
   movl(Address(rsp, 8), eax);
   movl(eax, 2);
   movl(Address(rsp, 12), eax);
-  call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dlibm_sin_cos_huge())));
+  call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dlibm_sin_cos_huge())), noreg);
   addl(rsp, 32);
   fld_d(Address(rsp, 16));
   jmp(L_2TAG_PACKET_1_0_2);

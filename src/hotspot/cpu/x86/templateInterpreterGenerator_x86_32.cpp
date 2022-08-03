@@ -373,7 +373,7 @@ address TemplateInterpreterGenerator::generate_math_entry(AbstractInterpreter::M
         __ subptr(rsp, 2 * wordSize);
         __ fstp_d(Address(rsp, 0));
         if (VM_Version::supports_sse2() && StubRoutines::dsin() != NULL) {
-          __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dsin())));
+          __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dsin())), noreg);
         } else {
           __ call_VM_leaf0(CAST_FROM_FN_PTR(address, SharedRuntime::dsin));
         }
@@ -383,7 +383,7 @@ address TemplateInterpreterGenerator::generate_math_entry(AbstractInterpreter::M
         __ subptr(rsp, 2 * wordSize);
         __ fstp_d(Address(rsp, 0));
         if (VM_Version::supports_sse2() && StubRoutines::dcos() != NULL) {
-          __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dcos())));
+          __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dcos())), noreg);
         } else {
           __ call_VM_leaf0(CAST_FROM_FN_PTR(address, SharedRuntime::dcos));
         }
@@ -393,7 +393,7 @@ address TemplateInterpreterGenerator::generate_math_entry(AbstractInterpreter::M
         __ subptr(rsp, 2 * wordSize);
         __ fstp_d(Address(rsp, 0));
         if (StubRoutines::dtan() != NULL) {
-          __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dtan())));
+          __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dtan())), noreg);
         } else {
           __ call_VM_leaf0(CAST_FROM_FN_PTR(address, SharedRuntime::dtan));
         }
@@ -409,7 +409,7 @@ address TemplateInterpreterGenerator::generate_math_entry(AbstractInterpreter::M
         __ subptr(rsp, 2 * wordSize);
         __ fstp_d(Address(rsp, 0));
         if (StubRoutines::dlog() != NULL) {
-          __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dlog())));
+          __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dlog())), noreg);
         } else {
           __ call_VM_leaf0(CAST_FROM_FN_PTR(address, SharedRuntime::dlog));
         }
@@ -419,7 +419,7 @@ address TemplateInterpreterGenerator::generate_math_entry(AbstractInterpreter::M
         __ subptr(rsp, 2 * wordSize);
         __ fstp_d(Address(rsp, 0));
         if (StubRoutines::dlog10() != NULL) {
-          __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dlog10())));
+          __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dlog10())), noreg);
         } else {
           __ call_VM_leaf0(CAST_FROM_FN_PTR(address, SharedRuntime::dlog10));
         }
@@ -431,7 +431,7 @@ address TemplateInterpreterGenerator::generate_math_entry(AbstractInterpreter::M
       __ fstp_d(Address(rsp, 0));
       __ fstp_d(Address(rsp, 2 * wordSize));
       if (StubRoutines::dpow() != NULL) {
-        __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dpow())));
+        __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dpow())), noreg);
       } else {
         __ call_VM_leaf0(CAST_FROM_FN_PTR(address, SharedRuntime::dpow));
       }
@@ -441,7 +441,7 @@ address TemplateInterpreterGenerator::generate_math_entry(AbstractInterpreter::M
       __ subptr(rsp, 2*wordSize);
       __ fstp_d(Address(rsp, 0));
       if (StubRoutines::dexp() != NULL) {
-        __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dexp())));
+        __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dexp())), noreg);
       } else {
         __ call_VM_leaf0(CAST_FROM_FN_PTR(address, SharedRuntime::dexp));
       }

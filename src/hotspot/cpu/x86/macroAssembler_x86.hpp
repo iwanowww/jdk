@@ -91,7 +91,7 @@ class MacroAssembler: public Assembler {
   Address as_Address(AddressLiteral adr);
   Address as_Address(ArrayAddress adr, Register rscratch);
 
-  Address as_Address_unchecked(AddressLiteral adr);
+  Address as_Address_unchecked(AddressLiteral adr, Register rscratch);
 
   // Support for NULL-checks
   //
@@ -709,7 +709,7 @@ public:
   void bang_stack_size(Register size, Register tmp);
 
   // Check for reserved stack access in method being exited (for JIT)
-  void reserved_stack_check(Register rscratch);
+  void reserved_stack_check();
 
   void safepoint_poll(Label& slow_path, Register thread_reg, bool at_return, bool in_nmethod);
 
@@ -868,6 +868,7 @@ public:
   // the address contained by entry. This is because this is more natural
   // for jumps/calls.
   void call(AddressLiteral entry);
+  void call(AddressLiteral entry, Register rscratch);
 
   // Emit the CompiledIC call idiom
   void ic_call(address entry, jint method_index = 0);
@@ -877,6 +878,7 @@ public:
   // NOTE: these jumps transfer to the effective address of dst NOT
   // the address contained by dst. This is because this is more natural
   // for jumps/calls.
+  void jump(AddressLiteral dst);
   void jump(AddressLiteral dst, Register rscratch);
   void jump_cc(Condition cc, AddressLiteral dst, Register rscratch);
 

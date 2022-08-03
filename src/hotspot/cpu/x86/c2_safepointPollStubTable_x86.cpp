@@ -55,6 +55,6 @@ void C2SafepointPollStubTable::emit_stub_impl(MacroAssembler& masm, C2SafepointP
   __ pop(tmp2);
   __ pop(tmp1);
 #endif
-  __ jump(callback_addr, rscratch1);
+  __ jump(callback_addr, noreg);
 }
 #undef __

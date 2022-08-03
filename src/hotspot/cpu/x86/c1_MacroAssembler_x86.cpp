@@ -235,7 +235,7 @@ void C1_MacroAssembler::initialize_object(Register obj, Register klass, Register
 
   if (CURRENT_ENV->dtrace_alloc_probes()) {
     assert(obj == rax, "must be");
-    call(RuntimeAddress(Runtime1::entry_for(Runtime1::dtrace_object_alloc_id)));
+    call(RuntimeAddress(Runtime1::entry_for(Runtime1::dtrace_object_alloc_id)), noreg);
   }
 
   verify_oop(obj);
@@ -268,7 +268,7 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
 
   if (CURRENT_ENV->dtrace_alloc_probes()) {
     assert(obj == rax, "must be");
-    call(RuntimeAddress(Runtime1::entry_for(Runtime1::dtrace_object_alloc_id)));
+    call(RuntimeAddress(Runtime1::entry_for(Runtime1::dtrace_object_alloc_id)), noreg);
   }
 
   verify_oop(obj);
@@ -293,7 +293,7 @@ void C1_MacroAssembler::inline_cache_check(Register receiver, Register iCache) {
   // if icache check fails, then jump to runtime routine
   // Note: RECEIVER must still contain the receiver!
   jump_cc(Assembler::notEqual,
-          RuntimeAddress(SharedRuntime::get_ic_miss_stub()), rscratch1);
+          RuntimeAddress(SharedRuntime::get_ic_miss_stub()), noreg);
   const int ic_cmp_size = LP64_ONLY(10) NOT_LP64(9);
   assert(UseCompressedClassPointers || offset() - start_offset == ic_cmp_size, "check alignment in emit_method_entry");
 }

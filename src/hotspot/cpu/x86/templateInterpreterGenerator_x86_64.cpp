@@ -383,35 +383,35 @@ address TemplateInterpreterGenerator::generate_math_entry(AbstractInterpreter::M
   } else if (kind == Interpreter::java_lang_math_exp) {
     __ movdbl(xmm0, Address(rsp, wordSize));
     if (StubRoutines::dexp() != NULL) {
-      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dexp())));
+      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dexp())), noreg);
     } else {
       __ call_VM_leaf0(CAST_FROM_FN_PTR(address, SharedRuntime::dexp));
     }
   } else if (kind == Interpreter::java_lang_math_log) {
     __ movdbl(xmm0, Address(rsp, wordSize));
     if (StubRoutines::dlog() != NULL) {
-      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dlog())));
+      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dlog())), noreg);
     } else {
       __ call_VM_leaf0(CAST_FROM_FN_PTR(address, SharedRuntime::dlog));
     }
   } else if (kind == Interpreter::java_lang_math_log10) {
     __ movdbl(xmm0, Address(rsp, wordSize));
     if (StubRoutines::dlog10() != NULL) {
-      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dlog10())));
+      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dlog10())), noreg);
     } else {
       __ call_VM_leaf0(CAST_FROM_FN_PTR(address, SharedRuntime::dlog10));
     }
   } else if (kind == Interpreter::java_lang_math_sin) {
     __ movdbl(xmm0, Address(rsp, wordSize));
     if (StubRoutines::dsin() != NULL) {
-      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dsin())));
+      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dsin())), noreg);
     } else {
       __ call_VM_leaf0(CAST_FROM_FN_PTR(address, SharedRuntime::dsin));
     }
   } else if (kind == Interpreter::java_lang_math_cos) {
     __ movdbl(xmm0, Address(rsp, wordSize));
     if (StubRoutines::dcos() != NULL) {
-      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dcos())));
+      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dcos())), noreg);
     } else {
       __ call_VM_leaf0(CAST_FROM_FN_PTR(address, SharedRuntime::dcos));
     }
@@ -419,14 +419,14 @@ address TemplateInterpreterGenerator::generate_math_entry(AbstractInterpreter::M
     __ movdbl(xmm1, Address(rsp, wordSize));
     __ movdbl(xmm0, Address(rsp, 3 * wordSize));
     if (StubRoutines::dpow() != NULL) {
-      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dpow())));
+      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dpow())), noreg);
     } else {
       __ call_VM_leaf0(CAST_FROM_FN_PTR(address, SharedRuntime::dpow));
     }
   } else if (kind == Interpreter::java_lang_math_tan) {
     __ movdbl(xmm0, Address(rsp, wordSize));
     if (StubRoutines::dtan() != NULL) {
-      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dtan())));
+      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dtan())), noreg);
     } else {
       __ call_VM_leaf0(CAST_FROM_FN_PTR(address, SharedRuntime::dtan));
     }

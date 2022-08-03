@@ -567,7 +567,7 @@ static void patch_callers_callsite(MacroAssembler *masm) {
   __ push(rax);
   // VM needs target method
   __ push(rbx);
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::fixup_callers_callsite)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::fixup_callers_callsite)), noreg);
   __ addptr(rsp, 2*wordSize);
 
   if (UseSSE == 1) {
@@ -1754,7 +1754,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   // Now set thread in native
   __ movl(Address(thread, JavaThread::thread_state_offset()), _thread_in_native);
 
-  __ call(RuntimeAddress(native_func));
+  __ call(RuntimeAddress(native_func), rscratch1);
 
   // Verify or restore cpu control state after JNI call
   __ restore_cpu_control_state_after_jni(noreg);
@@ -1823,8 +1823,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
     save_native_result(masm, ret_type, stack_slots);
     __ push(thread);
-    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address,
-                                              JavaThread::check_special_condition_for_native_trans)));
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, JavaThread::check_special_condition_for_native_trans)));
     __ increment(rsp, wordSize);
     // Restore any method result value
     restore_native_result(masm, ret_type, stack_slots);
@@ -1970,7 +1969,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ push(thread);
     __ push(lock_reg);
     __ push(obj_reg);
-    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_locking_C)));
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_locking_C)), rscratch1);
     __ addptr(rsp, 3*wordSize);
 
 #ifdef ASSERT
@@ -2007,7 +2006,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ push(rax);
 
     __ push(obj_reg);
-    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_unlocking_C)));
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_unlocking_C)), rscratch1);
     __ addptr(rsp, 3*wordSize);
 #ifdef ASSERT
     {
@@ -2035,7 +2034,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   __ vzeroupper();
   save_native_result(masm, ret_type, stack_slots);
   {
-    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::reguard_yellow_pages)));
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::reguard_yellow_pages)), rscratch1);
   }
   restore_native_result(masm, ret_type, stack_slots);
   __ jmp(reguard_done);
@@ -2229,7 +2228,7 @@ void SharedRuntime::generate_deopt_blob() {
   // fetch_unroll_info needs to call last_java_frame()
   __ set_last_Java_frame(rcx, noreg, noreg, NULL, noreg);
 
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::fetch_unroll_info)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::fetch_unroll_info)), rscratch1);
 
   // Need to have an oopmap that tells fetch_unroll_info where to
   // find any register it might need.
@@ -2380,7 +2379,7 @@ void SharedRuntime::generate_deopt_blob() {
   // Call C code.  Need thread but NOT official VM entry
   // crud.  We cannot block on this call, no GC can happen.  Call should
   // restore return values to their stack-slots with the new SP.
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::unpack_frames)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::unpack_frames)), rscratch1);
   // Set an oopmap for the call site
   oop_maps->add_gc_map( __ pc()-start, new OopMap( frame_size_in_words, 0 ));
 
@@ -2481,7 +2480,7 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   // argument already in ECX
   __ movl(Address(rsp, arg1_off*wordSize),rcx);
   __ movl(Address(rsp, arg2_off*wordSize), Deoptimization::Unpack_uncommon_trap);
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::uncommon_trap)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::uncommon_trap)), rscratch1);
 
   // Set an oopmap for the call site
   OopMapSet *oop_maps = new OopMapSet();
@@ -2591,7 +2590,7 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   // restore return values to their stack-slots with the new SP.
   __ movptr(Address(rsp,arg0_off*wordSize),rdi);
   __ movl(Address(rsp,arg1_off*wordSize), Deoptimization::Unpack_uncommon_trap);
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::unpack_frames)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::unpack_frames)), rscratch1);
   // Set an oopmap for the call site
   oop_maps->add_gc_map( __ pc()-start, new OopMap( framesize, 0 ) );
 
@@ -2678,7 +2677,7 @@ SafepointBlob* SharedRuntime::generate_handler_blob(address call_ptr, int poll_t
   }
 
   // do the call
-  __ call(RuntimeAddress(call_ptr));
+  __ call(RuntimeAddress(call_ptr), rscratch1);
 
   // Set an oopmap for the call site.  This oopmap will map all
   // oop-registers and debug-info registers as callee-saved.  This
@@ -2807,7 +2806,7 @@ RuntimeStub* SharedRuntime::generate_resolve_blob(address destination, const cha
   __ push(thread);
   __ set_last_Java_frame(thread, noreg, rbp, NULL, noreg);
 
-  __ call(RuntimeAddress(destination));
+  __ call(RuntimeAddress(destination), noreg);
 
 
   // Set an oopmap for the call site.

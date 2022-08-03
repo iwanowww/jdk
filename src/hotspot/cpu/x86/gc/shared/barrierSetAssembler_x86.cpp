@@ -320,7 +320,7 @@ void BarrierSetAssembler::nmethod_entry_barrier(MacroAssembler* masm) {
   __ align(8);
   __ cmpl(disarmed_addr, 0);
   __ jcc(Assembler::equal, continuation);
-  __ call(RuntimeAddress(StubRoutines::x86::method_entry_barrier()));
+  __ call(RuntimeAddress(StubRoutines::x86::method_entry_barrier()), noreg);
   __ bind(continuation);
 }
 #else
@@ -340,7 +340,7 @@ void BarrierSetAssembler::nmethod_entry_barrier(MacroAssembler* masm) {
   __ cmpl(disarmed_addr, 0);
   __ pop(tmp);
   __ jcc(Assembler::equal, continuation);
-  __ call(RuntimeAddress(StubRoutines::x86::method_entry_barrier()));
+  __ call(RuntimeAddress(StubRoutines::x86::method_entry_barrier()), noreg);
   __ bind(continuation);
 }
 #endif
@@ -385,7 +385,7 @@ void BarrierSetAssembler::c2i_entry_barrier(MacroAssembler* masm) {
 #endif
 
   __ bind(bad_call);
-  __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()), rscratch1);
+  __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()), noreg);
   __ bind(method_live);
 
 #ifndef _LP64

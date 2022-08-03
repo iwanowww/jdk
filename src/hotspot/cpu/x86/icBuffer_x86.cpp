@@ -59,7 +59,7 @@ void InlineCacheBuffer::assemble_ic_buffer_code(address code_begin, void* cached
   // (2) these ICStubs are removed *before* a GC happens, so the roots disappear
   // assert(cached_value == NULL || cached_oop->is_perm(), "must be perm oop");
   masm->lea(rax, AddressLiteral((address) cached_value, relocInfo::metadata_type));
-  masm->jump(ExternalAddress(entry_point), rscratch1);
+  masm->jump(ExternalAddress(entry_point), noreg);
 }
 
 

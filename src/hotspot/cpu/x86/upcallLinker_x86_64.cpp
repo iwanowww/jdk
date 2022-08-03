@@ -267,7 +267,7 @@ address UpcallLinker::make_upcall_stub(jobject receiver, Method* entry,
   __ vzeroupper();
   __ lea(c_rarg0, Address(rsp, frame_data_offset));
   // stack already aligned
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, UpcallLinker::on_entry)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, UpcallLinker::on_entry)), rscratch1);
   __ movptr(r15_thread, rax);
   __ reinit_heapbase();
   __ block_comment("} on_entry");
@@ -343,7 +343,7 @@ address UpcallLinker::make_upcall_stub(jobject receiver, Method* entry,
   __ vzeroupper();
   __ lea(c_rarg0, Address(rsp, frame_data_offset));
   // stack already aligned
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, UpcallLinker::on_exit)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, UpcallLinker::on_exit)), rscratch1);
   __ reinit_heapbase();
   __ block_comment("} on_exit");
 
@@ -369,7 +369,7 @@ address UpcallLinker::make_upcall_stub(jobject receiver, Method* entry,
   __ mov(c_rarg0, rax);
   __ andptr(rsp, -StackAlignmentInBytes); // align stack as required by ABI
   __ subptr(rsp, frame::arg_reg_save_area_bytes); // windows (not really needed)
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, UpcallLinker::handle_uncaught_exception)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, UpcallLinker::handle_uncaught_exception)), rscratch1);
   __ should_not_reach_here();
 
   __ block_comment("} exception handler");
