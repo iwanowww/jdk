@@ -8361,15 +8361,15 @@ instruct vstoreMask8B_evex_novectmask(vec dst, vec src, immI_8 size) %{
   ins_pipe( pipe_slow );
 %}
 
-instruct vstoreMask_evex_vectmask(vec dst, kReg mask, immI size, rRegI tmp) %{
+instruct vstoreMask_evex_vectmask(vec dst, kReg mask, immI size) %{
   predicate(n->in(1)->bottom_type()->isa_vectmask() && !VM_Version::supports_avx512vlbw());
   match(Set dst (VectorStoreMask mask size));
-  effect(TEMP_DEF dst, TEMP tmp);
+  effect(TEMP_DEF dst);
   format %{ "vector_store_mask $dst, $mask \t! elem size is $size byte[s]" %}
   ins_encode %{
     assert(Matcher::vector_length_in_bytes(this, $mask) == 64, "");
     __ evmovdqul($dst$$XMMRegister, $mask$$KRegister, ExternalAddress(vector_int_mask_cmp_bits()),
-                 false, Assembler::AVX_512bit, $tmp$$Register);
+                 false, Assembler::AVX_512bit, noreg);
     __ evpmovdb($dst$$XMMRegister, $dst$$XMMRegister, Assembler::AVX_512bit);
   %}
   ins_pipe( pipe_slow );
