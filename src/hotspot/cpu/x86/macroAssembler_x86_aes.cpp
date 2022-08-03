@@ -1282,7 +1282,7 @@ void MacroAssembler::gfmul_avx512(XMMRegister GH, XMMRegister HK) {
     evpxorq(TMP1, TMP1, TMP3, Assembler::AVX_512bit);
     evpxorq(GH, GH, TMP2, Assembler::AVX_512bit);
 
-    evmovdquq(TMP3, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr()), Assembler::AVX_512bit, r15);
+    evmovdquq(TMP3, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr()), Assembler::AVX_512bit, noreg);
     evpclmulqdq(TMP2, TMP3, GH, 0x01, Assembler::AVX_512bit);
     vpslldq(TMP2, TMP2, 8, Assembler::AVX_512bit);
     evpxorq(GH, GH, TMP2, Assembler::AVX_512bit);
@@ -1302,11 +1302,11 @@ void MacroAssembler::generateHtbl_48_block_zmm(Register htbl, Register avx512_ht
     Label GFMUL_AVX512;
 
     movdqu(HK, Address(htbl, 0));
-    movdqu(xmm10, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), rscratch1);
+    movdqu(xmm10, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), noreg);
     vpshufb(HK, HK, xmm10, Assembler::AVX_128bit);
 
-    movdqu(xmm11, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr() + 64), rscratch1); // Poly
-    movdqu(xmm12, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr() + 80), rscratch1); // Twoone
+    movdqu(xmm11, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr() + 64), noreg); // Poly
+    movdqu(xmm12, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr() + 80), noreg); // Twoone
     // Compute H ^ 2 from the input subkeyH
     movdqu(xmm2, xmm6);
     vpsllq(xmm6, xmm6, 1, Assembler::AVX_128bit);
@@ -1562,7 +1562,7 @@ void MacroAssembler::ghash16_encrypt16_parallel(Register key, Register subkeyHtb
         vpternlogq(ZTMP7, 0x96, xmm25, ZTMP11, Assembler::AVX_512bit);
         vpsrldq(ZTMP11, ZTMP7, 8, Assembler::AVX_512bit);
         vpslldq(ZTMP7, ZTMP7, 8, Assembler::AVX_512bit);
-        evmovdquq(ZTMP12, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr()), Assembler::AVX_512bit, rbx);
+        evmovdquq(ZTMP12, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr()), Assembler::AVX_512bit, noreg);
     }
     // AES round 7
     roundEncode(ZTMP18, ZTMP0, ZTMP1, ZTMP2, ZTMP3);
@@ -1674,7 +1674,7 @@ void MacroAssembler::aesgcm_encrypt(Register in, Register len, Register ct, Regi
     movdqu(CTR_BLOCKx, Address(counter, 0));
     movdqu(AAD_HASHx, Address(state, 0));
     // Load lswap mask for ghash
-    movdqu(xmm24, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), rbx);
+    movdqu(xmm24, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), noreg);
     // Shuffle input state using lswap mask
     vpshufb(AAD_HASHx, AAD_HASHx, xmm24, Assembler::AVX_128bit);
 
@@ -1684,14 +1684,14 @@ void MacroAssembler::aesgcm_encrypt(Register in, Register len, Register ct, Regi
     // Broadcast counter value to 512 bit register
     evshufi64x2(CTR_BLOCKx, CTR_BLOCKx, CTR_BLOCKx, 0, Assembler::AVX_512bit);
     // Load counter shuffle mask
-    evmovdquq(xmm24, ExternalAddress(StubRoutines::x86::counter_mask_addr()), Assembler::AVX_512bit, rbx);
+    evmovdquq(xmm24, ExternalAddress(StubRoutines::x86::counter_mask_addr()), Assembler::AVX_512bit, noreg);
     // Shuffle counter
     vpshufb(CTR_BLOCKx, CTR_BLOCKx, xmm24, Assembler::AVX_512bit);
 
     // Load mask for incrementing counter
-    evmovdquq(COUNTER_INC_MASK, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 128), Assembler::AVX_512bit, rbx);
+    evmovdquq(COUNTER_INC_MASK, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 128), Assembler::AVX_512bit, noreg);
     // Pre-increment counter
-    vpaddd(ZTMP5, CTR_BLOCKx, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 64), Assembler::AVX_512bit, rbx);
+    vpaddd(ZTMP5, CTR_BLOCKx, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 64), Assembler::AVX_512bit, noreg);
     vpaddd(ZTMP6, ZTMP5, COUNTER_INC_MASK, Assembler::AVX_512bit);
     vpaddd(ZTMP7, ZTMP6, COUNTER_INC_MASK, Assembler::AVX_512bit);
     vpaddd(ZTMP8, ZTMP7, COUNTER_INC_MASK, Assembler::AVX_512bit);
@@ -1704,7 +1704,7 @@ void MacroAssembler::aesgcm_encrypt(Register in, Register len, Register ct, Regi
     // Move 256 bytes of data
     loadData(in, pos, ZTMP0, ZTMP1, ZTMP2, ZTMP3);
     // Load key shuffle mask
-    movdqu(xmm29, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), rbx);
+    movdqu(xmm29, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), noreg);
     // Load 0th AES round key
     ev_load_key(ZTMP4, key, 0, xmm29);
     // AES-ROUND0, xmm24 has the shuffle mask
@@ -1867,7 +1867,7 @@ void MacroAssembler::aesgcm_encrypt(Register in, Register len, Register ct, Regi
     vhpxori4x128(ZTMP1, ZTMP11);
     vhpxori4x128(ZTMP2, ZTMP12);
     // Load reduction polynomial and compute final reduction
-    evmovdquq(ZTMP15, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr()), Assembler::AVX_512bit, rbx);
+    evmovdquq(ZTMP15, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr()), Assembler::AVX_512bit, noreg);
     vclmul_reduce(AAD_HASHx, ZTMP15, ZTMP1, ZTMP2, ZTMP3, ZTMP4);
 
     // Pre-increment counter for next operation
@@ -1876,7 +1876,7 @@ void MacroAssembler::aesgcm_encrypt(Register in, Register len, Register ct, Regi
     vpshufb(CTR_BLOCKx, CTR_BLOCKx, xmm24, Assembler::AVX_512bit);
     movdqu(Address(counter, 0), CTR_BLOCKx);
     // Load ghash lswap mask
-    movdqu(xmm24, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), rscratch1);
+    movdqu(xmm24, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), noreg);
     // Shuffle ghash using lbswap_mask and store it
     vpshufb(AAD_HASHx, AAD_HASHx, xmm24, Assembler::AVX_128bit);
     movdqu(Address(state, 0), AAD_HASHx);

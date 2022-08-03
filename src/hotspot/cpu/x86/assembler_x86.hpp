@@ -811,9 +811,8 @@ private:
   void emit_data64(jlong data, relocInfo::relocType rtype, int format = 0);
   void emit_data64(jlong data, RelocationHolder const& rspec, int format = 0);
 
-#ifdef ASSERT
   bool always_reachable(AddressLiteral adr) NOT_LP64( { return true; } );
-#endif // ASSERT
+
   bool        reachable(AddressLiteral adr, bool requires_always_reachable) NOT_LP64( { return true; } );
 
   bool        reachable(AddressLiteral adr, Register rscratch) { return reachable(adr, rscratch == noreg); }

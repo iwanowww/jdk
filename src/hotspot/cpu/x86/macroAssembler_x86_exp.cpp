@@ -77,6 +77,10 @@ ATTRIBUTE_ALIGNED(16) juint _cv[] =
     0xc090cf0fUL, 0x3f811115UL, 0x55548ba1UL, 0x3fc55555UL
 };
 
+ATTRIBUTE_ALIGNED(16) juint _shifter[] =
+{
+    0x00000000UL, 0x43380000UL, 0x00000000UL, 0x43380000UL
+};
 
 ATTRIBUTE_ALIGNED(16) juint _mmask[] =
 {
@@ -189,6 +193,7 @@ void MacroAssembler::fast_exp(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
   assert_different_registers(tmp, eax, ecx, edx);
 
   address cv       = (address)_cv;
+  address Shifter  = (address)_shifter;
   address mmask    = (address)_mmask;
   address bias     = (address)_bias;
   address Tbl_addr = (address)_Tbl_addr;
@@ -202,7 +207,7 @@ void MacroAssembler::fast_exp(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
   movsd(Address(rsp, 8), xmm0);
   unpcklpd(xmm0, xmm0);
   movdqu(xmm1, ExternalAddress(cv),      tmp /*rscratch*/);  // 0x652b82feUL, 0x40571547UL, 0x652b82feUL, 0x40571547UL
-  movdqu(xmm6, ExternalAddress(ONE),     tmp /*rscratch*/);  // 0x00000000UL, 0x43380000UL, 0x00000000UL, 0x43380000UL
+  movdqu(xmm6, ExternalAddress(Shifter), tmp /*rscratch*/);  // 0x00000000UL, 0x43380000UL, 0x00000000UL, 0x43380000UL
   movdqu(xmm2, ExternalAddress(16 + cv), tmp /*rscratch*/);  // 0xfefa0000UL, 0x3f862e42UL, 0xfefa0000UL, 0x3f862e42UL
   movdqu(xmm3, ExternalAddress(32 + cv), tmp /*rscratch*/);  // 0xbc9e3b3aUL, 0x3d1cf79aUL, 0xbc9e3b3aUL, 0x3d1cf79aUL
   pextrw(eax, xmm0, 3);

@@ -172,7 +172,7 @@ address TemplateInterpreterGenerator::generate_exception_handler_common(
                rarg, rarg2);
   }
   // throw exception
-  __ jump(ExternalAddress(Interpreter::throw_exception_entry()), rscratch1);
+  __ jump(ExternalAddress(Interpreter::throw_exception_entry()), noreg);
   return entry;
 }
 
@@ -535,7 +535,7 @@ void TemplateInterpreterGenerator::generate_stack_overflow_check(void) {
   // Note: the restored frame is not necessarily interpreted.
   // Use the shared runtime version of the StackOverflowError.
   assert(StubRoutines::throw_StackOverflowError_entry() != NULL, "stub not yet generated");
-  __ jump(ExternalAddress(StubRoutines::throw_StackOverflowError_entry()), rscratch1);
+  __ jump(ExternalAddress(StubRoutines::throw_StackOverflowError_entry()), noreg);
   // all done with frame size check
   __ bind(after_frame_check_pop);
   NOT_LP64(__ pop(rsi));
@@ -663,7 +663,7 @@ address TemplateInterpreterGenerator::generate_Continuation_doYield_entry(void) 
 
   __ push_cont_fastpath();
 
-  __ jump(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::cont_doYield())), rscratch1);
+  __ jump(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::cont_doYield())), noreg);
   // return value is in rax
 
   return entry;
@@ -1128,7 +1128,7 @@ address TemplateInterpreterGenerator::generate_native_entry(bool synchronized) {
 #ifndef _LP64
     __ push(thread);
     __ call(RuntimeAddress(CAST_FROM_FN_PTR(address,
-                                            JavaThread::check_special_condition_for_native_trans)));
+                                            JavaThread::check_special_condition_for_native_trans)), rscratch1);
     __ increment(rsp, wordSize);
     __ get_thread(thread);
 #else
@@ -1136,7 +1136,7 @@ address TemplateInterpreterGenerator::generate_native_entry(bool synchronized) {
     __ mov(r12, rsp); // remember sp (can only use r12 if not using call_VM)
     __ subptr(rsp, frame::arg_reg_save_area_bytes); // windows
     __ andptr(rsp, -16); // align stack as required by ABI
-    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, JavaThread::check_special_condition_for_native_trans)));
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, JavaThread::check_special_condition_for_native_trans)), rscratch1);
     __ mov(rsp, r12); // restore sp
     __ reinit_heapbase();
 #endif // _LP64
@@ -1187,13 +1187,13 @@ address TemplateInterpreterGenerator::generate_native_entry(bool synchronized) {
 
     __ pusha(); // XXX only save smashed registers
 #ifndef _LP64
-    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::reguard_yellow_pages)));
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::reguard_yellow_pages)), noreg);
     __ popa();
 #else
     __ mov(r12, rsp); // remember sp (can only use r12 if not using call_VM)
     __ subptr(rsp, frame::arg_reg_save_area_bytes); // windows
     __ andptr(rsp, -16); // align stack as required by ABI
-    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::reguard_yellow_pages)));
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::reguard_yellow_pages)), rscratch1);
     __ mov(rsp, r12); // restore sp
     __ popa(); // XXX only restore smashed registers
     __ reinit_heapbase();
@@ -1849,11 +1849,11 @@ void TemplateInterpreterGenerator::trace_bytecode(Template* t) {
   assert(Interpreter::trace_code(t->tos_in()) != NULL,
          "entry must have been generated");
 #ifndef _LP64
-  __ call(RuntimeAddress(Interpreter::trace_code(t->tos_in())));
+  __ call(RuntimeAddress(Interpreter::trace_code(t->tos_in())), noreg);
 #else
   __ mov(r12, rsp); // remember sp (can only use r12 if not using call_VM)
   __ andptr(rsp, -16); // align stack as required by ABI
-  __ call(RuntimeAddress(Interpreter::trace_code(t->tos_in())));
+  __ call(RuntimeAddress(Interpreter::trace_code(t->tos_in())), noreg);
   __ mov(rsp, r12); // restore sp
   __ reinit_heapbase();
 #endif // _LP64

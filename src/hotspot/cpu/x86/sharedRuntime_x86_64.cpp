@@ -584,7 +584,7 @@ static void patch_callers_callsite(MacroAssembler *masm) {
   }
   __ mov(c_rarg0, rbx);
   __ mov(c_rarg1, rax);
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::fixup_callers_callsite)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::fixup_callers_callsite)), rscratch1);
 
   // De-allocate argument register save area
   if (frame::arg_reg_save_area_bytes != 0) {
@@ -1401,7 +1401,7 @@ static void gen_continuation_enter(MacroAssembler* masm,
 
   __ bind(L_thaw);
 
-  __ call(RuntimeAddress(StubRoutines::cont_thaw()));
+  __ call(RuntimeAddress(StubRoutines::cont_thaw()), noreg);
 
   ContinuationEntry::_return_pc_offset = __ pc() - start;
   oop_maps->add_gc_map(__ pc() - start, map->deep_copy());
@@ -2017,7 +2017,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   // Now set thread in native
   __ movl(Address(r15_thread, JavaThread::thread_state_offset()), _thread_in_native);
 
-  __ call(RuntimeAddress(native_func));
+  __ call(RuntimeAddress(native_func), rscratch1);
 
   // Verify or restore cpu control state after JNI call
   __ restore_cpu_control_state_after_jni(rscratch1);
@@ -2080,7 +2080,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ mov(r12, rsp); // remember sp
     __ subptr(rsp, frame::arg_reg_save_area_bytes); // windows
     __ andptr(rsp, -16); // align stack as required by ABI
-    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, JavaThread::check_special_condition_for_native_trans)));
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, JavaThread::check_special_condition_for_native_trans)), rscratch1);
     __ mov(rsp, r12); // restore sp
     __ reinit_heapbase();
     // Restore any method result value
@@ -2252,7 +2252,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ movptr(Address(r15_thread, in_bytes(Thread::pending_exception_offset())), NULL_WORD);
 
     // args are (oop obj, BasicLock* lock, JavaThread* thread)
-    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_unlocking_C)));
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_unlocking_C)), rscratch1);
     __ mov(rsp, r12); // restore sp
     __ reinit_heapbase();
 #ifdef ASSERT
@@ -2284,7 +2284,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   __ mov(r12, rsp); // remember sp
   __ subptr(rsp, frame::arg_reg_save_area_bytes); // windows
   __ andptr(rsp, -16); // align stack as required by ABI
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::reguard_yellow_pages)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::reguard_yellow_pages)), rscratch1);
   __ mov(rsp, r12); // restore sp
   __ reinit_heapbase();
   restore_native_result(masm, ret_type, stack_slots);
@@ -2431,7 +2431,7 @@ void SharedRuntime::generate_deopt_blob() {
     __ movl(r14, (int32_t)Deoptimization::Unpack_reexecute);
     __ mov(c_rarg0, r15_thread);
     __ movl(c_rarg2, r14); // exec mode
-    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::uncommon_trap)));
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::uncommon_trap)), rscratch1);
     oop_maps->add_gc_map( __ pc()-start, map->deep_copy());
 
     __ reset_last_Java_frame(false, rscratch1);
@@ -2518,7 +2518,7 @@ void SharedRuntime::generate_deopt_blob() {
 #endif // ASSERT
   __ mov(c_rarg0, r15_thread);
   __ movl(c_rarg1, r14); // exec_mode
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::fetch_unroll_info)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::fetch_unroll_info)), rscratch1);
 
   // Need to have an oopmap that tells fetch_unroll_info where to
   // find any register it might need.
@@ -2660,7 +2660,7 @@ void SharedRuntime::generate_deopt_blob() {
   __ andptr(rsp, -(StackAlignmentInBytes));  // Fix stack alignment as required by ABI
   __ mov(c_rarg0, r15_thread);
   __ movl(c_rarg1, r14); // second arg: exec_mode
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::unpack_frames)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::unpack_frames)), rscratch1);
   // Revert SP alignment after call since we're going to do some SP relative addressing below
   __ movptr(rsp, Address(r15_thread, JavaThread::last_Java_sp_offset()));
 
@@ -2737,7 +2737,7 @@ void SharedRuntime::generate_uncommon_trap_blob() {
 
   __ mov(c_rarg0, r15_thread);
   __ movl(c_rarg2, Deoptimization::Unpack_uncommon_trap);
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::uncommon_trap)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::uncommon_trap)), rscratch1);
 
   // Set an oopmap for the call site
   OopMapSet* oop_maps = new OopMapSet();
@@ -2855,7 +2855,7 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   __ andptr(rsp, -(StackAlignmentInBytes)); // Align SP as required by ABI
   __ mov(c_rarg0, r15_thread);
   __ movl(c_rarg1, Deoptimization::Unpack_uncommon_trap);
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::unpack_frames)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::unpack_frames)), rscratch1);
 
   // Set an oopmap for the call site
   // Use the same PC we used for the last java frame
@@ -2935,7 +2935,7 @@ SafepointBlob* SharedRuntime::generate_handler_blob(address call_ptr, int poll_t
 
   // Do the call
   __ mov(c_rarg0, r15_thread);
-  __ call(RuntimeAddress(call_ptr));
+  __ call(RuntimeAddress(call_ptr), rscratch1);
 
   // Set an oopmap for the call site.  This oopmap will map all
   // oop-registers and debug-info registers as callee-saved.  This
@@ -3074,7 +3074,7 @@ RuntimeStub* SharedRuntime::generate_resolve_blob(address destination, const cha
 
   __ mov(c_rarg0, r15_thread);
 
-  __ call(RuntimeAddress(destination));
+  __ call(RuntimeAddress(destination), rscratch1);
 
 
   // Set an oopmap for the call site.
@@ -3469,7 +3469,7 @@ void OptoRuntime::generate_exception_blob() {
   __ set_last_Java_frame(noreg, noreg, the_pc, rscratch1);
   __ mov(c_rarg0, r15_thread);
   __ andptr(rsp, -(StackAlignmentInBytes));    // Align stack
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, OptoRuntime::handle_exception_C)));
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, OptoRuntime::handle_exception_C)), rscratch1);
 
   // Set an oopmap for the call site.  This oopmap will only be used if we
   // are unwinding the stack.  Hence, all locations will be dead.

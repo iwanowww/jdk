@@ -851,7 +851,7 @@ void MacroAssembler::fast_cos(XMMRegister xmm0, XMMRegister xmm1, XMMRegister xm
   movl(Address(rsp, 8), eax);
   movl(eax, 1);
   movl(Address(rsp, 12), eax);
-  call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dlibm_sin_cos_huge())));
+  call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::dlibm_sin_cos_huge())), noreg);
   addl(rsp, 32);
   fld_d(Address(rsp, 8));
   jmp(L_2TAG_PACKET_1_0_2);

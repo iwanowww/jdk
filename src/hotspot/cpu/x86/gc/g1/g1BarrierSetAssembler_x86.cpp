@@ -423,7 +423,7 @@ void G1BarrierSetAssembler::gen_pre_barrier_stub(LIR_Assembler* ce, G1PreBarrier
   __ cmpptr(pre_val_reg, NULL_WORD);
   __ jcc(Assembler::equal, *stub->continuation());
   ce->store_parameter(stub->pre_val()->as_register(), 0);
-  __ call(RuntimeAddress(bs->pre_barrier_c1_runtime_code_blob()->code_begin()));
+  __ call(RuntimeAddress(bs->pre_barrier_c1_runtime_code_blob()->code_begin()), noreg);
   __ jmp(*stub->continuation());
 
 }
@@ -437,7 +437,7 @@ void G1BarrierSetAssembler::gen_post_barrier_stub(LIR_Assembler* ce, G1PostBarri
   __ cmpptr(new_val_reg, NULL_WORD);
   __ jcc(Assembler::equal, *stub->continuation());
   ce->store_parameter(stub->addr()->as_pointer_register(), 0);
-  __ call(RuntimeAddress(bs->post_barrier_c1_runtime_code_blob()->code_begin()));
+  __ call(RuntimeAddress(bs->post_barrier_c1_runtime_code_blob()->code_begin()), noreg);
   __ jmp(*stub->continuation());
 }
 

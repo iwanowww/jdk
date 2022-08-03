@@ -892,7 +892,7 @@ class StubGenerator: public StubCodeGenerator {
     __ popf();                                   // get saved EFLAGS off stack -- will be ignored
     __ pusha();                                  // push registers (eip = return address & msg are already pushed)
     BLOCK_COMMENT("call MacroAssembler::debug");
-    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::debug32)));
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::debug32)), rscratch1);
     __ hlt();
     return start;
   }
@@ -3931,7 +3931,7 @@ class StubGenerator: public StubCodeGenerator {
 
     // Call runtime
     BLOCK_COMMENT("call runtime_entry");
-    __ call(RuntimeAddress(runtime_entry));
+    __ call(RuntimeAddress(runtime_entry), noreg);
     // Generate oop map
     OopMap* map =  new OopMap(framesize, 0);
     oop_maps->add_gc_map(__ pc() - start, map);

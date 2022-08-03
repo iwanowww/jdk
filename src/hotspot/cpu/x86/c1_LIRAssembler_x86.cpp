@@ -230,7 +230,7 @@ Address LIR_Assembler::as_Address(LIR_Address* addr, Register tmp) {
   if (addr->base()->is_illegal()) {
     assert(addr->index()->is_illegal(), "must be illegal too");
     AddressLiteral laddr((address)addr->disp(), relocInfo::none);
-    if (! __ reachable(laddr)) {
+    if (! __ reachable(laddr, tmp)) {
       __ movptr(tmp, laddr.addr());
       Address res(tmp, 0);
       return res;
@@ -367,7 +367,7 @@ void LIR_Assembler::clinit_barrier(ciMethod* method) {
   __ mov_metadata(klass, method->holder()->constant_encoding());
   __ clinit_barrier(klass, thread, &L_skip_barrier /*L_fast_path*/);
 
-  __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()), rscratch1);
+  __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()), noreg);
 
   __ bind(L_skip_barrier);
 }
@@ -416,7 +416,7 @@ int LIR_Assembler::emit_exception_handler() {
   __ verify_not_null_oop(rax);
 
   // search an exception handler (rax: exception oop, rdx: throwing pc)
-  __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::handle_exception_from_callee_id)));
+  __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::handle_exception_from_callee_id)), noreg);
   __ should_not_reach_here();
   guarantee(code_offset() - offset <= exception_handler_size(), "overflow");
   __ end_a_stub();
@@ -440,8 +440,8 @@ int LIR_Assembler::emit_unwind_handler() {
   Register thread = NOT_LP64(rsi) LP64_ONLY(r15_thread);
   NOT_LP64(__ get_thread(thread));
   __ movptr(rax, Address(thread, JavaThread::exception_oop_offset()));
-  __ movptr(Address(thread, JavaThread::exception_oop_offset()), NULL_WORD, rscratch1);
-  __ movptr(Address(thread, JavaThread::exception_pc_offset()),  NULL_WORD, rscratch1);
+  __ movptr(Address(thread, JavaThread::exception_oop_offset()), NULL_WORD);
+  __ movptr(Address(thread, JavaThread::exception_pc_offset()),  NULL_WORD);
 
   __ bind(_unwind_handler_entry);
   __ verify_not_null_oop(rax);
@@ -471,7 +471,7 @@ int LIR_Assembler::emit_unwind_handler() {
     __ movptr(Address(rsp, 0), rax);
     __ mov_metadata(Address(rsp, sizeof(void*)), method()->constant_encoding(), noreg);
 #endif
-    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::dtrace_method_exit)));
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::dtrace_method_exit)), noreg);
   }
 
   if (method()->is_synchronized() || compilation()->env()->dtrace_method_probes()) {
@@ -480,7 +480,7 @@ int LIR_Assembler::emit_unwind_handler() {
 
   // remove the activation and dispatch to the unwind handler
   __ remove_frame(initial_frame_size_in_bytes());
-  __ jump(RuntimeAddress(Runtime1::entry_for(Runtime1::unwind_exception_id)), rscratch1);
+  __ jump(RuntimeAddress(Runtime1::entry_for(Runtime1::unwind_exception_id)), noreg);
 
   // Emit the slow path assembly
   if (stub != NULL) {
@@ -504,7 +504,7 @@ int LIR_Assembler::emit_deopt_handler() {
   InternalAddress here(__ pc());
 
   __ pushptr(here.addr(), rscratch1);
-  __ jump(RuntimeAddress(SharedRuntime::deopt_blob()->unpack()), rscratch1);
+  __ jump(RuntimeAddress(SharedRuntime::deopt_blob()->unpack()), noreg);
   guarantee(code_offset() - offset <= deopt_handler_size(), "overflow");
   __ end_a_stub();
 
@@ -521,7 +521,7 @@ void LIR_Assembler::return_op(LIR_Opr result, C1SafepointPollStub* code_stub) {
   __ remove_frame(initial_frame_size_in_bytes());
 
   if (StackReservedPages > 0 && compilation()->has_reserved_stack_access()) {
-    __ reserved_stack_check(rscratch1);
+    __ reserved_stack_check();
   }
 
   // Note: we do not need to round double result; float result has the right precision
@@ -1583,7 +1583,7 @@ void LIR_Assembler::emit_opConvert(LIR_OpConvert* op) {
 
       // instruction sequence too long to inline it here
       {
-        __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::fpu2long_stub_id)));
+        __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::fpu2long_stub_id)), noreg);
       }
       break;
 #endif // _LP64
@@ -1788,7 +1788,7 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
 #else
         __ pushklass(k->constant_encoding(), noreg);
 #endif // _LP64
-        __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::slow_subtype_check_id)));
+        __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::slow_subtype_check_id)), noreg);
         __ pop(klass_RInfo);
         __ pop(klass_RInfo);
         // result is a boolean
@@ -1802,7 +1802,7 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
       // call out-of-line instance of __ check_klass_subtype_slow_path(...):
       __ push(klass_RInfo);
       __ push(k_RInfo);
-      __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::slow_subtype_check_id)));
+      __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::slow_subtype_check_id)), noreg);
       __ pop(klass_RInfo);
       __ pop(k_RInfo);
       // result is a boolean
@@ -1886,7 +1886,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
     // call out-of-line instance of __ check_klass_subtype_slow_path(...):
     __ push(klass_RInfo);
     __ push(k_RInfo);
-    __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::slow_subtype_check_id)));
+    __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::slow_subtype_check_id)), noreg);
     __ pop(klass_RInfo);
     __ pop(k_RInfo);
     // result is a boolean
@@ -2925,7 +2925,7 @@ void LIR_Assembler::throw_op(LIR_Opr exceptionPC, LIR_Opr exceptionOop, CodeEmit
   } else {
     unwind_id = Runtime1::handle_exception_nofpu_id;
   }
-  __ call(RuntimeAddress(Runtime1::entry_for(unwind_id)));
+  __ call(RuntimeAddress(Runtime1::entry_for(unwind_id)), noreg);
 
   // enough room for two byte trap
   __ nop();
@@ -3113,7 +3113,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
       __ incrementl(ExternalAddress((address)&Runtime1::_generic_arraycopystub_cnt), rscratch1);
     }
 #endif
-    __ call(RuntimeAddress(copyfunc_addr));
+    __ call(RuntimeAddress(copyfunc_addr), noreg);
     __ addptr(rsp, 6*wordSize);
 #else
     __ mov(c_rarg4, j_rarg4);
@@ -3122,7 +3122,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
       __ incrementl(ExternalAddress((address)&Runtime1::_generic_arraycopystub_cnt), rscratch1);
     }
 #endif
-    __ call(RuntimeAddress(copyfunc_addr));
+    __ call(RuntimeAddress(copyfunc_addr), noreg);
 #endif // _WIN64
 #else
     __ push(length);
@@ -3278,7 +3278,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
 
       __ push(src);
       __ push(dst);
-      __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::slow_subtype_check_id)));
+      __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::slow_subtype_check_id)), noreg);
       __ pop(dst);
       __ pop(src);
 
@@ -3350,13 +3350,13 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
         __ movptr(c_rarg3, Address(c_rarg3, ObjArrayKlass::element_klass_offset()));
         store_parameter(c_rarg3, 4);
         __ movl(c_rarg3, Address(c_rarg3, Klass::super_check_offset_offset()));
-        __ call(RuntimeAddress(copyfunc_addr));
+        __ call(RuntimeAddress(copyfunc_addr), noreg);
         __ addptr(rsp, 6*wordSize);
 #else
         __ load_klass(c_rarg4, dst, tmp_load_klass);
         __ movptr(c_rarg4, Address(c_rarg4, ObjArrayKlass::element_klass_offset()));
         __ movl(c_rarg3, Address(c_rarg4, Klass::super_check_offset_offset()));
-        __ call(RuntimeAddress(copyfunc_addr));
+        __ call(RuntimeAddress(copyfunc_addr), noreg);
 #endif
 
 #endif

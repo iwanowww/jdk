@@ -852,7 +852,7 @@ void ShenandoahBarrierSetAssembler::gen_pre_barrier_stub(LIR_Assembler* ce, Shen
   __ cmpptr(pre_val_reg, NULL_WORD);
   __ jcc(Assembler::equal, *stub->continuation());
   ce->store_parameter(stub->pre_val()->as_register(), 0);
-  __ call(RuntimeAddress(bs->pre_barrier_c1_runtime_code_blob()->code_begin()));
+  __ call(RuntimeAddress(bs->pre_barrier_c1_runtime_code_blob()->code_begin()), noreg);
   __ jmp(*stub->continuation());
 
 }
@@ -904,15 +904,15 @@ void ShenandoahBarrierSetAssembler::gen_load_reference_barrier_stub(LIR_Assemble
   ce->store_parameter(addr, 1);
   if (is_strong) {
     if (is_native) {
-      __ call(RuntimeAddress(bs->load_reference_barrier_strong_native_rt_code_blob()->code_begin()));
+      __ call(RuntimeAddress(bs->load_reference_barrier_strong_native_rt_code_blob()->code_begin()), noreg);
     } else {
-      __ call(RuntimeAddress(bs->load_reference_barrier_strong_rt_code_blob()->code_begin()));
+      __ call(RuntimeAddress(bs->load_reference_barrier_strong_rt_code_blob()->code_begin()), noreg);
     }
   } else if (is_weak) {
-    __ call(RuntimeAddress(bs->load_reference_barrier_weak_rt_code_blob()->code_begin()));
+    __ call(RuntimeAddress(bs->load_reference_barrier_weak_rt_code_blob()->code_begin()), noreg);
   } else {
     assert(is_phantom, "only remaining strength");
-    __ call(RuntimeAddress(bs->load_reference_barrier_phantom_rt_code_blob()->code_begin()));
+    __ call(RuntimeAddress(bs->load_reference_barrier_phantom_rt_code_blob()->code_begin()), noreg);
   }
   __ jmp(*stub->continuation());
 }

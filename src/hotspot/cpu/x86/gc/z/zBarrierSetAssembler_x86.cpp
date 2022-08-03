@@ -300,7 +300,7 @@ void ZBarrierSetAssembler::generate_c1_load_barrier_stub(LIR_Assembler* ce,
   __ subptr(rsp, 2 * BytesPerWord);
   ce->store_parameter(ref_addr, 1);
   ce->store_parameter(ref, 0);
-  __ call(RuntimeAddress(stub->runtime_stub()));
+  __ call(RuntimeAddress(stub->runtime_stub()), noreg);
   __ addptr(rsp, 2 * BytesPerWord);
 
   // Verify result
@@ -690,7 +690,7 @@ void ZBarrierSetAssembler::generate_c2_load_barrier_stub(MacroAssembler* masm, Z
   {
     ZSaveLiveRegisters save_live_registers(masm, stub);
     ZSetupArguments setup_arguments(masm, stub);
-    __ call(RuntimeAddress(stub->slow_path()));
+    __ call(RuntimeAddress(stub->slow_path()), rscratch1);
   }
 
   // Stub exit

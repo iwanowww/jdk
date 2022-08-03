@@ -12207,11 +12207,11 @@ static bool is_reachable_from(address pc, address target, relocInfo::relocType r
   // This would have to change if we ever save/restore shared code
   // to be more pessimistic.
   disp = (int64_t)target - ((int64_t)CodeCache::low_bound() + sizeof(int));
-  if (!is_simm32(disp)) {
+  if (!Assembler::is_simm32(disp)) {
     return false;
   }
   disp = (int64_t)target - ((int64_t)CodeCache::high_bound() + sizeof(int));
-  if (!is_simm32(disp)) {
+  if (!Assembler::is_simm32(disp)) {
     return false;
   }
 
@@ -12230,13 +12230,11 @@ static bool is_reachable_from(address pc, address target, relocInfo::relocType r
   } else {
     disp += fudge;
   }
-  return is_simm32(disp);
+  return Assembler::is_simm32(disp);
 }
 
 bool Assembler::reachable(AddressLiteral adr, bool requires_always_reachable) {
-  if (requires_always_reachable) {
-    assert(always_reachable(adr), "requirement");
-  }
+  assert(always_reachable(adr) == requires_always_reachable, "requirement");
   bool is_reachable = is_reachable_from(pc(), adr.target(), adr.reloc());
   if (!is_reachable) {
     assert(!always_reachable(adr), "sanity");
@@ -12244,7 +12242,6 @@ bool Assembler::reachable(AddressLiteral adr, bool requires_always_reachable) {
   return is_reachable;
 }
 
-#ifdef ASSERT
 bool Assembler::always_reachable(AddressLiteral adr) {
   switch (adr.reloc()) {
     // This should be rip relative and easily reachable.
@@ -12271,7 +12268,6 @@ bool Assembler::always_reachable(AddressLiteral adr) {
     }
   }
 }
-#endif // ASSERT
 
 void Assembler::emit_data64(jlong data,
                             relocInfo::relocType rtype,
