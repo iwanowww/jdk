@@ -2926,7 +2926,7 @@ public:
 
   // Set embedded opmask register specifier.
   void set_embedded_opmask_register_specifier(KRegister mask) {
-    _embedded_opmask_register_specifier = (*mask).encoding() & 0x7;
+    _embedded_opmask_register_specifier = mask->encoding() & 0x7;
   }
 
 };
