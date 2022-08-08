@@ -61,7 +61,7 @@ const char* FloatRegisterImpl::name() const {
 
 const char* XMMRegisterImpl::name() const {
   static const char *const names[number_of_registers] = {
-    "xmm0","xmm1","xmm2","xmm3","xmm4","xmm5","xmm6","xmm7"
+    "xmm0",    "xmm1",  "xmm2",  "xmm3",  "xmm4",  "xmm5",  "xmm6",  "xmm7"
 #ifdef _LP64
     ,"xmm8",   "xmm9",  "xmm10", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15"
     ,"xmm16",  "xmm17", "xmm18", "xmm19", "xmm20", "xmm21", "xmm22", "xmm23"
