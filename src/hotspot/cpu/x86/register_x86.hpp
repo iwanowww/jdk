@@ -225,7 +225,7 @@ public:
   // Actually available XMM registers for use, depending on actual CPU capabilities and flags.
   static int available_xmm_registers() {
 #ifdef _LP64
-    return (UseAVX < 3) {
+    if (UseAVX < 3) {
       return number_of_registers / 2;
     }
 #endif // _LP64
