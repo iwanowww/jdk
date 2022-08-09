@@ -26,19 +26,21 @@
 
 #include "register_x86.hpp"
 
-Register::RegisterImpl all_RegisterImpls[Register::number_of_registers + 1];
+Register::RegisterImpl           all_RegisterImpls     [Register::number_of_registers      + 1];
 FloatRegister::FloatRegisterImpl all_FloatRegisterImpls[FloatRegister::number_of_registers + 1];
-XMMRegister::XMMRegisterImpl all_XMMRegisterImpls[XMMRegister::number_of_registers + 1];
-KRegister::KRegisterImpl all_KRegisterImpls[KRegister::number_of_registers + 1];
+XMMRegister::XMMRegisterImpl     all_XMMRegisterImpls  [XMMRegister::number_of_registers   + 1];
+KRegister::KRegisterImpl         all_KRegisterImpls    [KRegister::number_of_registers     + 1];
 
 const int ConcreteRegisterImpl::max_gpr = Register::number_of_registers LP64_ONLY( << 1 );
 
 const int ConcreteRegisterImpl::max_fpr = ConcreteRegisterImpl::max_gpr +
-    2 * FloatRegister::number_of_registers;
+    FloatRegister::number_of_registers * FloatRegister::max_slots_per_register;
+
 const int ConcreteRegisterImpl::max_xmm = ConcreteRegisterImpl::max_fpr +
-    XMMRegister::max_slots_per_register * XMMRegister::number_of_registers;
+    XMMRegister::number_of_registers * XMMRegister::max_slots_per_register;
+
 const int ConcreteRegisterImpl::max_kpr = ConcreteRegisterImpl::max_xmm +
-    KRegister::max_slots_per_register * KRegister::number_of_registers;
+    KRegister::number_of_registers * KRegister::max_slots_per_register;
 
 const char * Register::RegisterImpl::name() const {
   static const char *const names[number_of_registers] = {
@@ -56,7 +58,7 @@ const char* FloatRegister::FloatRegisterImpl::name() const {
   static const char *const names[number_of_registers] = {
     "st0", "st1", "st2", "st3", "st4", "st5", "st6", "st7"
   };
-  return is_valid() ? names[encoding()] : "noreg";
+  return is_valid() ? names[encoding()] : "fnoreg";
 }
 
 const char* XMMRegister::XMMRegisterImpl::name() const {

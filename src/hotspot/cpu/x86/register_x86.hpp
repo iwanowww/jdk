@@ -36,9 +36,9 @@ typedef VMRegImpl* VMReg;
 // The implementation of integer registers for the x86/x64 architectures
 class Register {
 private:
-  int _enc;
+  int _encoding;
 
-  constexpr Register(int enc, bool unused) : _enc(enc) {}
+  constexpr Register(int encoding, bool unused) : _encoding(encoding) {}
 
 public:
   inline friend constexpr Register as_Register(int encoding);
@@ -69,12 +69,12 @@ public:
     const char* name() const;
   };
 
-  constexpr Register() : _enc(-1) {} // noreg
+  constexpr Register() : _encoding(-1) {} // noreg
 
-  int operator==(const Register r) const { return _enc == r._enc; }
-  int operator!=(const Register r) const { return _enc != r._enc; }
+  int operator==(const Register r) const { return _encoding == r._encoding; }
+  int operator!=(const Register r) const { return _encoding != r._encoding; }
 
-  const RegisterImpl* operator->() const { return RegisterImpl::first() + _enc; }
+  const RegisterImpl* operator->() const { return RegisterImpl::first() + _encoding; }
 };
 
 extern Register::RegisterImpl all_RegisterImpls[Register::number_of_registers + 1] INTERNAL_VISIBILITY;
@@ -93,6 +93,7 @@ inline constexpr Register as_Register(int encoding) {
 }
 
 inline Register Register::RegisterImpl::successor() const {
+  assert(is_valid(), "sanity");
   return as_Register(encoding() + 1);
 }
 
@@ -120,15 +121,16 @@ constexpr Register r15 = as_Register(15);
 // The implementation of floating point registers for the ia32 architecture
 class FloatRegister {
 private:
-  int _enc;
+  int _encoding;
 
-  constexpr FloatRegister(int enc, bool unused) : _enc(enc) {}
+  constexpr FloatRegister(int encoding, bool unused) : _encoding(encoding) {}
 
 public:
   inline friend constexpr FloatRegister as_FloatRegister(int encoding);
 
   enum {
-    number_of_registers = 8
+    number_of_registers    = 8,
+    max_slots_per_register = 2
   };
 
   class FloatRegisterImpl: public AbstractRegisterImpl {
@@ -150,12 +152,12 @@ public:
     const char* name() const;
   };
 
-  constexpr FloatRegister() : _enc(-1) {} // fnoreg
+  constexpr FloatRegister() : _encoding(-1) {} // fnoreg
 
-  int operator==(const FloatRegister r) const { return _enc == r._enc; }
-  int operator!=(const FloatRegister r) const { return _enc != r._enc; }
+  int operator==(const FloatRegister r) const { return _encoding == r._encoding; }
+  int operator!=(const FloatRegister r) const { return _encoding != r._encoding; }
 
-  const FloatRegisterImpl* operator->() const { return FloatRegisterImpl::first() + _enc; }
+  const FloatRegisterImpl* operator->() const { return FloatRegisterImpl::first() + _encoding; }
 };
 
 extern FloatRegister::FloatRegisterImpl all_FloatRegisterImpls[FloatRegister::number_of_registers + 1] INTERNAL_VISIBILITY;
@@ -174,6 +176,7 @@ inline constexpr FloatRegister as_FloatRegister(int encoding) {
 }
 
 inline FloatRegister FloatRegister::FloatRegisterImpl::successor() const {
+  assert(is_valid(), "sanity");
   return as_FloatRegister(encoding() + 1);
 }
 
@@ -181,9 +184,9 @@ inline FloatRegister FloatRegister::FloatRegisterImpl::successor() const {
 // The implementation of XMM registers.
 class XMMRegister {
 private:
-  int _enc;
+  int _encoding;
 
-  constexpr XMMRegister(int enc, bool unused) : _enc(enc) {}
+  constexpr XMMRegister(int enc, bool unused) : _encoding(encoding) {}
 
 public:
   inline friend constexpr XMMRegister as_XMMRegister(int encoding);
@@ -212,17 +215,17 @@ public:
     const char* name() const;
   };
 
-  constexpr XMMRegister() : _enc(-1) {} // xnoreg
+  constexpr XMMRegister() : _encoding(-1) {} // xnoreg
 
-  int operator==(const XMMRegister r) const { return _enc == r._enc; }
-  int operator!=(const XMMRegister r) const { return _enc != r._enc; }
+  int operator==(const XMMRegister r) const { return _encoding == r._encoding; }
+  int operator!=(const XMMRegister r) const { return _encoding != r._encoding; }
 
-  const XMMRegisterImpl* operator->() const { return XMMRegisterImpl::first() + _enc; }
+  const XMMRegisterImpl* operator->() const { return XMMRegisterImpl::first() + _encoding; }
 
   // Actually available XMM registers for use, depending on actual CPU capabilities and flags.
   static int available_xmm_registers() {
 #ifdef _LP64
-    if (UseAVX < 3) {
+    return (UseAVX < 3) {
       return number_of_registers / 2;
     }
 #endif // _LP64
@@ -246,6 +249,7 @@ inline constexpr XMMRegister as_XMMRegister(int encoding) {
 }
 
 inline XMMRegister XMMRegister::XMMRegisterImpl::successor() const {
+  assert(is_valid(), "sanity");
   return as_XMMRegister(encoding() + 1);
 }
 
@@ -289,9 +293,9 @@ constexpr XMMRegister xmm31 = as_XMMRegister(31);
 // The implementation of AVX-512 opmask registers.
 class KRegister {
 private:
-  int _enc;
+  int _encoding;
 
-  constexpr KRegister(int enc, bool unused) : _enc(enc) {}
+  constexpr KRegister(int encoding, bool unused) : _encoding(encoding) {}
 
 public:
   inline friend constexpr KRegister as_KRegister(int encoding);
@@ -323,12 +327,12 @@ public:
     const char* name() const;
   };
 
-  constexpr KRegister() : _enc(-1) {} // knoreg
+  constexpr KRegister() : _encoding(-1) {} // knoreg
 
-  int operator==(const KRegister r) const { return _enc == r._enc; }
-  int operator!=(const KRegister r) const { return _enc != r._enc; }
+  int operator==(const KRegister r) const { return _encoding == r._encoding; }
+  int operator!=(const KRegister r) const { return _encoding != r._encoding; }
 
-  const KRegisterImpl* operator->() const { return KRegisterImpl::first() + _enc; }
+  const KRegisterImpl* operator->() const { return KRegisterImpl::first() + _encoding; }
 };
 
 extern KRegister::KRegisterImpl all_KRegisterImpls[KRegister::number_of_registers + 1] INTERNAL_VISIBILITY;
@@ -347,6 +351,7 @@ inline constexpr KRegister as_KRegister(int encoding) {
 }
 
 inline KRegister KRegister::KRegisterImpl::successor() const {
+  assert(is_valid(), "sanity");
   return as_KRegister(encoding() + 1);
 }
 
@@ -375,18 +380,19 @@ class ConcreteRegisterImpl : public AbstractRegisterImpl {
   // REG_COUNT (computed by ADLC based on the number of reg_defs seen in .ad files)
   // with ConcreteRegisterImpl::number_of_registers additional count of 8 is being
   // added for 32 bit jvm.
-    number_of_registers = Register::number_of_registers * Register::max_slots_per_register +
-      2 * FloatRegister::number_of_registers + NOT_LP64(8) LP64_ONLY(0) +
-      XMMRegister::max_slots_per_register * XMMRegister::number_of_registers +
-      KRegister::number_of_registers * KRegister::max_slots_per_register + // mask registers
-      1 // eflags
+    number_of_registers =
+        Register::number_of_registers * Register::max_slots_per_register +
+        FloatRegister::number_of_registers * FloatRegister::max_slots_per_register +
+        XMMRegister::number_of_registers * XMMRegister::max_slots_per_register +
+        KRegister::number_of_registers * KRegister::max_slots_per_register + // mask registers
+        NOT_LP64( 8 + ) // FILL0-FILL7 in x86_32.ad
+        1 // eflags
   };
 
   static const int max_gpr;
   static const int max_fpr;
   static const int max_xmm;
   static const int max_kpr;
-
 };
 
 template <>
