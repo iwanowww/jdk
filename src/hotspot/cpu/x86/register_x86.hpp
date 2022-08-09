@@ -186,7 +186,7 @@ class XMMRegister {
 private:
   int _encoding;
 
-  constexpr XMMRegister(int enc, bool unused) : _encoding(encoding) {}
+  constexpr XMMRegister(int encoding, bool unused) : _encoding(encoding) {}
 
 public:
   inline friend constexpr XMMRegister as_XMMRegister(int encoding);
