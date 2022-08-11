@@ -2763,7 +2763,7 @@ void MacroAssembler::movss(XMMRegister dst, AddressLiteral src, Register rscratc
 }
 
 void MacroAssembler::movddup(XMMRegister dst, AddressLiteral src, Register rscratch) {
-  if (reachable(src)) {
+  if (reachable(src, rscratch)) {
     Assembler::movddup(dst, as_Address(src));
   } else {
     lea(rscratch, src);
@@ -3318,7 +3318,7 @@ void MacroAssembler::vpand(XMMRegister dst, XMMRegister nds, AddressLiteral src,
 }
 
 void MacroAssembler::vpbroadcastd(XMMRegister dst, AddressLiteral src, int vector_len, Register rscratch) {
-  if (reachable(src)) {
+  if (reachable(src, rscratch)) {
     Assembler::vpbroadcastd(dst, as_Address(src), vector_len);
   } else {
     lea(rscratch, src);
@@ -3345,7 +3345,7 @@ void MacroAssembler::vbroadcastsd(XMMRegister dst, AddressLiteral src, int vecto
 }
 
 void MacroAssembler::vbroadcastss(XMMRegister dst, AddressLiteral src, int vector_len, Register rscratch) {
-  if (reachable(src)) {
+  if (reachable(src, rscratch)) {
     Assembler::vbroadcastss(dst, as_Address(src), vector_len);
   } else {
     lea(rscratch, src);

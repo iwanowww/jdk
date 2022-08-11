@@ -1680,7 +1680,7 @@ void C2_MacroAssembler::load_constant_vector(BasicType bt, XMMRegister dst, Inte
   } else if (VM_Version::supports_sse3()) {
     movddup(dst, src);
   } else {
-    movq(dst, src);
+    movq(dst, src, noreg);
     if (vlen == 16) {
       punpcklqdq(dst, dst);
     }
