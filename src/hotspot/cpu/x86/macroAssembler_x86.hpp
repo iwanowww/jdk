@@ -813,12 +813,12 @@ public:
   void cond_inc32(Condition cond, AddressLiteral counter_addr);
   // Unconditional atomic increment.
   void atomic_incl(Address counter_addr);
-  void atomic_incl(AddressLiteral counter_addr, Register scr = rscratch1);
+  void atomic_incl(AddressLiteral counter_addr, Register rscratch = rscratch1);
 #ifdef _LP64
   void atomic_incq(Address counter_addr);
-  void atomic_incq(AddressLiteral counter_addr, Register scr = rscratch1);
+  void atomic_incq(AddressLiteral counter_addr, Register rscratch = rscratch1);
 #endif
-  void atomic_incptr(AddressLiteral counter_addr, Register scr = rscratch1) { LP64_ONLY(atomic_incq(counter_addr, scr)) NOT_LP64(atomic_incl(counter_addr, scr)) ; }
+  void atomic_incptr(AddressLiteral counter_addr, Register rscratch = rscratch1) { LP64_ONLY(atomic_incq(counter_addr, rscratch)) NOT_LP64(atomic_incl(counter_addr, rscratch)) ; }
   void atomic_incptr(Address counter_addr) { LP64_ONLY(atomic_incq(counter_addr)) NOT_LP64(atomic_incl(counter_addr)) ; }
 
   void lea(Register dst, AddressLiteral adr);
@@ -881,12 +881,12 @@ public:
   void pop_d(XMMRegister r);
 
   void andpd(XMMRegister dst, Address src) { Assembler::andpd(dst, src); }
-  void andpd(XMMRegister dst, AddressLiteral src, Register scratch_reg = rscratch1);
+  void andpd(XMMRegister dst, AddressLiteral src, Register rscratch = rscratch1);
   void andpd(XMMRegister dst, XMMRegister src) { Assembler::andpd(dst, src); }
 
   void andps(XMMRegister dst, XMMRegister src) { Assembler::andps(dst, src); }
   void andps(XMMRegister dst, Address src) { Assembler::andps(dst, src); }
-  void andps(XMMRegister dst, AddressLiteral src, Register scratch_reg = rscratch1);
+  void andps(XMMRegister dst, AddressLiteral src, Register rscratch = rscratch1);
 
   void comiss(XMMRegister dst, XMMRegister src) { Assembler::comiss(dst, src); }
   void comiss(XMMRegister dst, Address src) { Assembler::comiss(dst, src); }
@@ -918,7 +918,7 @@ public:
   void fld_x(AddressLiteral src);
 
   void ldmxcsr(Address src) { Assembler::ldmxcsr(src); }
-  void ldmxcsr(AddressLiteral src, Register scratchReg = rscratch1);
+  void ldmxcsr(AddressLiteral src, Register rscratch = rscratch1);
 
 #ifdef _LP64
  private:
@@ -1179,7 +1179,7 @@ public:
   void kmovql(Register dst, KRegister src) { Assembler::kmovql(dst, src); }
   void kmovql(KRegister dst, Address src) { Assembler::kmovql(dst, src); }
   void kmovql(Address  dst, KRegister src) { Assembler::kmovql(dst, src); }
-  void kmovql(KRegister dst, AddressLiteral src, Register scratch_reg = rscratch1);
+  void kmovql(KRegister dst, AddressLiteral src, Register rscratch = rscratch1);
 
   // Safe move operation, lowers down to 16bit moves for targets supporting
   // AVX512F feature and 64bit moves for targets supporting AVX512BW feature.
@@ -1215,7 +1215,7 @@ public:
   }
   void evmovdqub(XMMRegister dst, KRegister mask, Address src, bool merge, int vector_len) { Assembler::evmovdqub(dst, mask, src, merge, vector_len); }
   void evmovdqub(Address dst, KRegister mask, XMMRegister src, bool merge, int vector_len) { Assembler::evmovdqub(dst, mask, src, merge, vector_len); }
-  void evmovdqub(XMMRegister dst, KRegister mask, AddressLiteral src, bool merge, int vector_len, Register scratch_reg);
+  void evmovdqub(XMMRegister dst, KRegister mask, AddressLiteral src, bool merge, int vector_len, Register rscratch);
 
   void evmovdquw(XMMRegister dst, Address src, int vector_len) { Assembler::evmovdquw(dst, src, vector_len); }
   void evmovdquw(Address dst, XMMRegister src, int vector_len) { Assembler::evmovdquw(dst, src, vector_len); }
@@ -1226,7 +1226,7 @@ public:
   }
   void evmovdquw(XMMRegister dst, KRegister mask, Address src, bool merge, int vector_len) { Assembler::evmovdquw(dst, mask, src, merge, vector_len); }
   void evmovdquw(Address dst, KRegister mask, XMMRegister src, bool merge, int vector_len) { Assembler::evmovdquw(dst, mask, src, merge, vector_len); }
-  void evmovdquw(XMMRegister dst, KRegister mask, AddressLiteral src, bool merge, int vector_len, Register scratch_reg);
+  void evmovdquw(XMMRegister dst, KRegister mask, AddressLiteral src, bool merge, int vector_len, Register rscratch);
 
   void evmovdqul(XMMRegister dst, XMMRegister src, int vector_len) {
      if (dst->encoding() != src->encoding()) {
@@ -1387,25 +1387,25 @@ public:
   void vpcmpeqb(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len);
 
   void vpcmpeqw(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len);
-  void evpcmpeqd(KRegister kdst, KRegister mask, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg);
+  void evpcmpeqd(KRegister kdst, KRegister mask, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch);
 
   // Vector compares
   void evpcmpd(KRegister kdst, KRegister mask, XMMRegister nds, XMMRegister src,
                int comparison, bool is_signed, int vector_len) { Assembler::evpcmpd(kdst, mask, nds, src, comparison, is_signed, vector_len); }
   void evpcmpd(KRegister kdst, KRegister mask, XMMRegister nds, AddressLiteral src,
-               int comparison, bool is_signed, int vector_len, Register scratch_reg);
+               int comparison, bool is_signed, int vector_len, Register rscratch);
   void evpcmpq(KRegister kdst, KRegister mask, XMMRegister nds, XMMRegister src,
                int comparison, bool is_signed, int vector_len) { Assembler::evpcmpq(kdst, mask, nds, src, comparison, is_signed, vector_len); }
   void evpcmpq(KRegister kdst, KRegister mask, XMMRegister nds, AddressLiteral src,
-               int comparison, bool is_signed, int vector_len, Register scratch_reg);
+               int comparison, bool is_signed, int vector_len, Register rscratch);
   void evpcmpb(KRegister kdst, KRegister mask, XMMRegister nds, XMMRegister src,
                int comparison, bool is_signed, int vector_len) { Assembler::evpcmpb(kdst, mask, nds, src, comparison, is_signed, vector_len); }
   void evpcmpb(KRegister kdst, KRegister mask, XMMRegister nds, AddressLiteral src,
-               int comparison, bool is_signed, int vector_len, Register scratch_reg);
+               int comparison, bool is_signed, int vector_len, Register rscratch);
   void evpcmpw(KRegister kdst, KRegister mask, XMMRegister nds, XMMRegister src,
                int comparison, bool is_signed, int vector_len) { Assembler::evpcmpw(kdst, mask, nds, src, comparison, is_signed, vector_len); }
   void evpcmpw(KRegister kdst, KRegister mask, XMMRegister nds, AddressLiteral src,
-               int comparison, bool is_signed, int vector_len, Register scratch_reg);
+               int comparison, bool is_signed, int vector_len, Register rscratch);
 
   void evpbroadcast(BasicType type, XMMRegister dst, Register src, int vector_len);
 
@@ -1426,7 +1426,7 @@ public:
   void vpmulld(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len) {
     Assembler::vpmulld(dst, nds, src, vector_len);
   }
-  void vpmulld(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg);
+  void vpmulld(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch);
 
   void vpsubb(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len);
   void vpsubb(XMMRegister dst, XMMRegister nds, Address src, int vector_len);
@@ -1529,13 +1529,13 @@ public:
 
   void vandpd(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len) { Assembler::vandpd(dst, nds, src, vector_len); }
   void vandpd(XMMRegister dst, XMMRegister nds, Address src, int vector_len)     { Assembler::vandpd(dst, nds, src, vector_len); }
-  void vandpd(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg = rscratch1);
+  void vandpd(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch = rscratch1);
 
   void vandps(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len) { Assembler::vandps(dst, nds, src, vector_len); }
   void vandps(XMMRegister dst, XMMRegister nds, Address src, int vector_len)     { Assembler::vandps(dst, nds, src, vector_len); }
-  void vandps(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg = rscratch1);
+  void vandps(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch = rscratch1);
 
-  void evpord(XMMRegister dst, KRegister mask, XMMRegister nds, AddressLiteral src, bool merge, int vector_len, Register scratch_reg);
+  void evpord(XMMRegister dst, KRegister mask, XMMRegister nds, AddressLiteral src, bool merge, int vector_len, Register rscratch);
 
   void vdivsd(XMMRegister dst, XMMRegister nds, XMMRegister src) { Assembler::vdivsd(dst, nds, src); }
   void vdivsd(XMMRegister dst, XMMRegister nds, Address src)     { Assembler::vdivsd(dst, nds, src); }
@@ -1568,11 +1568,11 @@ public:
 
   void vxorpd(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len) { Assembler::vxorpd(dst, nds, src, vector_len); }
   void vxorpd(XMMRegister dst, XMMRegister nds, Address src, int vector_len) { Assembler::vxorpd(dst, nds, src, vector_len); }
-  void vxorpd(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg = rscratch1);
+  void vxorpd(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch = rscratch1);
 
   void vxorps(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len) { Assembler::vxorps(dst, nds, src, vector_len); }
   void vxorps(XMMRegister dst, XMMRegister nds, Address src, int vector_len) { Assembler::vxorps(dst, nds, src, vector_len); }
-  void vxorps(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg = rscratch1);
+  void vxorps(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch = rscratch1);
 
   void vpxor(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len) {
     if (UseAVX > 1 || (vector_len < 1)) // vpxor 256 bit is available only in AVX2
@@ -1586,7 +1586,7 @@ public:
     else
       Assembler::vxorpd(dst, nds, src, vector_len);
   }
-  void vpxor(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg = rscratch1);
+  void vpxor(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch = rscratch1);
 
   // Simple version for AVX2 256bit vectors
   void vpxor(XMMRegister dst, XMMRegister src) {
@@ -1599,7 +1599,7 @@ public:
   }
 
   void vpermd(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len) { Assembler::vpermd(dst, nds, src, vector_len); }
-  void vpermd(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg);
+  void vpermd(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch);
 
   void vinserti128(XMMRegister dst, XMMRegister nds, XMMRegister src, uint8_t imm8) {
     if (UseAVX > 2 && VM_Version::supports_avx512novl()) {
