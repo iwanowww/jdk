@@ -10609,6 +10609,16 @@ void Assembler::vfpclasssd(KRegister kdst, XMMRegister src, uint8_t imm8) {
   emit_int24((unsigned char)0x67, (unsigned char)(0xC0 | encode), imm8);
 }
 
+void Assembler::emit_operand32(Register reg, Address adr) {
+  assert(reg->encoding() < 8, "no extended registers");
+  assert(!adr.base_needs_rex() && !adr.index_needs_rex(), "no extended registers");
+  emit_operand(reg, adr._base, adr._index, adr._scale, adr._disp,
+               adr._rspec);
+}
+
+#ifndef _LP64
+// 32bit only pieces of the assembler
+//
 void Assembler::fld_x(Address adr) {
   InstructionMark im(this);
   emit_int8((unsigned char)0xDB);
@@ -10620,16 +10630,6 @@ void Assembler::fstp_x(Address adr) {
   emit_int8((unsigned char)0xDB);
   emit_operand32(rdi, adr);
 }
-
-void Assembler::emit_operand32(Register reg, Address adr) {
-  assert(reg->encoding() < 8, "no extended registers");
-  assert(!adr.base_needs_rex() && !adr.index_needs_rex(), "no extended registers");
-  emit_operand(reg, adr._base, adr._index, adr._scale, adr._disp,
-               adr._rspec);
-}
-
-#ifndef _LP64
-// 32bit only pieces of the assembler
 
 void Assembler::emms() {
   NOT_LP64(assert(VM_Version::supports_mmx(), ""));

@@ -1910,12 +1910,14 @@ void MacroAssembler::comiss(XMMRegister dst, AddressLiteral src, Register rscrat
 }
 
 
-void MacroAssembler::cond_inc32(Condition cond, AddressLiteral counter_addr) {
+void MacroAssembler::cond_inc32(Condition cond, AddressLiteral counter_addr, Register rscratch) {
+  assert(rscratch != noreg || always_reachable(counter_addr),  "missing");
+
   Condition negated_cond = negate_condition(cond);
   Label L;
   jcc(negated_cond, L);
   pushf(); // Preserve flags
-  atomic_incl(counter_addr);
+  atomic_incl(counter_addr, rscratch);
   popf();
   bind(L);
 }
@@ -2118,8 +2120,12 @@ void MacroAssembler::fld_s(AddressLiteral src) {
   fld_s(as_Address(src));
 }
 
+void MacroAssembler::fld_x(AddressLiteral src) {
+  fld_x(as_Address(src));
+}
+
 void MacroAssembler::fldcw(AddressLiteral src) {
-  Assembler::fldcw(as_Address(src));
+  fldcw(as_Address(src));
 }
 
 void MacroAssembler::fpop() {
@@ -2331,10 +2337,6 @@ void MacroAssembler::jump_cc(Condition cc, AddressLiteral dst, Register rscratch
     Assembler::jmp(rscratch);
     bind(skip);
   }
-}
-
-void MacroAssembler::fld_x(AddressLiteral src) {
-  Assembler::fld_x(as_Address(src));
 }
 
 void MacroAssembler::ldmxcsr(AddressLiteral src, Register rscratch) {
@@ -3361,9 +3363,9 @@ void MacroAssembler::vpaddd(XMMRegister dst, XMMRegister nds, AddressLiteral src
   }
 }
 
-void MacroAssembler::vabsss(XMMRegister dst, XMMRegister nds, XMMRegister src, AddressLiteral negate_field, int vector_len) {
+void MacroAssembler::vabsss(XMMRegister dst, XMMRegister nds, XMMRegister src, AddressLiteral negate_field, int vector_len, Register rscratch) {
   assert(((dst->encoding() < 16 && src->encoding() < 16 && nds->encoding() < 16) || VM_Version::supports_avx512vldq()),"XMM register should be 0-15");
-  vandps(dst, nds, negate_field, vector_len);
+  vandps(dst, nds, negate_field, vector_len, rscratch);
 }
 
 void MacroAssembler::vabssd(XMMRegister dst, XMMRegister nds, XMMRegister src, AddressLiteral negate_field, int vector_len) {
@@ -3456,8 +3458,7 @@ void MacroAssembler::vpcmpeqw(XMMRegister dst, XMMRegister nds, XMMRegister src,
   Assembler::vpcmpeqw(dst, nds, src, vector_len);
 }
 
-void MacroAssembler::evpcmpeqd(KRegister kdst, KRegister mask, XMMRegister nds,
-                               AddressLiteral src, int vector_len, Register rscratch) {
+void MacroAssembler::evpcmpeqd(KRegister kdst, KRegister mask, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch) {
   assert(rscratch != noreg || always_reachable(src),  "missing");
 
   if (reachable(src)) {
@@ -3468,7 +3469,7 @@ void MacroAssembler::evpcmpeqd(KRegister kdst, KRegister mask, XMMRegister nds,
   }
 }
 
-void MacroAssembler::evpcmpd(KRegister kdst, KRegister mask, XMMRegister nds, AddressLiteral src,
+void MacroAssembler::evpcmpd(KRegister kdst, KRegister mask, XMMRegister nds, AddressLiteral src, 
                              int comparison, bool is_signed, int vector_len, Register rscratch) {
   assert(rscratch != noreg || always_reachable(src),  "missing");
 
@@ -3779,14 +3780,18 @@ void MacroAssembler::vsubss(XMMRegister dst, XMMRegister nds, AddressLiteral src
   }
 }
 
-void MacroAssembler::vnegatess(XMMRegister dst, XMMRegister nds, AddressLiteral src) {
+void MacroAssembler::vnegatess(XMMRegister dst, XMMRegister nds, AddressLiteral src, Register rscratch) {
   assert(((dst->encoding() < 16 && nds->encoding() < 16) || VM_Version::supports_avx512vldq()),"XMM register should be 0-15");
-  vxorps(dst, nds, src, Assembler::AVX_128bit);
+  assert(rscratch != noreg || always_reachable(src),  "missing");
+
+  vxorps(dst, nds, src, Assembler::AVX_128bit, rscratch);
 }
 
-void MacroAssembler::vnegatesd(XMMRegister dst, XMMRegister nds, AddressLiteral src) {
+void MacroAssembler::vnegatesd(XMMRegister dst, XMMRegister nds, AddressLiteral src, Register rscratch) {
   assert(((dst->encoding() < 16 && nds->encoding() < 16) || VM_Version::supports_avx512vldq()),"XMM register should be 0-15");
-  vxorpd(dst, nds, src, Assembler::AVX_128bit);
+  assert(rscratch != noreg || always_reachable(src),  "missing");
+
+  vxorpd(dst, nds, src, Assembler::AVX_128bit, rscratch);
 }
 
 void MacroAssembler::vxorpd(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch) {

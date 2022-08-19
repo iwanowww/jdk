@@ -1546,7 +1546,7 @@ void TemplateTable::fop2(Operation op) {
       __ movflt(xmm1, xmm0);
       __ pop_f(xmm0);
       __ call_VM_leaf(CAST_FROM_FN_PTR(address, SharedRuntime::frem), 2);
-#else
+#else // !_LP64
       __ push_f(xmm0);
       __ pop_f();
       __ fld_s(at_rsp());
@@ -1555,7 +1555,7 @@ void TemplateTable::fop2(Operation op) {
       __ pop(rax);  // pop second operand off the stack
       __ push_f();
       __ pop_f(xmm0);
-#endif
+#endif // _LP64
       break;
     default:
       ShouldNotReachHere();
@@ -1564,7 +1564,7 @@ void TemplateTable::fop2(Operation op) {
   } else {
 #ifdef _LP64
     ShouldNotReachHere();
-#else
+#else // !_LP64
     switch (op) {
     case add: __ fadd_s (at_rsp());                break;
     case sub: __ fsubr_s(at_rsp());                break;
@@ -1609,7 +1609,7 @@ void TemplateTable::dop2(Operation op) {
       __ movdbl(xmm1, xmm0);
       __ pop_d(xmm0);
       __ call_VM_leaf(CAST_FROM_FN_PTR(address, SharedRuntime::drem), 2);
-#else
+#else // !_LP64
       __ push_d(xmm0);
       __ pop_d();
       __ fld_d(at_rsp());
@@ -1619,7 +1619,7 @@ void TemplateTable::dop2(Operation op) {
       __ pop(rdx);
       __ push_d();
       __ pop_d(xmm0);
-#endif
+#endif // _LP64
       break;
     default:
       ShouldNotReachHere();
@@ -1628,7 +1628,7 @@ void TemplateTable::dop2(Operation op) {
   } else {
 #ifdef _LP64
     ShouldNotReachHere();
-#else
+#else // !_LP64
     switch (op) {
     case add: __ fadd_d (at_rsp());                break;
     case sub: __ fsubr_d(at_rsp());                break;
@@ -1657,7 +1657,7 @@ void TemplateTable::dop2(Operation op) {
     // Pop double precision number from rsp.
     __ pop(rax);
     __ pop(rdx);
-#endif
+#endif // _LP64
   }
 }
 
@@ -1860,7 +1860,7 @@ void TemplateTable::convert() {
   default:
     ShouldNotReachHere();
   }
-#else
+#else // !_LP64
   // Checking
 #ifdef ASSERT
   { TosState tos_in  = ilgl;
@@ -2051,7 +2051,7 @@ void TemplateTable::convert() {
     default             :
       ShouldNotReachHere();
   }
-#endif
+#endif // _LP64
 }
 
 void TemplateTable::lcmp() {
@@ -2105,7 +2105,7 @@ void TemplateTable::float_cmp(bool is_float, int unordered_result) {
   } else {
 #ifdef _LP64
     ShouldNotReachHere();
-#else
+#else // !_LP64
     if (is_float) {
       __ fld_s(at_rsp());
     } else {
