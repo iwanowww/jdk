@@ -7396,7 +7396,7 @@ instruct castFtoX_reg_evex(vec dst, vec src, vec xtmp1, vec xtmp2, kReg ktmp1, k
       int vlen_enc = vector_length_encoding(this, $src);
       __ vector_castF2I_evex($dst$$XMMRegister, $src$$XMMRegister,
                              ExternalAddress(StubRoutines::x86::vector_float_sign_flip()), vlen_enc,
-                             $xtmp1$$XMMRegister, $xtmp2$$XMMRegister, $ktmp1$$KRegister, $ktmp2$$KRegister,
+                             $xtmp1$$XMMRegister, $xtmp2$$XMMRegister, $ktmp1$$KRegister, $ktmp2$$KRegister);
       if (to_elem_bt == T_SHORT) {
         __ evpmovdw($dst$$XMMRegister, $dst$$XMMRegister, vlen_enc);
       } else {
