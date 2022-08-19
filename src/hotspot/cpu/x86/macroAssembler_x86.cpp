@@ -109,7 +109,9 @@ Address MacroAssembler::as_Address(ArrayAddress adr, Register rscratch) {
 
 void MacroAssembler::call_VM_leaf_base(address entry_point,
                                        int number_of_arguments) {
-  call(RuntimeAddress(entry_point));
+  assert(!always_reachable(entry_point), "");
+
+  call(RuntimeAddress(entry_point), rscratch1);
   increment(rsp, number_of_arguments * wordSize);
 }
 
@@ -493,7 +495,9 @@ Address MacroAssembler::as_Address(ArrayAddress adr, Register rscratch) {
   return array;
 }
 
-void MacroAssembler::call_VM_leaf_base(address entry_point, int num_args, Register rscratch) {
+void MacroAssembler::call_VM_leaf_base(address entry_point, int num_args) {
+  assert(!always_reachable(entry_point), "");
+
   Label L, E;
 
 #ifdef _WIN64
@@ -507,12 +511,12 @@ void MacroAssembler::call_VM_leaf_base(address entry_point, int num_args, Regist
   jcc(Assembler::zero, L);
 
   subq(rsp, 8);
-  call(RuntimeAddress(entry_point), rscratch);
+  call(RuntimeAddress(entry_point), rscratch1);
   addq(rsp, 8);
   jmp(E);
 
   bind(L);
-  call(RuntimeAddress(entry_point), rscratch);
+  call(RuntimeAddress(entry_point), rscratch1);
 
   bind(E);
 
