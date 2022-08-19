@@ -446,7 +446,7 @@ void TemplateTable::fast_aldc(bool wide) {
     Label notNull;
     ExternalAddress null_sentinel((address)Universe::the_null_sentinel_addr());
     __ movptr(tmp, null_sentinel);
-    __ resolve_oop_handle(tmp);
+    __ resolve_oop_handle(tmp, rscratch2);
     __ cmpoop(tmp, result);
     __ jccb(Assembler::notEqual, notNull);
     __ xorptr(result, result);  // NULL object reference
@@ -2717,7 +2717,7 @@ void TemplateTable::load_field_cp_cache_entry(Register obj,
                                     ConstantPoolCacheEntry::f1_offset())));
     const int mirror_offset = in_bytes(Klass::java_mirror_offset());
     __ movptr(obj, Address(obj, mirror_offset));
-    __ resolve_oop_handle(obj);
+    __ resolve_oop_handle(obj, rscratch2);
   }
 }
 
