@@ -9378,8 +9378,8 @@ instruct vreverse_reg_gfni(vec dst, vec src, vec xtmp) %{
     int vec_enc = vector_length_encoding(this);
     BasicType bt  = Matcher::vector_element_basic_type(this);
     InternalAddress addr = $constantaddress(T_LONG, vreplicate_imm(T_LONG, 0x8040201008040201L, 1));
-    __ vector_reverse_bit_gfni(bt, $dst$$XMMRegister, $src$$XMMRegister, $xtmp$$XMMRegister,
-                               addr, noreg, vec_enc);
+    __ vector_reverse_bit_gfni(bt, $dst$$XMMRegister, $src$$XMMRegister, addr, vec_enc,
+                               $xtmp$$XMMRegister);
   %}
   ins_pipe( pipe_slow );
 %}
