@@ -496,7 +496,7 @@ Address MacroAssembler::as_Address(ArrayAddress adr, Register rscratch) {
 }
 
 void MacroAssembler::call_VM_leaf_base(address entry_point, int num_args) {
-  assert(!always_reachable(entry_point), "");
+  assert(!always_reachable(RuntimeAddress(entry_point)), "");
 
   Label L, E;
 
