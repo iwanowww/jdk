@@ -265,7 +265,7 @@ address TemplateInterpreterGenerator::generate_CRC32_updateBytes_entry(AbstractI
     // Can now load 'len' since we're finished with 'off'
     __ movl(len, Address(rsp, wordSize)); // Length
 
-    __ call(CAST_FROM_FN_PTR(address, StubRoutines::updateBytesCRC32()));
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::updateBytesCRC32())));
     // result in rax
 
     // _areturn
@@ -319,7 +319,7 @@ address TemplateInterpreterGenerator::generate_CRC32C_updateBytes_entry(Abstract
     }
     __ movl(end, Address(rsp, wordSize)); // end
     __ subl(end, off); // end - off
-    __ call(CAST_FROM_FN_PTR(address, StubRoutines::updateBytesCRC32C()));
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::updateBytesCRC32C())));
     // result in rax
     // _areturn
     __ pop(rdi);                // get return address
