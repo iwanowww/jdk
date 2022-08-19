@@ -4409,13 +4409,15 @@ void C2_MacroAssembler::vector_cast_float_special_cases_evex(XMMRegister dst, XM
   bind(done);
 }
 
-void C2_MacroAssembler::vector_cast_float_to_long_special_cases_evex(
-                                                             XMMRegister dst, XMMRegister src, XMMRegister xtmp1,
-                                                             XMMRegister xtmp2, KRegister ktmp1, KRegister ktmp2,
-                                                             Register scratch, AddressLiteral double_sign_flip,
-                                                             int vec_enc) {
+void C2_MacroAssembler::vector_cast_float_to_long_special_cases_evex(XMMRegister dst, XMMRegister src, 
+                                                                     AddressLiteral double_sign_flip, int vec_enc,
+                                                                     XMMRegister xtmp1, XMMRegister xtmp2, 
+                                                                     KRegister ktmp1, KRegister ktmp2, 
+                                                                     Register rscratch) {
+  assert(rscratch != noreg || always_reachable(double_sign_flip), "missing");
+  
   Label done;
-  evmovdquq(xtmp1, k0, double_sign_flip, false, vec_enc, scratch);
+  evmovdquq(xtmp1, k0, double_sign_flip, false, vec_enc, rscratch);
   Assembler::evpcmpeqq(ktmp1, k0, xtmp1, dst, vec_enc);
   kortestwl(ktmp1, ktmp1);
   jccb(Assembler::equal, done);
@@ -4439,9 +4441,9 @@ void C2_MacroAssembler::vector_cast_float_to_long_special_cases_evex(
  * If the src is positive infinity or any value greater than or equal to the value of Long.MAX_VALUE,
  * the result is equal to the value of Long.MAX_VALUE.
  */
-void C2_MacroAssembler::vector_cast_double_special_cases_evex(XMMRegister dst, XMMRegister src, XMMRegister xtmp1,
-                                                              XMMRegister xtmp2, KRegister ktmp1, KRegister ktmp2,
+void C2_MacroAssembler::vector_cast_double_special_cases_evex(XMMRegister dst, XMMRegister src, 
                                                               AddressLiteral double_sign_flip, int vec_enc,
+                                                              XMMRegister xtmp1, XMMRegister xtmp2, KRegister ktmp1, KRegister ktmp2,
                                                               Register rscratch) {
   assert(rscratch != noreg || always_reachable(double_sign_flip), "missing");
 
