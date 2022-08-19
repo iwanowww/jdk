@@ -7355,7 +7355,7 @@ instruct castFtoI_reg_avx(vec dst, vec src, vec xtmp1, vec xtmp2, vec xtmp3, vec
   ins_encode %{
     int vlen_enc = vector_length_encoding(this);
     __ vector_castF2I_avx($dst$$XMMRegister, $src$$XMMRegister,
-                          ExternalAddress(StubRoutines::x86::vector_float_signflip()), vlen_enc,
+                          ExternalAddress(StubRoutines::x86::vector_float_sign_flip()), vlen_enc,
                           $xtmp1$$XMMRegister, $xtmp2$$XMMRegister, $xtmp3$$XMMRegister, $xtmp4$$XMMRegister);
   %}
   ins_pipe( pipe_slow );
@@ -7371,7 +7371,7 @@ instruct castFtoI_reg_evex(vec dst, vec src, vec xtmp1, vec xtmp2, kReg ktmp1, k
   ins_encode %{
     int vlen_enc = vector_length_encoding(this);
     __ vector_castF2I_evex($dst$$XMMRegister, $src$$XMMRegister,
-                           ExternalAddress(StubRoutines::x86::vector_float_signflip()), vlen_enc
+                           ExternalAddress(StubRoutines::x86::vector_float_sign_flip()), vlen_enc
                            $xtmp1$$XMMRegister, $xtmp2$$XMMRegister, $ktmp1$$KRegister, $ktmp2$$KRegister);
   %}
   ins_pipe( pipe_slow );
@@ -7390,12 +7390,12 @@ instruct castFtoX_reg_evex(vec dst, vec src, vec xtmp1, vec xtmp2, kReg ktmp1, k
     if (to_elem_bt == T_LONG) {
       int vlen_enc = vector_length_encoding(this);
       __ vector_castF2L_evex($dst$$XMMRegister, $src$$XMMRegister,
-                             ExternalAddress(StubRoutines::x86::vector_double_signflip()), vlen_enc,
+                             ExternalAddress(StubRoutines::x86::vector_double_sign_flip()), vlen_enc,
                              $xtmp1$$XMMRegister, $xtmp2$$XMMRegister, $ktmp1$$KRegister, $ktmp2$$KRegister);
     } else {
       int vlen_enc = vector_length_encoding(this, $src);
       __ vector_castF2I_evex($dst$$XMMRegister, $src$$XMMRegister,
-                             ExternalAddress(StubRoutines::x86::vector_float_signflip()), vlen_enc,
+                             ExternalAddress(StubRoutines::x86::vector_float_sign_flip()), vlen_enc,
                              $xtmp1$$XMMRegister, $xtmp2$$XMMRegister, $ktmp1$$KRegister, $ktmp2$$KRegister,
       if (to_elem_bt == T_SHORT) {
         __ evpmovdw($dst$$XMMRegister, $dst$$XMMRegister, vlen_enc);
@@ -7428,7 +7428,7 @@ instruct castDtoX_reg_evex(vec dst, vec src, vec xtmp1, vec xtmp2, kReg ktmp1, k
     int vlen_enc = vector_length_encoding(this, $src);
     BasicType to_elem_bt = Matcher::vector_element_basic_type(this);
     __ vector_castD2X_evex(to_elem_bt, $dst$$XMMRegister, $src$$XMMRegister,
-                           ExternalAddress(StubRoutines::x86::vector_double_signflip()), vlen_enc,
+                           ExternalAddress(StubRoutines::x86::vector_double_sign_flip()), vlen_enc,
                            $xtmp1$$XMMRegister, $xtmp2$$XMMRegister, $ktmp1$$KRegister, $ktmp2$$KRegister);
   %}
   ins_pipe( pipe_slow );
@@ -7462,7 +7462,7 @@ instruct vround_float_avx(vec dst, vec src, rRegP tmp, vec xtmp1, vec xtmp2, vec
     int vlen_enc = vector_length_encoding(this);
     InternalAddress new_mxcsr = $constantaddress((jint)0x3F80);
     __ vector_round_float_avx($dst$$XMMRegister, $src$$XMMRegister,
-                              ExternalAddress(StubRoutines::x86::vector_float_signflip()), new_mxcsr, vlen_enc,
+                              ExternalAddress(StubRoutines::x86::vector_float_sign_flip()), new_mxcsr, vlen_enc,
                               $tmp$$Register, $xtmp1$$XMMRegister, $xtmp2$$XMMRegister, $xtmp3$$XMMRegister, $xtmp4$$XMMRegister);
   %}
   ins_pipe( pipe_slow );
@@ -7479,7 +7479,7 @@ instruct vround_float_evex(vec dst, vec src, rRegP tmp, vec xtmp1, vec xtmp2, kR
     int vlen_enc = vector_length_encoding(this);
     InternalAddress new_mxcsr = $constantaddress((jint)0x3F80);
     __ vector_round_float_evex($dst$$XMMRegister, $src$$XMMRegister,
-                               ExternalAddress(StubRoutines::x86::vector_float_signflip()), new_mxcsr, vlen_enc,
+                               ExternalAddress(StubRoutines::x86::vector_float_sign_flip()), new_mxcsr, vlen_enc,
                                $tmp$$Register, $xtmp1$$XMMRegister, $xtmp2$$XMMRegister, $ktmp1$$KRegister, $ktmp2$$KRegister);
   %}
   ins_pipe( pipe_slow );
@@ -7494,7 +7494,7 @@ instruct vround_reg_evex(vec dst, vec src, rRegP tmp, vec xtmp1, vec xtmp2, kReg
     int vlen_enc = vector_length_encoding(this);
     InternalAddress new_mxcsr = $constantaddress((jint)0x3F80);
     __ vector_round_double_evex($dst$$XMMRegister, $src$$XMMRegister,
-                                ExternalAddress(StubRoutines::x86::vector_double_signflip()), new_mxcsr, vlen_enc,
+                                ExternalAddress(StubRoutines::x86::vector_double_sign_flip()), new_mxcsr, vlen_enc,
                                 $tmp$$Register, $xtmp1$$XMMRegister, $xtmp2$$XMMRegister, $ktmp1$$KRegister, $ktmp2$$KRegister);
   %}
   ins_pipe( pipe_slow );
