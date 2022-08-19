@@ -4564,7 +4564,7 @@ void C2_MacroAssembler::vector_round_float_evex(XMMRegister dst, XMMRegister src
   vbroadcastss(xtmp1, xtmp1, vec_enc);
   vaddps(xtmp1, src , xtmp1, vec_enc);
   vcvtps2dq(dst, xtmp1, vec_enc);
-  vector_cast_float_special_cases_evex(dst, src, float_sign_flip, vec_en,
+  vector_cast_float_special_cases_evex(dst, src, float_sign_flip, vec_enc,
                                        xtmp1, xtmp2, ktmp1, ktmp2, tmp);
 
   ldmxcsr(ExternalAddress(StubRoutines::x86::addr_mxcsr_std()));
