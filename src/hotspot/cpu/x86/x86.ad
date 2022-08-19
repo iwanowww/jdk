@@ -7371,7 +7371,7 @@ instruct castFtoI_reg_evex(vec dst, vec src, vec xtmp1, vec xtmp2, kReg ktmp1, k
   ins_encode %{
     int vlen_enc = vector_length_encoding(this);
     __ vector_castF2I_evex($dst$$XMMRegister, $src$$XMMRegister,
-                           ExternalAddress(StubRoutines::x86::vector_float_sign_flip()), vlen_enc
+                           ExternalAddress(StubRoutines::x86::vector_float_sign_flip()), vlen_enc,
                            $xtmp1$$XMMRegister, $xtmp2$$XMMRegister, $ktmp1$$KRegister, $ktmp2$$KRegister);
   %}
   ins_pipe( pipe_slow );

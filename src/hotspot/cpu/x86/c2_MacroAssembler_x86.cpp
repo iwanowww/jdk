@@ -4554,7 +4554,7 @@ void C2_MacroAssembler::vector_round_double_evex(XMMRegister dst, XMMRegister sr
 
 void C2_MacroAssembler::vector_round_float_evex(XMMRegister dst, XMMRegister src,
                                                 AddressLiteral float_sign_flip, AddressLiteral new_mxcsr, int vec_enc,
-                                                Register tmp, XMMRegister xtmp1, XMMRegister xtmp2, KRegister ktmp1, KRegister ktmp) {
+                                                Register tmp, XMMRegister xtmp1, XMMRegister xtmp2, KRegister ktmp1, KRegister ktmp2) {
   // Perform floor(val+0.5) operation under the influence of MXCSR.RC mode roundTowards -inf.
   // and re-instantiate original MXCSR.RC mode after that.
   ldmxcsr(new_mxcsr, tmp /*rscratch*/);
