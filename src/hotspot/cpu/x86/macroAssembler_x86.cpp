@@ -442,7 +442,7 @@ void MacroAssembler::stop(const char* msg) {
   pushptr(message.addr());
   { Label L; call(L, relocInfo::none); bind(L); }     // push eip
   pusha();                                            // push registers
-  call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::debug32)));
+  call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::debug32)), rscratch1);
   hlt();
 }
 
@@ -463,7 +463,7 @@ void MacroAssembler::print_state() {
   pusha();                                            // push registers
 
   push_CPU_state();
-  call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::print_state32)));
+  call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::print_state32)), rscratch1);
   pop_CPU_state();
 
   popa();
@@ -493,7 +493,7 @@ Address MacroAssembler::as_Address(ArrayAddress adr, Register rscratch) {
   return array;
 }
 
-void MacroAssembler::call_VM_leaf_base(address entry_point, int num_args) {
+void MacroAssembler::call_VM_leaf_base(address entry_point, int num_args, Register rscratch) {
   Label L, E;
 
 #ifdef _WIN64
@@ -507,12 +507,12 @@ void MacroAssembler::call_VM_leaf_base(address entry_point, int num_args) {
   jcc(Assembler::zero, L);
 
   subq(rsp, 8);
-  call(RuntimeAddress(entry_point));
+  call(RuntimeAddress(entry_point), rscratch);
   addq(rsp, 8);
   jmp(E);
 
   bind(L);
-  call(RuntimeAddress(entry_point));
+  call(RuntimeAddress(entry_point), rscratch);
 
   bind(E);
 

@@ -50,8 +50,9 @@ class MacroAssembler: public Assembler {
   // additional registers when doing a VM call).
 
   virtual void call_VM_leaf_base(
-    address entry_point,               // the entry point
-    int     number_of_arguments        // the number of arguments to pop after the call
+    address  entry_point,               // the entry point
+    int      number_of_arguments,       // the number of arguments to pop after the call
+    Register rscratch = noreg
   );
 
  protected:
