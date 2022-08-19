@@ -1020,13 +1020,13 @@ address TemplateInterpreterGenerator::generate_native_entry(bool synchronized) {
    // set_last_Java_frame_before_call
    // It is enough that the pc()
    // points into the right code segment. It does not have to be the correct return pc.
-   __ set_last_Java_frame(thread, noreg, rbp, __ pc());
+   __ set_last_Java_frame(thread, noreg, rbp, __ pc(), rscratch1);
 #else
    __ lea(c_rarg0, Address(r15_thread, JavaThread::jni_environment_offset()));
 
    // It is enough that the pc() points into the right code
    // segment. It does not have to be the correct return pc.
-   __ set_last_Java_frame(rsp, rbp, (address) __ pc());
+   __ set_last_Java_frame(rsp, rbp, (address) __ pc(), rscratch1);
 #endif // _LP64
 
   // change thread state
@@ -1619,14 +1619,14 @@ void TemplateInterpreterGenerator::generate_throw_exception() {
   __ movptr(rbx, Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize));
   __ get_thread(thread);
   // PC must point into interpreter here
-  __ set_last_Java_frame(thread, noreg, rbp, __ pc());
+  __ set_last_Java_frame(thread, noreg, rbp, __ pc(), rscratch1);
   __ super_call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::popframe_move_outgoing_args), thread, rax, rbx);
   __ get_thread(thread);
 #else
   __ mov(c_rarg1, rsp);
   __ movptr(c_rarg2, Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize));
   // PC must point into interpreter here
-  __ set_last_Java_frame(noreg, rbp, __ pc());
+  __ set_last_Java_frame(noreg, rbp, __ pc(), rscratch1);
   __ super_call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::popframe_move_outgoing_args), r15_thread, c_rarg1, c_rarg2);
 #endif
   __ reset_last_Java_frame(thread, true);

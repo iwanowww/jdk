@@ -7439,7 +7439,7 @@ address generate_avx_ghash_processBlocks() {
     OopMap* map = new OopMap(framesize, 1);
     oop_maps->add_gc_map(frame_complete, map);
 
-    __ set_last_Java_frame(rsp, rbp, the_pc);
+    __ set_last_Java_frame(rsp, rbp, the_pc, rscratch1);
     __ movptr(c_rarg0, r15_thread);
     __ movptr(c_rarg1, rsp);
     __ call_VM_leaf(Continuation::freeze_entry(), 2);
@@ -7631,7 +7631,7 @@ address generate_avx_ghash_processBlocks() {
 
     int frame_complete = the_pc - start;
 
-    __ set_last_Java_frame(rsp, rbp, the_pc);
+    __ set_last_Java_frame(rsp, rbp, the_pc, rscratch1);
     __ movptr(c_rarg0, r15_thread);
     __ call_VM_leaf(CAST_FROM_FN_PTR(address, JfrIntrinsicSupport::write_checkpoint), 1);
     __ reset_last_Java_frame(true);
@@ -7724,7 +7724,7 @@ address generate_avx_ghash_processBlocks() {
 
     // Set up last_Java_sp and last_Java_fp
     address the_pc = __ pc();
-    __ set_last_Java_frame(rsp, rbp, the_pc);
+    __ set_last_Java_frame(rsp, rbp, the_pc, rscratch1);
     __ andptr(rsp, -(StackAlignmentInBytes));    // Align stack
 
     // Call runtime

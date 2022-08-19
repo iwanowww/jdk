@@ -1911,7 +1911,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   intptr_t the_pc = (intptr_t) __ pc();
   oop_maps->add_gc_map(the_pc - start, map);
 
-  __ set_last_Java_frame(rsp, noreg, (address)the_pc);
+  __ set_last_Java_frame(rsp, noreg, (address)the_pc, rscratch1);
 
 
   // We have all of the arguments setup at this point. We must not touch any register
@@ -2423,7 +2423,7 @@ void SharedRuntime::generate_deopt_blob() {
     // Save everything in sight.
     RegisterSaver::save_live_registers(masm, 0, &frame_size_in_words, /*save_wide_vectors*/ true);
     // fetch_unroll_info needs to call last_java_frame()
-    __ set_last_Java_frame(noreg, noreg, NULL);
+    __ set_last_Java_frame(noreg, noreg, NULL, rscratch1);
 
     __ movl(c_rarg1, Address(r15_thread, in_bytes(JavaThread::pending_deoptimization_offset())));
     __ movl(Address(r15_thread, in_bytes(JavaThread::pending_deoptimization_offset())), -1);
@@ -2505,7 +2505,7 @@ void SharedRuntime::generate_deopt_blob() {
 
   // fetch_unroll_info needs to call last_java_frame().
 
-  __ set_last_Java_frame(noreg, noreg, NULL);
+  __ set_last_Java_frame(noreg, noreg, NULL, rscratch1);
 #ifdef ASSERT
   { Label L;
     __ cmpptr(Address(r15_thread,
@@ -2655,7 +2655,7 @@ void SharedRuntime::generate_deopt_blob() {
   // Save "the_pc" since it cannot easily be retrieved using the last_java_SP after we aligned SP.
   // Don't need the precise return PC here, just precise enough to point into this code blob.
   address the_pc = __ pc();
-  __ set_last_Java_frame(noreg, rbp, the_pc);
+  __ set_last_Java_frame(noreg, rbp, the_pc, rscratch1);
 
   __ andptr(rsp, -(StackAlignmentInBytes));  // Fix stack alignment as required by ABI
   __ mov(c_rarg0, r15_thread);
@@ -2726,7 +2726,7 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   // runtime expects it.
   __ movl(c_rarg1, j_rarg0);
 
-  __ set_last_Java_frame(noreg, noreg, NULL);
+  __ set_last_Java_frame(noreg, noreg, NULL, rscratch1);
 
   // Call C code.  Need thread but NOT official VM entry
   // crud.  We cannot block on this call, no GC can happen.  Call should
@@ -2843,7 +2843,7 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   // Save "the_pc" since it cannot easily be retrieved using the last_java_SP after we aligned SP.
   // Don't need the precise return PC here, just precise enough to point into this code blob.
   address the_pc = __ pc();
-  __ set_last_Java_frame(noreg, rbp, the_pc);
+  __ set_last_Java_frame(noreg, rbp, the_pc, rscratch1);
 
   // Call C code.  Need thread but NOT official VM entry
   // crud.  We cannot block on this call, no GC can happen.  Call should
@@ -2920,7 +2920,7 @@ SafepointBlob* SharedRuntime::generate_handler_blob(address call_ptr, int poll_t
   // address of the call in order to generate an oopmap. Hence, we do all the
   // work ourselves.
 
-  __ set_last_Java_frame(noreg, noreg, NULL);  // JavaFrameAnchor::capture_last_Java_pc() will get the pc from the return address, which we store next:
+  __ set_last_Java_frame(noreg, noreg, NULL, rscratch1);  // JavaFrameAnchor::capture_last_Java_pc() will get the pc from the return address, which we store next:
 
   // The return address must always be correct so that frame constructor never
   // sees an invalid pc.
@@ -3056,7 +3056,7 @@ RuntimeStub* SharedRuntime::generate_resolve_blob(address destination, const cha
   ResourceMark rm;
 
   CodeBuffer buffer(name, 1200, 512);
-  MacroAssembler* masm                = new MacroAssembler(&buffer);
+  MacroAssembler* masm = new MacroAssembler(&buffer);
 
   int frame_size_in_words;
 
@@ -3070,7 +3070,7 @@ RuntimeStub* SharedRuntime::generate_resolve_blob(address destination, const cha
 
   int frame_complete = __ offset();
 
-  __ set_last_Java_frame(noreg, noreg, NULL);
+  __ set_last_Java_frame(noreg, noreg, NULL, rscratch1);
 
   __ mov(c_rarg0, r15_thread);
 
@@ -3466,7 +3466,7 @@ void OptoRuntime::generate_exception_blob() {
   // At a method handle call, the stack may not be properly aligned
   // when returning with an exception.
   address the_pc = __ pc();
-  __ set_last_Java_frame(noreg, noreg, the_pc);
+  __ set_last_Java_frame(noreg, noreg, the_pc, rscratch1);
   __ mov(c_rarg0, r15_thread);
   __ andptr(rsp, -(StackAlignmentInBytes));    // Align stack
   __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, OptoRuntime::handle_exception_C)));

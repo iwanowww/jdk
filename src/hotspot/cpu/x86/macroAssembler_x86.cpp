@@ -3365,12 +3365,16 @@ void MacroAssembler::vpaddd(XMMRegister dst, XMMRegister nds, AddressLiteral src
 
 void MacroAssembler::vabsss(XMMRegister dst, XMMRegister nds, XMMRegister src, AddressLiteral negate_field, int vector_len, Register rscratch) {
   assert(((dst->encoding() < 16 && src->encoding() < 16 && nds->encoding() < 16) || VM_Version::supports_avx512vldq()),"XMM register should be 0-15");
+  assert(rscratch != noreg || always_reachable(negate_field), "missing");
+
   vandps(dst, nds, negate_field, vector_len, rscratch);
 }
 
-void MacroAssembler::vabssd(XMMRegister dst, XMMRegister nds, XMMRegister src, AddressLiteral negate_field, int vector_len) {
+void MacroAssembler::vabssd(XMMRegister dst, XMMRegister nds, XMMRegister src, AddressLiteral negate_field, int vector_len, Register rscratch) {
   assert(((dst->encoding() < 16 && src->encoding() < 16 && nds->encoding() < 16) || VM_Version::supports_avx512vldq()),"XMM register should be 0-15");
-  vandpd(dst, nds, negate_field, vector_len);
+  assert(rscratch != noreg || always_reachable(negate_field), "missing");
+
+  vandpd(dst, nds, negate_field, vector_len, rscratch);
 }
 
 void MacroAssembler::vpaddb(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len) {

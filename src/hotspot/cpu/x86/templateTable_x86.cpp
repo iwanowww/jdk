@@ -4403,7 +4403,7 @@ void TemplateTable::wide() {
   transition(vtos, vtos);
   __ load_unsigned_byte(rbx, at_bcp(1));
   ExternalAddress wtable((address)Interpreter::_wentry_point);
-  __ jump(ArrayAddress(wtable, Address(noreg, rbx, Address::times_ptr)));
+  __ jump(ArrayAddress(wtable, Address(noreg, rbx, Address::times_ptr)), rscratch1);
   // Note: the rbcp increment step is part of the individual wide bytecode implementations
 }
 

@@ -3927,7 +3927,7 @@ class StubGenerator: public StubCodeGenerator {
     }
 
     // Set up last_Java_sp and last_Java_fp
-    __ set_last_Java_frame(java_thread, rsp, rbp, NULL);
+    __ set_last_Java_frame(java_thread, rsp, rbp, NULL, rscratch1);
 
     // Call runtime
     BLOCK_COMMENT("call runtime_entry");
@@ -4011,7 +4011,7 @@ class StubGenerator: public StubCodeGenerator {
   static void jfr_prologue(address the_pc, MacroAssembler* masm) {
     Register java_thread = rdi;
     __ get_thread(java_thread);
-    __ set_last_Java_frame(java_thread, rsp, rbp, the_pc);
+    __ set_last_Java_frame(java_thread, rsp, rbp, the_pc, rscratch1);
     __ movptr(Address(rsp, 0), java_thread);
   }
 

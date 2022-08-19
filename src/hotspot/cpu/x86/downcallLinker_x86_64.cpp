@@ -190,7 +190,7 @@ void DowncallStubGenerator::generate() {
   address the_pc = __ pc();
 
   __ block_comment("{ thread java2native");
-  __ set_last_Java_frame(rsp, rbp, (address)the_pc);
+  __ set_last_Java_frame(rsp, rbp, (address)the_pc, rscratch1);
   OopMap* map = new OopMap(_framesize, 0);
   _oop_maps->add_gc_map(the_pc - start, map);
 
