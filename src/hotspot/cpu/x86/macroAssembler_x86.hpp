@@ -2115,7 +2115,7 @@ class SkipIfEqual {
   Label _label;
 
  public:
-   SkipIfEqual(MacroAssembler*, const bool* flag_addr, bool value);
+   SkipIfEqual(MacroAssembler*, const bool* flag_addr, bool value, Register rscratch);
    ~SkipIfEqual();
 };
 

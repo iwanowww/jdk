@@ -9518,9 +9518,9 @@ Assembler::Condition MacroAssembler::negate_condition(Assembler::Condition cond)
 }
 
 SkipIfEqual::SkipIfEqual(
-    MacroAssembler* masm, const bool* flag_addr, bool value) {
+    MacroAssembler* masm, const bool* flag_addr, bool value, Register rscratch) {
   _masm = masm;
-  _masm->cmp8(ExternalAddress((address)flag_addr), value);
+  _masm->cmp8(ExternalAddress((address)flag_addr), value, rscratch);
   _masm->jcc(Assembler::equal, _label);
 }
 
