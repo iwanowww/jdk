@@ -439,9 +439,8 @@ void MacroAssembler::print_state32(int rdi, int rsi, int rbp, int rsp, int rbx, 
 }
 
 void MacroAssembler::stop(const char* msg) {
-  ExternalAddress message((address)msg);
   // push address of message
-  pushptr(message.addr());
+  pushptr(ExternalAddress((address)msg), rscratch1);
   { Label L; call(L, relocInfo::none); bind(L); }     // push eip
   pusha();                                            // push registers
   call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::debug32)), rscratch1);
@@ -451,11 +450,10 @@ void MacroAssembler::stop(const char* msg) {
 void MacroAssembler::warn(const char* msg) {
   push_CPU_state();
 
-  ExternalAddress message((address) msg);
   // push address of message
-  pushptr(message.addr());
+  pushptr(ExternalAddress((address)msg), rscratch1);
 
-  call(RuntimeAddress(CAST_FROM_FN_PTR(address, warning)));
+  call(RuntimeAddress(CAST_FROM_FN_PTR(address, warning)), rscratch1);
   addl(rsp, wordSize);       // discard argument
   pop_CPU_state();
 }
@@ -557,7 +555,7 @@ int MacroAssembler::corrected_idivq(Register reg) {
   Label normal_case, special_case;
 
   // check for special case
-  cmp64(rax, ExternalAddress((address) &min_long));
+  cmp64(rax, ExternalAddress((address) &min_long), rdx /*rscratch*/);
   jcc(Assembler::notEqual, normal_case);
   xorl(rdx, rdx); // prepare rdx for possible special case (where
                   // remainder = 0)
@@ -4592,12 +4590,8 @@ void MacroAssembler::_verify_oop_addr(Address addr, const char* s, const char* f
     pushptr(addr);
   }
 
-  ExternalAddress buffer((address) b);
   // pass msg argument
-  // avoid using pushptr, as it modifies scratch registers
-  // and our contract is not to modify anything
-  movptr(rax, buffer.addr());
-  push(rax);
+  pushptr(ExternalAddress(b), rax /*rscratch*/);
 
   // call indirectly to solve generation ordering problem
   call(RuntimeAddress(StubRoutines::verify_oop_subroutine_entry_address()));
