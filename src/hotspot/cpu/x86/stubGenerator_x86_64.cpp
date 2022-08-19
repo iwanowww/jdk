@@ -301,9 +301,9 @@ class StubGenerator: public StubCodeGenerator {
       __ movl(rax, mxcsr_save);
       __ andl(rax, MXCSR_MASK);    // Only check control and mask bits
       ExternalAddress mxcsr_std(StubRoutines::x86::addr_mxcsr_std());
-      __ cmp32(rax, mxcsr_std);
+      __ cmp32(rax, mxcsr_std, rscratch1);
       __ jcc(Assembler::equal, skip_ldmx);
-      __ ldmxcsr(mxcsr_std);
+      __ ldmxcsr(mxcsr_std, rscratch1);
       __ bind(skip_ldmx);
     }
 #endif
@@ -621,12 +621,12 @@ class StubGenerator: public StubCodeGenerator {
       __ stmxcsr(mxcsr_save);
       __ movl(rax, mxcsr_save);
       __ andl(rax, MXCSR_MASK);    // Only check control and mask bits
-      __ cmp32(rax, mxcsr_std);
+      __ cmp32(rax, mxcsr_std, rscratch1);
       __ jcc(Assembler::equal, ok_ret);
 
       __ warn("MXCSR changed by native JNI code, use -XX:+RestoreMXCSROnJNICall");
 
-      __ ldmxcsr(mxcsr_std);
+      __ ldmxcsr(mxcsr_std, rscratch1);
 
       __ bind(ok_ret);
       __ addptr(rsp, wordSize);

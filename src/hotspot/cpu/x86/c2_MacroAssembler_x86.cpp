@@ -4549,7 +4549,7 @@ void C2_MacroAssembler::vector_round_double_evex(XMMRegister dst, XMMRegister sr
   vector_cast_double_special_cases_evex(dst, src, double_sign_flip, vec_enc,
                                         xtmp1, xtmp2, ktmp1, ktmp2, tmp);
 
-  ldmxcsr(ExternalAddress(StubRoutines::x86::addr_mxcsr_std()));
+  ldmxcsr(ExternalAddress(StubRoutines::x86::addr_mxcsr_std()), tmp /*rscratch*/);
 }
 
 void C2_MacroAssembler::vector_round_float_evex(XMMRegister dst, XMMRegister src,
@@ -4567,7 +4567,7 @@ void C2_MacroAssembler::vector_round_float_evex(XMMRegister dst, XMMRegister src
   vector_cast_float_special_cases_evex(dst, src, float_sign_flip, vec_enc,
                                        xtmp1, xtmp2, ktmp1, ktmp2, tmp);
 
-  ldmxcsr(ExternalAddress(StubRoutines::x86::addr_mxcsr_std()));
+  ldmxcsr(ExternalAddress(StubRoutines::x86::addr_mxcsr_std()), tmp /*rscratch*/);
 }
 
 void C2_MacroAssembler::vector_round_float_avx(XMMRegister dst, XMMRegister src,
@@ -4585,7 +4585,7 @@ void C2_MacroAssembler::vector_round_float_avx(XMMRegister dst, XMMRegister src,
   vector_cast_float_special_cases_avx(dst, src, float_sign_flip, vec_enc,
                                       xtmp1, xtmp2, xtmp3, xtmp4, tmp);
 
-  ldmxcsr(ExternalAddress(StubRoutines::x86::addr_mxcsr_std()));
+  ldmxcsr(ExternalAddress(StubRoutines::x86::addr_mxcsr_std()), tmp /*rscratch*/);
 }
 #endif // _LP64
 
