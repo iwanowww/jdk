@@ -854,7 +854,7 @@ public:
   // NOTE: this call transfers to the effective address of entry NOT
   // the address contained by entry. This is because this is more natural
   // for jumps/calls.
-  void call(AddressLiteral entry, Register rscratch = noreg);
+  void call(AddressLiteral entry, Register rscratch = rax);
 
   // Emit the CompiledIC call idiom
   void ic_call(address entry, jint method_index = 0);

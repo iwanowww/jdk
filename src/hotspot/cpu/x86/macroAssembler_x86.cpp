@@ -111,7 +111,7 @@ void MacroAssembler::call_VM_leaf_base(address entry_point,
                                        int number_of_arguments) {
   assert(!always_reachable(entry_point), "");
 
-  call(RuntimeAddress(entry_point), rscratch1);
+  call(RuntimeAddress(entry_point));
   increment(rsp, number_of_arguments * wordSize);
 }
 
@@ -443,7 +443,7 @@ void MacroAssembler::stop(const char* msg) {
   pushptr(ExternalAddress((address)msg), rscratch1);
   { Label L; call(L, relocInfo::none); bind(L); }     // push eip
   pusha();                                            // push registers
-  call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::debug32)), rscratch1);
+  call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::debug32)));
   hlt();
 }
 
@@ -453,7 +453,7 @@ void MacroAssembler::warn(const char* msg) {
   // push address of message
   pushptr(ExternalAddress((address)msg), rscratch1);
 
-  call(RuntimeAddress(CAST_FROM_FN_PTR(address, warning)), rscratch1);
+  call(RuntimeAddress(CAST_FROM_FN_PTR(address, warning)));
   addl(rsp, wordSize);       // discard argument
   pop_CPU_state();
 }
@@ -463,7 +463,7 @@ void MacroAssembler::print_state() {
   pusha();                                            // push registers
 
   push_CPU_state();
-  call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::print_state32)), rscratch1);
+  call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::print_state32)));
   pop_CPU_state();
 
   popa();
@@ -509,12 +509,12 @@ void MacroAssembler::call_VM_leaf_base(address entry_point, int num_args) {
   jcc(Assembler::zero, L);
 
   subq(rsp, 8);
-  call(RuntimeAddress(entry_point), rscratch1);
+  call(RuntimeAddress(entry_point));
   addq(rsp, 8);
   jmp(E);
 
   bind(L);
-  call(RuntimeAddress(entry_point), rscratch1);
+  call(RuntimeAddress(entry_point));
 
   bind(E);
 
@@ -783,9 +783,7 @@ void MacroAssembler::warn(const char* msg) {
   movq(rbp, rsp);
   andq(rsp, -16);     // align stack as required by push_CPU_state and call
   push_CPU_state();   // keeps alignment at 16 bytes
-  lea(c_rarg0, ExternalAddress((address) msg));
-  lea(rax, ExternalAddress(CAST_FROM_FN_PTR(address, warning)));
-  call(rax);
+  call(RuntimeAddress(CAST_FROM_FN_PTR(address, warning)));
   pop_CPU_state();
   mov(rsp, rbp);
   pop(rbp);
@@ -4591,7 +4589,7 @@ void MacroAssembler::_verify_oop_addr(Address addr, const char* s, const char* f
   }
 
   // pass msg argument
-  pushptr(ExternalAddress(b), rax /*rscratch*/);
+  pushptr(ExternalAddress((address)b), rax /*rscratch*/);
 
   // call indirectly to solve generation ordering problem
   call(RuntimeAddress(StubRoutines::verify_oop_subroutine_entry_address()));
