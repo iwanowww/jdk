@@ -197,7 +197,7 @@ void MacroAssembler::lcmp2int(Register x_hi, Register x_lo, Register y_hi, Regis
 }
 
 void MacroAssembler::lea(Register dst, AddressLiteral src) {
-    mov_literal32(dst, (int32_t)src.target(), src.rspec());
+  mov_literal32(dst, (int32_t)src.target(), src.rspec());
 }
 
 void MacroAssembler::lea(Address dst, AddressLiteral adr, Register rscratch) {
@@ -205,7 +205,7 @@ void MacroAssembler::lea(Address dst, AddressLiteral adr, Register rscratch) {
 
   // leal(dst, as_Address(adr));
   // see note in movl as to why we must use a move
-  mov_literal32(dst, (int32_t) adr.target(), adr.rspec());
+  mov_literal32(dst, (int32_t)adr.target(), adr.rspec());
 }
 
 void MacroAssembler::leave() {
@@ -481,7 +481,7 @@ Address MacroAssembler::as_Address(AddressLiteral adr) {
   // jmp/call are displacements others are absolute
   assert(!adr.is_lval(), "must be rval");
   assert(reachable(adr), "must be");
-  return Address((int32_t)(intptr_t)(adr.target() - pc()), adr.target(), adr.reloc());
+  return Address(checked_cast<int32_t>(adr.target() - pc()), adr.target(), adr.reloc());
 
 }
 
@@ -704,13 +704,9 @@ void MacroAssembler::movptr(Address dst, int32_t src) {
   movslq(dst, src);
 }
 
-void MacroAssembler::movptr(Register dst, int32_t src) {
-  mov64(dst, (intptr_t)src);
-}
-
-void MacroAssembler::pushoop(jobject obj, Register rscratch) {
-  movoop(rscratch, obj);
-  push(rscratch);
+void MacroAssembler::pushoop(jobject obj) {
+  movoop(rscratch1, obj);
+  push(rscratch1);
 }
 
 void MacroAssembler::pushklass(Metadata* obj, Register rscratch) {
@@ -1048,7 +1044,7 @@ void MacroAssembler::object_move(OopMap* map,
       *receiver_offset = (offset_in_older_frame + framesize_in_slots) * VMRegImpl::stack_slot_size;
     }
 
-    cmpptr(Address(rbp, reg2offset_in(src.first())), (int32_t)NULL_WORD);
+    cmpptr(Address(rbp, reg2offset_in(src.first())), NULL_WORD);
     lea(rHandle, Address(rbp, reg2offset_in(src.first())));
     // conditionally move a NULL
     cmovptr(Assembler::equal, rHandle, Address(rbp, reg2offset_in(src.first())));
@@ -1084,7 +1080,7 @@ void MacroAssembler::object_move(OopMap* map,
       *receiver_offset = offset;
     }
 
-    cmpptr(rOop, (int32_t)NULL_WORD);
+    cmpptr(rOop, NULL_WORD);
     lea(rHandle, Address(rsp, offset));
     // conditionally move a NULL from the handle area where it was just stored
     cmovptr(Assembler::equal, rHandle, Address(rsp, offset));
@@ -1585,7 +1581,7 @@ void MacroAssembler::call_VM_base(Register oop_result,
 
   if (check_exceptions) {
     // check for pending exceptions (java_thread is set upon return)
-    cmpptr(Address(java_thread, Thread::pending_exception_offset()), (int32_t) NULL_WORD);
+    cmpptr(Address(java_thread, Thread::pending_exception_offset()), NULL_WORD);
 #ifndef _LP64
     jump_cc(Assembler::notEqual,
             RuntimeAddress(StubRoutines::forward_exception_entry()));
@@ -1833,7 +1829,7 @@ void MacroAssembler::cmpptr(Register src1, AddressLiteral src2, Register rscratc
 #else
   assert(rscratch == noreg, "not needed");
   if (src2.is_lval()) {
-    cmp_literal32(src1, (int32_t) src2.target(), src2.rspec());
+    cmp_literal32(src1, (int32_t)src2.target(), src2.rspec());
   } else {
     cmpl(src1, as_Address(src2));
   }
@@ -1848,7 +1844,7 @@ void MacroAssembler::cmpptr(Address src1, AddressLiteral src2, Register rscratch
   Assembler::cmpq(src1, rscratch);
 #else
   assert(rscratch == noreg, "not needed");
-  cmp_literal32(src1, (int32_t) src2.target(), src2.rspec());
+  cmp_literal32(src1, (int32_t)src2.target(), src2.rspec());
 #endif // _LP64
 }
 
