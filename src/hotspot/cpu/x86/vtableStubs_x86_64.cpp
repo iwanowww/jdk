@@ -70,7 +70,7 @@ VtableStub* VtableStubs::create_vtable_stub(int vtable_index) {
 
 #if (!defined(PRODUCT) && defined(COMPILER2))
   if (CountCompiledCalls) {
-    __ incrementq(ExternalAddress((address) SharedRuntime::nof_megamorphic_calls_addr()), rscratch1);
+    __ incrementq(ExternalAddress(SharedRuntime::nof_megamorphic_calls_addr()), rscratch1);
   }
 #endif
 
@@ -164,7 +164,7 @@ VtableStub* VtableStubs::create_itable_stub(int itable_index) {
 
 #if (!defined(PRODUCT) && defined(COMPILER2))
   if (CountCompiledCalls) {
-    __ incrementq(ExternalAddress((address) SharedRuntime::nof_megamorphic_calls_addr(), rscratch1));
+    __ incrementq(ExternalAddress(SharedRuntime::nof_megamorphic_calls_addr()), rscratch1);
   }
 #endif // PRODUCT
 
