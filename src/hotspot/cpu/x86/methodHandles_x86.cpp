@@ -78,8 +78,7 @@ void MethodHandles::verify_klass(MacroAssembler* _masm,
   InstanceKlass** klass_addr = vmClasses::klass_addr_at(klass_id);
   Klass* klass = vmClasses::klass_at(klass_id);
   Register temp = rdi;
-  Register temp2 = noreg;
-  LP64_ONLY(temp2 = rscratch1);  // used by MacroAssembler::cmpptr and load_klass
+  Register temp2 = LP64_ONLY( rscratch1 ) NOT_LP64( noreg );  // used by MacroAssembler::cmpptr and load_klass
   Label L_ok, L_bad;
   BLOCK_COMMENT("verify_klass {");
   __ verify_oop(obj);
@@ -88,11 +87,11 @@ void MethodHandles::verify_klass(MacroAssembler* _masm,
   __ push(temp); if (temp2 != noreg)  __ push(temp2);
 #define UNPUSH { if (temp2 != noreg)  __ pop(temp2);  __ pop(temp); }
   __ load_klass(temp, obj, temp2);
-  __ cmpptr(temp, ExternalAddress((address) klass_addr));
+  __ cmpptr(temp, ExternalAddress((address) klass_addr), temp2 /*rscratch*/);
   __ jcc(Assembler::equal, L_ok);
   intptr_t super_check_offset = klass->super_check_offset();
   __ movptr(temp, Address(temp, super_check_offset));
-  __ cmpptr(temp, ExternalAddress((address) klass_addr));
+  __ cmpptr(temp, ExternalAddress((address) klass_addr), temp2 /*rscratch*/);
   __ jcc(Assembler::equal, L_ok);
   UNPUSH;
   __ bind(L_bad);
@@ -672,7 +671,7 @@ void MethodHandles::trace_method_handle(MacroAssembler* _masm, const char* adapt
   __ push(rbx);               // pusha saved_regs
   __ push(rcx);               // mh
   __ push(rcx);               // slot for adaptername
-  __ movptr(Address(rsp, 0), (intptr_t) adaptername);
+  __ movptr(Address(rsp, 0), (intptr_t) adaptername, rscratch1);
   __ super_call_VM_leaf(CAST_FROM_FN_PTR(address, trace_method_handle_stub_wrapper), rsp);
   __ increment(rsp, sizeof(MethodHandleStubArguments));
 
