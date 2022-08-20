@@ -89,7 +89,7 @@ class MacroAssembler: public Assembler {
  virtual void check_and_handle_earlyret(Register java_thread);
 
   Address as_Address(AddressLiteral adr);
-  Address as_Address(ArrayAddress adr, Register rscratch = noreg);
+  Address as_Address(ArrayAddress adr, Register rscratch);
 
   // Support for NULL-checks
   //
