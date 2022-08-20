@@ -2511,10 +2511,6 @@ void MacroAssembler::movbool(Address dst, Register src) {
     ShouldNotReachHere();
 }
 
-void MacroAssembler::movbyte(ArrayAddress dst, int src) {
-  movb(as_Address(dst), src);
-}
-
 void MacroAssembler::movdl(XMMRegister dst, AddressLiteral src, Register rscratch) {
   assert(rscratch != noreg || always_reachable(src),  "missing");
 

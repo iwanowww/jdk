@@ -1880,9 +1880,6 @@ public:
   void mov32(AddressLiteral dst, Register src, Register rscratch = noreg);
   void mov32(Register dst, AddressLiteral src, Register rscratch = noreg);
 
-  // to avoid hiding movb
-  void movbyte(ArrayAddress dst, int src);
-
   // Import other mov() methods from the parent class or else
   // they will be hidden by the following overriding declaration.
   using Assembler::movdl;
