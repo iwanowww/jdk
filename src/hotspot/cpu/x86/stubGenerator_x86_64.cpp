@@ -1042,7 +1042,7 @@ class StubGenerator: public StubCodeGenerator {
     Label exit, error;
 
     __ pushf();
-    __ incrementl(ExternalAddress((address) StubRoutines::verify_oop_count_addr()));
+    __ incrementl(ExternalAddress((address) StubRoutines::verify_oop_count_addr()), rscratch1);
 
     __ push(r12);
 
@@ -4753,7 +4753,7 @@ class StubGenerator: public StubCodeGenerator {
 
     __ push(rbx); // Save RBX
     __ movdqu(xmm_curr_counter, Address(counter, 0x00)); // initialize counter with initial counter
-    __ movdqu(xmm_counter_shuf_mask, ExternalAddress(StubRoutines::x86::counter_shuffle_mask_addr()), pos); // pos as scratch
+    __ movdqu(xmm_counter_shuf_mask, ExternalAddress(StubRoutines::x86::counter_shuffle_mask_addr()));
     __ pshufb(xmm_curr_counter, xmm_counter_shuf_mask); //counter is shuffled
     __ movptr(pos, 0);
 
@@ -4776,7 +4776,7 @@ class StubGenerator: public StubCodeGenerator {
     __ movl(Address(used_addr, 0), used);
 
     // key length could be only {11, 13, 15} * 4 = {44, 52, 60}
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), rbx); // rbx as scratch
+    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr())); 
     __ movl(rbx, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
     __ cmpl(rbx, 52);
     __ jcc(Assembler::equal, L_multiBlock_loopTop[1]);
@@ -5592,7 +5592,7 @@ address generate_avx_ghash_processBlocks() {
       __ shrl(isURL, 6); // restore isURL
 
       __ mov64(rax, 0x3036242a1016040aull); // Shifts
-      __ evmovdquq(xmm3, ExternalAddress(StubRoutines::x86::base64_shuffle_addr()), Assembler::AVX_512bit, r15);
+      __ evmovdquq(xmm3, ExternalAddress(StubRoutines::x86::base64_shuffle_addr()), Assembler::AVX_512bit);
       __ evmovdquq(xmm2, Address(encode_table, 0), Assembler::AVX_512bit);
       __ evpbroadcastq(xmm1, rax, Assembler::AVX_512bit);
 
@@ -5634,10 +5634,10 @@ address generate_avx_ghash_processBlocks() {
       __ jcc(Assembler::belowEqual, L_process3);
 
       // Set up supporting constant table data
-      __ vmovdqu(xmm9, ExternalAddress(StubRoutines::x86::base64_avx2_shuffle_addr()), rax);
+      __ vmovdqu(xmm9, ExternalAddress(StubRoutines::x86::base64_avx2_shuffle_addr()));
       // 6-bit mask for 2nd and 4th (and multiples) 6-bit values
       __ movl(rax, 0x0fc0fc00);
-      __ vmovdqu(xmm1, ExternalAddress(StubRoutines::x86::base64_avx2_input_mask_addr()), rax);
+      __ vmovdqu(xmm1, ExternalAddress(StubRoutines::x86::base64_avx2_input_mask_addr()));
       __ evpbroadcastd(xmm8, rax, Assembler::AVX_256bit);
 
       // Multiplication constant for "shifting" right by 6 and 10
@@ -6223,8 +6223,8 @@ address generate_avx_ghash_processBlocks() {
       __ cmpl(isURL, 0);
       __ jcc(Assembler::notZero, L_loadURL);
 
-      __ evmovdquq(lookup_lo, ExternalAddress(StubRoutines::x86::base64_vbmi_lookup_lo_addr()), Assembler::AVX_512bit, r13);
-      __ evmovdquq(lookup_hi, ExternalAddress(StubRoutines::x86::base64_vbmi_lookup_hi_addr()), Assembler::AVX_512bit, r13);
+      __ evmovdquq(lookup_lo, ExternalAddress(StubRoutines::x86::base64_vbmi_lookup_lo_addr()), Assembler::AVX_512bit);
+      __ evmovdquq(lookup_hi, ExternalAddress(StubRoutines::x86::base64_vbmi_lookup_hi_addr()), Assembler::AVX_512bit);
 
       __ BIND(L_continue);
 
@@ -6239,9 +6239,9 @@ address generate_avx_ghash_processBlocks() {
 
       // load masks required for decoding data
       __ BIND(L_processdata);
-      __ evmovdquq(join01, ExternalAddress(StubRoutines::x86::base64_vbmi_join_0_1_addr()), Assembler::AVX_512bit,r13);
-      __ evmovdquq(join12, ExternalAddress(StubRoutines::x86::base64_vbmi_join_1_2_addr()), Assembler::AVX_512bit, r13);
-      __ evmovdquq(join23, ExternalAddress(StubRoutines::x86::base64_vbmi_join_2_3_addr()), Assembler::AVX_512bit, r13);
+      __ evmovdquq(join01, ExternalAddress(StubRoutines::x86::base64_vbmi_join_0_1_addr()), Assembler::AVX_512bit);
+      __ evmovdquq(join12, ExternalAddress(StubRoutines::x86::base64_vbmi_join_1_2_addr()), Assembler::AVX_512bit);
+      __ evmovdquq(join23, ExternalAddress(StubRoutines::x86::base64_vbmi_join_2_3_addr()), Assembler::AVX_512bit);
 
       __ align32();
       __ BIND(L_process256);
@@ -6320,7 +6320,7 @@ address generate_avx_ghash_processBlocks() {
 
       __ BIND(L_process64);
 
-      __ evmovdquq(pack24bits, ExternalAddress(StubRoutines::x86::base64_vbmi_pack_vec_addr()), Assembler::AVX_512bit, r13);
+      __ evmovdquq(pack24bits, ExternalAddress(StubRoutines::x86::base64_vbmi_pack_vec_addr()), Assembler::AVX_512bit);
 
       __ cmpl(length, 63);
       __ jcc(Assembler::lessEqual, L_finalBit);
@@ -6449,8 +6449,8 @@ address generate_avx_ghash_processBlocks() {
       __ ret(0);
 
       __ BIND(L_loadURL);
-      __ evmovdquq(lookup_lo, ExternalAddress(StubRoutines::x86::base64_vbmi_lookup_lo_url_addr()), Assembler::AVX_512bit, r13);
-      __ evmovdquq(lookup_hi, ExternalAddress(StubRoutines::x86::base64_vbmi_lookup_hi_url_addr()), Assembler::AVX_512bit, r13);
+      __ evmovdquq(lookup_lo, ExternalAddress(StubRoutines::x86::base64_vbmi_lookup_lo_url_addr()), Assembler::AVX_512bit);
+      __ evmovdquq(lookup_hi, ExternalAddress(StubRoutines::x86::base64_vbmi_lookup_hi_url_addr()), Assembler::AVX_512bit);
       __ jmp(L_continue);
 
       __ BIND(L_padding);

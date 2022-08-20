@@ -2455,14 +2455,12 @@ void MacroAssembler::mov32(AddressLiteral dst, Register src, Register rscratch) 
   }
 }
 
-void MacroAssembler::mov32(Register dst, AddressLiteral src, Register rscratch) {
-  assert(rscratch != noreg || always_reachable(src),  "missing");
-
+void MacroAssembler::mov32(Register dst, AddressLiteral src) {
   if (reachable(src)) {
     movl(dst, as_Address(src));
   } else {
-    lea(rscratch, src);
-    movl(dst, Address(rscratch, 0));
+    lea(dst, src);
+    movl(dst, Address(dst, 0));
   }
 }
 

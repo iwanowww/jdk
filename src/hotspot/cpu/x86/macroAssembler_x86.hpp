@@ -1876,8 +1876,8 @@ public:
 #endif // _LP64
 
   // to avoid hiding movl
-  void mov32(AddressLiteral dst, Register src, Register rscratch = noreg);
-  void mov32(Register dst, AddressLiteral src, Register rscratch = noreg);
+  void mov32(Register       dst, AddressLiteral src);
+  void mov32(AddressLiteral dst, Register        src, Register rscratch = noreg);
 
   // Import other mov() methods from the parent class or else
   // they will be hidden by the following overriding declaration.
