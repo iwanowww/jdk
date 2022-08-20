@@ -503,7 +503,7 @@ int LIR_Assembler::emit_deopt_handler() {
   int offset = code_offset();
   InternalAddress here(__ pc());
 
-  __ pushptr(here.addr());
+  __ pushptr(here.addr(), rscratch1);
   __ jump(RuntimeAddress(SharedRuntime::deopt_blob()->unpack()));
   guarantee(code_offset() - offset <= deopt_handler_size(), "overflow");
   __ end_a_stub();

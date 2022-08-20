@@ -721,8 +721,6 @@ void MacroAssembler::pushklass(Metadata* obj, Register rscratch) {
 }
 
 void MacroAssembler::pushptr(AddressLiteral src, Register rscratch) {
-  assert(rscratch != noreg || always_reachable(src), "missing");
-
   lea(rscratch, src);
   if (src.is_lval()) {
     push(rscratch);

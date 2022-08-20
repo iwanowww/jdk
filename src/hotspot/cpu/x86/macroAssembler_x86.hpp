@@ -1888,7 +1888,7 @@ public:
   void movq (XMMRegister dst, AddressLiteral src, Register rscratch = noreg);
 
   // Can push value or effective address
-  void pushptr(AddressLiteral src, Register rscratch = noreg);
+  void pushptr(AddressLiteral src, Register rscratch);
 
   void pushptr(Address src) { LP64_ONLY(pushq(src)) NOT_LP64(pushl(src)); }
   void popptr(Address src) { LP64_ONLY(popq(src)) NOT_LP64(popl(src)); }
