@@ -289,10 +289,10 @@ void TemplateTable::fconst(int value) {
       __ xorps(xmm0, xmm0);
       break;
     case 1:
-      __ movflt(xmm0, ExternalAddress((address) &one));
+      __ movflt(xmm0, ExternalAddress((address) &one), rscratch1);
       break;
     case 2:
-      __ movflt(xmm0, ExternalAddress((address) &two));
+      __ movflt(xmm0, ExternalAddress((address) &two), rscratch1);
       break;
     default:
       ShouldNotReachHere();
@@ -320,7 +320,7 @@ void TemplateTable::dconst(int value) {
       __ xorpd(xmm0, xmm0);
       break;
     case 1:
-      __ movdbl(xmm0, ExternalAddress((address) &one));
+      __ movdbl(xmm0, ExternalAddress((address) &one), rscratch1);
       break;
     default:
       ShouldNotReachHere();
@@ -1691,7 +1691,7 @@ void TemplateTable::fneg() {
   transition(ftos, ftos);
   if (UseSSE >= 1) {
     static jlong *float_signflip  = double_quadword(&float_signflip_pool[1],  CONST64(0x8000000080000000),  CONST64(0x8000000080000000));
-    __ xorps(xmm0, ExternalAddress((address) float_signflip));
+    __ xorps(xmm0, ExternalAddress((address) float_signflip), rscratch1);
   } else {
     LP64_ONLY(ShouldNotReachHere());
     NOT_LP64(__ fchs());
@@ -1703,7 +1703,7 @@ void TemplateTable::dneg() {
   if (UseSSE >= 2) {
     static jlong *double_signflip =
       double_quadword(&double_signflip_pool[1], CONST64(0x8000000000000000), CONST64(0x8000000000000000));
-    __ xorpd(xmm0, ExternalAddress((address) double_signflip));
+    __ xorpd(xmm0, ExternalAddress((address) double_signflip), rscratch1);
   } else {
 #ifdef _LP64
     ShouldNotReachHere();
@@ -1824,7 +1824,7 @@ void TemplateTable::convert() {
     Label L;
     __ cvttss2siq(rax, xmm0);
     // NaN or overflow/underflow?
-    __ cmp64(rax, ExternalAddress((address) &is_nan));
+    __ cmp64(rax, ExternalAddress((address) &is_nan), rscratch1);
     __ jcc(Assembler::notEqual, L);
     __ call_VM_leaf(CAST_FROM_FN_PTR(address, SharedRuntime::f2l), 1);
     __ bind(L);
@@ -1848,7 +1848,7 @@ void TemplateTable::convert() {
     Label L;
     __ cvttsd2siq(rax, xmm0);
     // NaN or overflow/underflow?
-    __ cmp64(rax, ExternalAddress((address) &is_nan));
+    __ cmp64(rax, ExternalAddress((address) &is_nan), rscratch1);
     __ jcc(Assembler::notEqual, L);
     __ call_VM_leaf(CAST_FROM_FN_PTR(address, SharedRuntime::d2l), 1);
     __ bind(L);
