@@ -705,7 +705,7 @@ void MacroAssembler::movptr(Address dst, int32_t src) {
   movslq(dst, src);
 }
 
-void MacroAssembler::pushoop(jobject obj, Regsiter rscratch) {
+void MacroAssembler::pushoop(jobject obj, Register rscratch) {
   movoop(rscratch, obj);
   push(rscratch);
 }
