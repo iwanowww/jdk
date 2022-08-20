@@ -339,7 +339,8 @@ void MacroAssembler::movptr(Address dst, intptr_t src) {
   movl(dst, src);
 }
 
-void MacroAssembler::pushoop(jobject obj) {
+void MacroAssembler::pushoop(jobject obj, Register rscratch) {
+  assert(rscratch == noreg, "not used");
   push_literal32((int32_t)obj, oop_Relocation::spec_for_immediate());
 }
 
@@ -704,9 +705,9 @@ void MacroAssembler::movptr(Address dst, int32_t src) {
   movslq(dst, src);
 }
 
-void MacroAssembler::pushoop(jobject obj) {
-  movoop(rscratch1, obj);
-  push(rscratch1);
+void MacroAssembler::pushoop(jobject obj, Regsiter rscratch) {
+  movoop(rscratch, obj);
+  push(rscratch);
 }
 
 void MacroAssembler::pushklass(Metadata* obj, Register rscratch) {
