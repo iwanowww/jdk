@@ -325,12 +325,13 @@ void MacroAssembler::movptr(Register dst, AddressLiteral src) {
   }
 }
 
-void MacroAssembler::movptr(ArrayAddress dst, Register src) {
-  movl(as_Address(dst), src);
+void MacroAssembler::movptr(ArrayAddress dst, Register src, Register rscratch) {
+  assert(rscratch == noreg, "not used");
+  movl(as_Address(dst, noreg), src);
 }
 
 void MacroAssembler::movptr(Register dst, ArrayAddress src) {
-  movl(dst, as_Address(src));
+  movl(dst, as_Address(src, noreg));
 }
 
 // src should NEVER be a real pointer. Use AddressLiteral for true pointers
@@ -682,12 +683,12 @@ void MacroAssembler::movptr(Register dst, AddressLiteral src) {
   }
 }
 
-void MacroAssembler::movptr(ArrayAddress dst, Register src) {
-  movq(as_Address(dst), src);
+void MacroAssembler::movptr(ArrayAddress dst, Register src, Register rscratch) {
+  movq(as_Address(dst, rscratch), src);
 }
 
 void MacroAssembler::movptr(Register dst, ArrayAddress src) {
-  movq(dst, as_Address(src));
+  movq(dst, as_Address(src, dst /*rscratch*/));
 }
 
 // src should NEVER be a real pointer. Use AddressLiteral for true pointers

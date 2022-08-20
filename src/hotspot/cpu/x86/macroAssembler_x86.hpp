@@ -1857,7 +1857,7 @@ public:
   void movptr(Register     dst, intptr_t       src);
   void movptr(Address      dst, Register       src);
   void movptr(Address      dst, intptr_t       src, Register rscratch);
-  void movptr(ArrayAddress dst, Register       src);
+  void movptr(ArrayAddress dst, Register       src, Register rscratch);
 
   void movptr(Register dst, RegisterOrConstant src) {
     if (src.is_constant()) movptr(dst, src.as_constant());
