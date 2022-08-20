@@ -93,7 +93,7 @@ class StubGenerator: public StubCodeGenerator {
 #else
   void inc_counter_np_(int& counter) {
     // This can destroy rscratch1 if counter is far from the code cache
-    __ incrementl(ExternalAddress((address)&counter));
+    __ incrementl(ExternalAddress((address)&counter), rscratch1);
   }
 #define inc_counter_np(counter) \
   BLOCK_COMMENT("inc_counter " #counter); \
