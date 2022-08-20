@@ -246,7 +246,7 @@ void DowncallStubGenerator::generate() {
   }
 
   __ block_comment("{ thread native2java");
-  __ restore_cpu_control_state_after_jni();
+  __ restore_cpu_control_state_after_jni(rscratch1);
 
   __ movl(Address(r15_thread, JavaThread::thread_state_offset()), _thread_in_native_trans);
 

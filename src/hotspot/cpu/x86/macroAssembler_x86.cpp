@@ -4970,12 +4970,12 @@ void MacroAssembler::verify_FPU(int stack_depth, const char* s) {
 }
 #endif // _LP64
 
-void MacroAssembler::restore_cpu_control_state_after_jni() {
+void MacroAssembler::restore_cpu_control_state_after_jni(Register rscratch) {
   // Either restore the MXCSR register after returning from the JNI Call
   // or verify that it wasn't changed (with -Xcheck:jni flag).
   if (VM_Version::supports_sse()) {
     if (RestoreMXCSROnJNICalls) {
-      ldmxcsr(ExternalAddress(StubRoutines::x86::addr_mxcsr_std()), rscratch1);
+      ldmxcsr(ExternalAddress(StubRoutines::x86::addr_mxcsr_std()), rscratch);
     } else if (CheckJNICalls) {
       call(RuntimeAddress(StubRoutines::x86::verify_mxcsr_entry()));
     }
@@ -7375,7 +7375,7 @@ void MacroAssembler::kernel_crc32(Register crc, Register buf, Register len, Regi
 
   // Fold total 512 bits of polynomial on each iteration,
   // 128 bits per each of 4 parallel streams.
-  movdqu(xmm0, ExternalAddress(StubRoutines::x86::crc_by128_masks_addr() + 32));
+  movdqu(xmm0, ExternalAddress(StubRoutines::x86::crc_by128_masks_addr() + 32), rscratch1);
 
   align32();
   BIND(L_fold_512b_loop);
@@ -7389,7 +7389,7 @@ void MacroAssembler::kernel_crc32(Register crc, Register buf, Register len, Regi
 
   // Fold 512 bits to 128 bits.
   BIND(L_fold_512b);
-  movdqu(xmm0, ExternalAddress(StubRoutines::x86::crc_by128_masks_addr() + 16));
+  movdqu(xmm0, ExternalAddress(StubRoutines::x86::crc_by128_masks_addr() + 16), rscratch1);
   fold_128bit_crc32(xmm1, xmm0, xmm5, xmm2);
   fold_128bit_crc32(xmm1, xmm0, xmm5, xmm3);
   fold_128bit_crc32(xmm1, xmm0, xmm5, xmm4);
@@ -7398,7 +7398,7 @@ void MacroAssembler::kernel_crc32(Register crc, Register buf, Register len, Regi
   BIND(L_fold_tail);
   addl(len, 3);
   jccb(Assembler::lessEqual, L_fold_128b);
-  movdqu(xmm0, ExternalAddress(StubRoutines::x86::crc_by128_masks_addr() + 16));
+  movdqu(xmm0, ExternalAddress(StubRoutines::x86::crc_by128_masks_addr() + 16), rscratch1);
 
   BIND(L_fold_tail_loop);
   fold_128bit_crc32(xmm1, xmm0, xmm5, buf,  0);
@@ -7408,7 +7408,7 @@ void MacroAssembler::kernel_crc32(Register crc, Register buf, Register len, Regi
 
   // Fold 128 bits in xmm1 down into 32 bits in crc register.
   BIND(L_fold_128b);
-  movdqu(xmm0, ExternalAddress(StubRoutines::x86::crc_by128_masks_addr()));
+  movdqu(xmm0, ExternalAddress(StubRoutines::x86::crc_by128_masks_addr()), rscratch1);
   if (UseAVX > 0) {
     vpclmulqdq(xmm2, xmm0, xmm1, 0x1);
     vpand(xmm3, xmm0, xmm2, 0 /* vector_len */);

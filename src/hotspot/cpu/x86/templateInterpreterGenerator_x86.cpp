@@ -1051,7 +1051,7 @@ address TemplateInterpreterGenerator::generate_native_entry(bool synchronized) {
   // 64: result potentially in rax or xmm0
 
   // Verify or restore cpu control state after JNI call
-  __ restore_cpu_control_state_after_jni();
+  __ restore_cpu_control_state_after_jni(rscratch1);
 
   // NOTE: The order of these pushes is known to frame::interpreter_frame_result
   // in order to extract the result of a method call. If the order of these
