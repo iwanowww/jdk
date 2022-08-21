@@ -215,13 +215,14 @@ const char* AbstractAssembler::code_string(const char* str) {
   return NULL;
 }
 
-const char* AbstractAssembler::code_string(const char* format, ...) {
-  ResourceMark rm;
-
-  stringStream ss;
+const char* AbstractAssembler::code_string_format(const char* format, ...) {
   va_list ap;
   va_start(ap, format);
-  ss.vprint(format, va_list);
+
+  ResourceMark rm;
+  stringStream ss;
+  ss.vprint(format, ap);
+
   va_end(ap);
 
   return code_string(ss.as_string());

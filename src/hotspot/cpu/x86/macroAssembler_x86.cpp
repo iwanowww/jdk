@@ -2861,7 +2861,7 @@ void MacroAssembler::os_breakpoint() {
 }
 
 void MacroAssembler::unimplemented(const char* what) {
-  const char* msg = code_string("unimplemented: %s", what);
+  const char* msg = code_string_format("unimplemented: %s", what);
   stop(msg);
 }
 
@@ -4495,7 +4495,7 @@ void MacroAssembler::_verify_oop(Register reg, const char* s, const char* file, 
   push(rax);                          // save rax
   push(reg);                          // pass register argument
   // Pass register number to verify_oop_subroutine
-  const char* msg = code_string("verify_oop: %s: %s (%s:%d)", reg->name(), s, file, line);
+  const char* msg = code_string_format("verify_oop: %s: %s (%s:%d)", reg->name(), s, file, line);
   ExternalAddress b((address)msg);
   pushptr(b.addr(), rax /*rscratch*/);
   call(RuntimeAddress(StubRoutines::verify_oop_subroutine_entry_address()));
@@ -4554,7 +4554,7 @@ void MacroAssembler::_verify_oop_addr(Address addr, const char* s, const char* f
   }
 
   // Pass register number to verify_oop_subroutine
-  const char* msg = code_string("verify_oop_addr: %s (%s:%d)", s, file, line);
+  const char* msg = code_string_format("verify_oop_addr: %s (%s:%d)", s, file, line);
   ExternalAddress buffer((address)msg);
   pushptr(buffer.addr(), rax /*rscratch*/);
 
