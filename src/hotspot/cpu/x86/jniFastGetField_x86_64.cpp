@@ -68,7 +68,7 @@ address JNI_FastGetField::generate_fast_get_int_field0(BasicType type) {
   Label slow;
 
   ExternalAddress counter(SafepointSynchronize::safepoint_counter_addr());
-  __ mov32 (rcounter, counter, rscratch1);
+  __ mov32 (rcounter, counter);
   __ mov   (robj, c_rarg1);
   __ testb (rcounter, 1);
   __ jcc (Assembler::notZero, slow);
@@ -165,7 +165,7 @@ address JNI_FastGetField::generate_fast_get_float_field0(BasicType type) {
   Label slow;
 
   ExternalAddress counter(SafepointSynchronize::safepoint_counter_addr());
-  __ mov32 (rcounter, counter, rscratch1);
+  __ mov32 (rcounter, counter);
   __ mov   (robj, c_rarg1);
   __ testb (rcounter, 1);
   __ jcc (Assembler::notZero, slow);
