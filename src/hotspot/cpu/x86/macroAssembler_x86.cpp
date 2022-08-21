@@ -4506,14 +4506,9 @@ void MacroAssembler::_verify_oop(Register reg, const char* s, const char* file, 
   BLOCK_COMMENT("verify_oop {");
   push(rax);                          // save rax,
   push(reg);                          // pass register argument
-  ExternalAddress buffer((address) b);
-  // avoid using pushptr, as it modifies scratch registers
-  // and our contract is not to modify anything
-  movptr(rax, buffer.addr());
-  push(rax);
+  pushptr(ExternalAddress((address) b), rax /*rscratch*/);
   // call indirectly to solve generation ordering problem
-  movptr(rax, ExternalAddress(StubRoutines::verify_oop_subroutine_entry_address()));
-  call(rax);
+  call(RuntimeAddress(StubRoutines::verify_oop_subroutine_entry_address()));
   // Caller pops the arguments (oop, message) and restores rax, r10
   BLOCK_COMMENT("} verify_oop");
 }
