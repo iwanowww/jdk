@@ -356,6 +356,7 @@ class AbstractAssembler : public ResourceObj  {
   void block_comment(const char* comment);
   // Copy str to a buffer that has the same lifetime as the CodeBuffer
   const char* code_string(const char* str);
+  const char* code_string(const char* format, ...) ATTRIBUTE_PRINTF(2, 3);
 
   // Label functions
   void bind(Label& L); // binds an unbound label L to the current code position

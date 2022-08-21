@@ -442,7 +442,8 @@ void MacroAssembler::print_state32(int rdi, int rsi, int rbp, int rsp, int rbx, 
 
 void MacroAssembler::stop(const char* msg) {
   // push address of message
-  pushptr(ExternalAddress((address)msg), rscratch1);
+  ExternalAddress message((address)msg);
+  pushptr(message.addr());
   { Label L; call(L, relocInfo::none); bind(L); }     // push eip
   pusha();                                            // push registers
   call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::debug32)));
@@ -453,7 +454,8 @@ void MacroAssembler::warn(const char* msg) {
   push_CPU_state();
 
   // push address of message
-  pushptr(ExternalAddress((address)msg), rscratch1);
+  ExternalAddress message((address)msg);
+  pushptr(message.addr());
 
   call(RuntimeAddress(CAST_FROM_FN_PTR(address, warning)));
   addl(rsp, wordSize);       // discard argument
@@ -633,7 +635,7 @@ void MacroAssembler::lcmp2int(Register x_hi, Register x_lo, Register y_hi, Regis
 }
 
 void MacroAssembler::lea(Register dst, AddressLiteral src) {
-    mov_literal64(dst, (intptr_t)src.target(), src.rspec());
+  mov_literal64(dst, (intptr_t)src.target(), src.rspec());
 }
 
 void MacroAssembler::lea(Address dst, AddressLiteral adr, Register rscratch) {
@@ -2859,14 +2861,8 @@ void MacroAssembler::os_breakpoint() {
 }
 
 void MacroAssembler::unimplemented(const char* what) {
-  const char* buf = NULL;
-  {
-    ResourceMark rm;
-    stringStream ss;
-    ss.print("unimplemented: %s", what);
-    buf = code_string(ss.as_string());
-  }
-  stop(buf);
+  const char* msg = code_string("unimplemented: %s", what);
+  stop(msg);
 }
 
 #ifdef _LP64
@@ -4495,19 +4491,13 @@ void MacroAssembler::cmov32(Condition cc, Register dst, Register src) {
 void MacroAssembler::_verify_oop(Register reg, const char* s, const char* file, int line) {
   if (!VerifyOops) return;
 
-  // Pass register number to verify_oop_subroutine
-  const char* b = NULL;
-  {
-    ResourceMark rm;
-    stringStream ss;
-    ss.print("verify_oop: %s: %s (%s:%d)", reg->name(), s, file, line);
-    b = code_string(ss.as_string());
-  }
   BLOCK_COMMENT("verify_oop {");
-  push(rax);                          // save rax,
+  push(rax);                          // save rax
   push(reg);                          // pass register argument
-  pushptr(ExternalAddress((address) b), rax /*rscratch*/);
-  // call indirectly to solve generation ordering problem
+  // Pass register number to verify_oop_subroutine
+  const char* msg = code_string("verify_oop: %s: %s (%s:%d)", reg->name(), s, file, line);
+  ExternalAddress b((address)msg);
+  pushptr(b.addr(), rax /*rscratch*/);
   call(RuntimeAddress(StubRoutines::verify_oop_subroutine_entry_address()));
   // Caller pops the arguments (oop, message) and restores rax, r10
   BLOCK_COMMENT("} verify_oop");
@@ -4551,14 +4541,6 @@ void MacroAssembler::_verify_oop_addr(Address addr, const char* s, const char* f
   if (!VerifyOops) return;
 
   // Address adjust(addr.base(), addr.index(), addr.scale(), addr.disp() + BytesPerWord);
-  // Pass register number to verify_oop_subroutine
-  const char* b = NULL;
-  {
-    ResourceMark rm;
-    stringStream ss;
-    ss.print("verify_oop_addr: %s (%s:%d)", s, file, line);
-    b = code_string(ss.as_string());
-  }
   push(rax);                          // save rax,
   // addr may contain rsp so we will have to adjust it based on the push
   // we just did (and on 64 bit we do two pushes)
@@ -4571,8 +4553,10 @@ void MacroAssembler::_verify_oop_addr(Address addr, const char* s, const char* f
     pushptr(addr);
   }
 
-  // pass msg argument
-  pushptr(ExternalAddress((address)b), rax /*rscratch*/);
+  // Pass register number to verify_oop_subroutine
+  const char* msg = code_string("verify_oop_addr: %s (%s:%d)", s, file, line);
+  ExternalAddress buffer((address)msg);
+  pushptr(buffer.addr(), rax /*rscratch*/);
 
   // call indirectly to solve generation ordering problem
   call(RuntimeAddress(StubRoutines::verify_oop_subroutine_entry_address()));

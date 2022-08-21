@@ -215,6 +215,18 @@ const char* AbstractAssembler::code_string(const char* str) {
   return NULL;
 }
 
+const char* AbstractAssembler::code_string(const char* format, ...) {
+  ResourceMark rm;
+
+  stringStream ss;
+  va_list ap;
+  va_start(ap, format);
+  ss.vprint(format, va_list);
+  va_end(ap);
+
+  return code_string(ss.as_string());
+}
+
 bool MacroAssembler::uses_implicit_null_check(void* address) {
   // Exception handler checks the nmethod's implicit null checks table
   // only when this method returns false.
