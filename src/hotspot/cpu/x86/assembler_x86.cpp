@@ -12163,28 +12163,9 @@ void Assembler::set_byte_if_not_zero(Register dst) {
 // This should only be used by 64bit instructions that can use rip-relative
 // it cannot be used by instructions that want an immediate value.
 
-// Determine whether an address is reachable in rip-relative addressing mode.
-static bool is_reachable_from(address target, address pc) {
-  // Because rip-relative is a disp + address_of_next_instruction and we
-  // don't know the value of address_of_next_instruction we apply a fudge factor
-  // to make sure we will be ok no matter the size of the instruction we get placed into.
-
-  // 12 == override/rex byte, opcode byte, rm byte, sib byte, a 4-byte disp, 4-byte literal
-  // + 4 because better safe than sorry.
-  const int fudge = 12 + 4;
-
-  int64_t disp = (int64_t)target - ((int64_t)pc + sizeof(int));
-  if (disp < 0) {
-    disp -= fudge;
-  } else {
-    disp += fudge;
-  }
-  return Assembler::is_simm32(disp);
-}
-
 // Determine whether an address is always reachable in rip-relative addressing mode
 // when accessed from the code cache.
-static bool is_always_reachable(address target, address pc, relocInfo::relocType reloc_type) {
+static bool is_always_reachable(address target, relocInfo::relocType reloc_type) {
   switch (reloc_type) {
     // This should be rip-relative and easily reachable.
     case relocInfo::internal_word_type: {
@@ -12203,8 +12184,7 @@ static bool is_always_reachable(address target, address pc, relocInfo::relocType
     case relocInfo::external_word_type:
     case relocInfo::poll_return_type: // these are really external_word but need special
     case relocInfo::poll_type: {      // relocs to identify them
-      return CodeCache::contains(target) &&
-             CodeCache::contains(pc);
+      return CodeCache::contains(target);
     }
     default: {
       return false;
@@ -12212,8 +12192,8 @@ static bool is_always_reachable(address target, address pc, relocInfo::relocType
   }
 }
 
-// Determine whether target address is reachable from pc address in rip-relative addressing mode.
-static bool is_reachable_from(address target, address pc, relocInfo::relocType reloc_type) {
+// Determine whether an address is reachable in rip-relative addressing mode from the code cache.
+static bool is_reachable_from(address target, relocInfo::relocType reloc_type) {
   if (is_always_reachable(target, reloc_type)) {
     return true;
   }
@@ -12228,21 +12208,23 @@ static bool is_reachable_from(address target, address pc, relocInfo::relocType r
     case relocInfo::external_word_type:
     case relocInfo::poll_return_type: // these are really external_word but need special
     case relocInfo::poll_type: {      // relocs to identify them
-      assert(!CodeCache::contains(target) || !CodeCache::contains(pc), "always reachable");
+      assert(!CodeCache::contains(target), "always reachable");
       if (ForceUnreachable) {
         return false; // stress the correction code
       }
       // For external_word_type/runtime_call_type if it is reachable from where we
       // are now (possibly a temp buffer) and where we might end up
       // anywhere in the code cache then we are always reachable.
-      // This would have to change if we ever save/restore shared code
-      // to be more pessimistic.
-      if (is_reachable_from(target, CodeCache::low_bound())  &&
-          is_reachable_from(target, CodeCache::high_bound()) &&
-          is_reachable_from(target, pc)) {
-        return true;
-      }
-      return false;
+      // This would have to change if we ever save/restore shared code to be more pessimistic.
+      // Temp buffer is assumed to be allocated in the code cache, so check against
+      // code cache boundaries are enough.
+      //
+      // In rip-relative addressing mode, an effective address is formed by adding displacement
+      // to the 64-bit RIP of the next instruction which is not known yet. Considering target address
+      // is guaranteed to be outside of the code cache, checking against code cache boundaries is enough
+      // to account for that.
+      return Assembler::is_simm32(target - CodeCache::low_bound()) &&
+             Assembler::is_simm32(target - CodeCache::high_bound());
     }
     default: {
       return false;
@@ -12251,10 +12233,12 @@ static bool is_reachable_from(address target, address pc, relocInfo::relocType r
 }
 
 bool Assembler::reachable(AddressLiteral adr) {
-  return is_reachable_from(adr.target(), pc(), adr.reloc());
+  assert(CodeCache::contains(pc()), "required");
+  return is_reachable_from(adr.target(), adr.reloc());
 }
 
 bool Assembler::always_reachable(AddressLiteral adr) {
+  assert(CodeCache::contains(pc()), "required");
   return is_always_reachable(adr.target(), adr.reloc());
 }
 
