@@ -12184,7 +12184,7 @@ static bool is_reachable_from(address target, address pc) {
 
 // Determine whether an address is always reachable in rip-relative addressing mode
 // when accessed from the code cache.
-static bool is_always_reachable(address target, relocInfo::relocType reloc_type) {
+static bool is_always_reachable(address target, address pc, relocInfo::relocType reloc_type) {
   switch (reloc_type) {
     // This should be rip-relative and easily reachable.
     case relocInfo::internal_word_type: {
@@ -12203,7 +12203,8 @@ static bool is_always_reachable(address target, relocInfo::relocType reloc_type)
     case relocInfo::external_word_type:
     case relocInfo::poll_return_type: // these are really external_word but need special
     case relocInfo::poll_type: {      // relocs to identify them
-      return CodeCache::contains(target);
+      return CodeCache::contains(target) &&
+             CodeCache::contains(pc);
     }
     default: {
       return false;
@@ -12227,13 +12228,13 @@ static bool is_reachable_from(address target, address pc, relocInfo::relocType r
     case relocInfo::external_word_type:
     case relocInfo::poll_return_type: // these are really external_word but need special
     case relocInfo::poll_type: {      // relocs to identify them
-      assert(!CodeCache::contains(target), "always reachable");
+      assert(!CodeCache::contains(target) || !CodeCache::contains(pc), "always reachable");
       if (ForceUnreachable) {
         return false; // stress the correction code
       }
       // For external_word_type/runtime_call_type if it is reachable from where we
       // are now (possibly a temp buffer) and where we might end up
-      // anywhere in the codeCache then we are always reachable.
+      // anywhere in the code cache then we are always reachable.
       // This would have to change if we ever save/restore shared code
       // to be more pessimistic.
       if (is_reachable_from(target, CodeCache::low_bound())  &&
