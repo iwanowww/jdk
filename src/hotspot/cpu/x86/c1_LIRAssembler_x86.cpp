@@ -748,7 +748,7 @@ void LIR_Assembler::const2mem(LIR_Opr src, LIR_Opr dest, BasicType type, CodeEmi
       } else {
         if (is_literal_address(addr)) {
           ShouldNotReachHere();
-          //__ movoop(as_Address(addr, noreg), c->as_jobject());
+          __ movoop(as_Address(addr, noreg), c->as_jobject(), rscratch1);
         } else {
 #ifdef _LP64
           __ movoop(rscratch1, c->as_jobject());
