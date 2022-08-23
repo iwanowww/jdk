@@ -85,7 +85,7 @@ __ BIND(L_loop);
 __ BIND(L_done);
 }
 
-void CardTableBarrierSetAssembler::store_check(MacroAssembler* masm, Register obj, Address dst, Register tmp) {
+void CardTableBarrierSetAssembler::store_check(MacroAssembler* masm, Register obj, Address dst) {
   // Does a store check for the oop in register obj. The content of
   // register obj is destroyed afterwards.
   BarrierSet* bs = BarrierSet::barrier_set();
@@ -112,7 +112,7 @@ void CardTableBarrierSetAssembler::store_check(MacroAssembler* masm, Register ob
     // entry and that entry is not properly handled by the relocation code.
     AddressLiteral cardtable((address)byte_map_base, relocInfo::none);
     Address index(noreg, obj, Address::times_1);
-    card_addr = __ as_Address(ArrayAddress(cardtable, index), tmp);
+    card_addr = __ as_Address(ArrayAddress(cardtable, index), rscratch1);
   }
 
   int dirty = CardTable::dirty_card_val();
@@ -141,10 +141,10 @@ void CardTableBarrierSetAssembler::oop_store_at(MacroAssembler* masm, DecoratorS
   if (needs_post_barrier) {
     // flatten object address if needed
     if (!precise || (dst.index() == noreg && dst.disp() == 0)) {
-      store_check(masm, dst.base(), dst, tmp1);
+      store_check(masm, dst.base(), dst);
     } else {
       __ lea(tmp1, dst);
-      store_check(masm, tmp1, dst, tmp2);
+      store_check(masm, tmp1, dst);
     }
   }
 }
