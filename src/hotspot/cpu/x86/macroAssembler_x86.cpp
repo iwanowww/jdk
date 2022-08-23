@@ -109,8 +109,6 @@ Address MacroAssembler::as_Address(ArrayAddress adr, Register rscratch) {
 
 void MacroAssembler::call_VM_leaf_base(address entry_point,
                                        int number_of_arguments) {
-  assert(!always_reachable(entry_point), "");
-
   call(RuntimeAddress(entry_point));
   increment(rsp, number_of_arguments * wordSize);
 }
@@ -167,7 +165,7 @@ void MacroAssembler::jnC2(Register tmp, Label& L) {
 // to be installed in the Address class
 void MacroAssembler::jump(ArrayAddress entry, Register rscratch) {
   assert(rscratch == noreg, "not needed");
-  jmp(as_Address(entry));
+  jmp(as_Address(entry, noreg));
 }
 
 // Note: y_lo will be destroyed
@@ -305,7 +303,8 @@ void MacroAssembler::movoop(Register dst, jobject obj) {
   mov_literal32(dst, (int32_t)obj, oop_Relocation::spec_for_immediate());
 }
 
-void MacroAssembler::movoop(Address dst, jobject obj) {
+void MacroAssembler::movoop(Address dst, jobject obj, Register rscratch) {
+  assert(rscratch == noreg, "redundant");
   mov_literal32(dst, (int32_t)obj, oop_Relocation::spec_for_immediate());
 }
 
@@ -313,7 +312,8 @@ void MacroAssembler::mov_metadata(Register dst, Metadata* obj) {
   mov_literal32(dst, (int32_t)obj, metadata_Relocation::spec_for_immediate());
 }
 
-void MacroAssembler::mov_metadata(Address dst, Metadata* obj) {
+void MacroAssembler::mov_metadata(Address dst, Metadata* obj, Register rscratch) {
+  assert(rscratch == noreg, "redundant");
   mov_literal32(dst, (int32_t)obj, metadata_Relocation::spec_for_immediate());
 }
 
@@ -326,7 +326,7 @@ void MacroAssembler::movptr(Register dst, AddressLiteral src) {
 }
 
 void MacroAssembler::movptr(ArrayAddress dst, Register src, Register rscratch) {
-  assert(rscratch == noreg, "not used");
+  assert(rscratch == noreg, "redundant");
   movl(as_Address(dst, noreg), src);
 }
 
@@ -334,21 +334,23 @@ void MacroAssembler::movptr(Register dst, ArrayAddress src) {
   movl(dst, as_Address(src, noreg));
 }
 
-// src should NEVER be a real pointer. Use AddressLiteral for true pointers
-void MacroAssembler::movptr(Address dst, intptr_t src) {
+void MacroAssembler::movptr(Address dst, intptr_t src, Register rscratch) {
+  assert(rscratch == noreg, "redundant");
   movl(dst, src);
 }
 
 void MacroAssembler::pushoop(jobject obj, Register rscratch) {
-  assert(rscratch == noreg, "not used");
+  assert(rscratch == noreg, "redundant");
   push_literal32((int32_t)obj, oop_Relocation::spec_for_immediate());
 }
 
-void MacroAssembler::pushklass(Metadata* obj) {
+void MacroAssembler::pushklass(Metadata* obj, Register rscratch) {
+  assert(rscratch == noreg, "redundant");
   push_literal32((int32_t)obj, metadata_Relocation::spec_for_immediate());
 }
 
-void MacroAssembler::pushptr(AddressLiteral src) {
+void MacroAssembler::pushptr(AddressLiteral src, Register rscratch) {
+  assert(rscratch == noreg, "redundant");
   if (src.is_lval()) {
     push_literal32((int32_t)src.target(), src.rspec());
   } else {
@@ -443,7 +445,7 @@ void MacroAssembler::print_state32(int rdi, int rsi, int rbp, int rsp, int rbx, 
 void MacroAssembler::stop(const char* msg) {
   // push address of message
   ExternalAddress message((address)msg);
-  pushptr(message.addr());
+  pushptr(message.addr(), noreg);
   { Label L; call(L, relocInfo::none); bind(L); }     // push eip
   pusha();                                            // push registers
   call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::debug32)));
@@ -455,7 +457,7 @@ void MacroAssembler::warn(const char* msg) {
 
   // push address of message
   ExternalAddress message((address)msg);
-  pushptr(message.addr());
+  pushptr(message.addr(), noreg);
 
   call(RuntimeAddress(CAST_FROM_FN_PTR(address, warning)));
   addl(rsp, wordSize);       // discard argument
@@ -700,11 +702,6 @@ void MacroAssembler::movptr(Address dst, intptr_t src, Register rscratch) {
     mov64(rscratch, src);
     movq(dst, rscratch);
   }
-}
-
-// These are mostly for initializing NULL
-void MacroAssembler::movptr(Address dst, int32_t src) {
-  movslq(dst, src);
 }
 
 void MacroAssembler::pushoop(jobject obj, Register rscratch) {
@@ -2119,10 +2116,6 @@ void MacroAssembler::fld_s(AddressLiteral src) {
   fld_s(as_Address(src));
 }
 
-void MacroAssembler::fld_x(AddressLiteral src) {
-  fld_x(as_Address(src));
-}
-
 void MacroAssembler::fldcw(AddressLiteral src) {
   fldcw(as_Address(src));
 }
@@ -2573,6 +2566,10 @@ void MacroAssembler::movptr(Register dst, intptr_t src) {
 
 void MacroAssembler::movptr(Address dst, Register src) {
   LP64_ONLY(movq(dst, src)) NOT_LP64(movl(dst, src));
+}
+
+void MacroAssembler::movptr(Address dst, int32_t src) {
+  LP64_ONLY(movslq(dst, src)) NOT_LP64(movl(dst, src));
 }
 
 void MacroAssembler::movdqu(Address dst, XMMRegister src) {
@@ -3171,17 +3168,6 @@ void MacroAssembler::pmovmskb(Register dst, XMMRegister src) {
 void MacroAssembler::ptest(XMMRegister dst, XMMRegister src) {
   assert((dst->encoding() < 16 && src->encoding() < 16),"XMM register should be 0-15");
   Assembler::ptest(dst, src);
-}
-
-void MacroAssembler::sqrtsd(XMMRegister dst, AddressLiteral src, Register rscratch) {
-  assert(rscratch != noreg || always_reachable(src), "missing");
-
-  if (reachable(src)) {
-    Assembler::sqrtsd(dst, as_Address(src));
-  } else {
-    lea(rscratch, src);
-    Assembler::sqrtsd(dst, Address(rscratch, 0));
-  }
 }
 
 void MacroAssembler::sqrtss(XMMRegister dst, AddressLiteral src, Register rscratch) {
@@ -4962,7 +4948,7 @@ void MacroAssembler::verify_FPU(int stack_depth, const char* s) {
   push(rsp);                // pass CPU state
   ExternalAddress msg((address) s);
   // pass message string s
-  pushptr(msg.addr());
+  pushptr(msg.addr(), noreg);
   push(stack_depth);        // pass stack depth
   call(RuntimeAddress(CAST_FROM_FN_PTR(address, _verify_FPU)));
   addptr(rsp, 3 * wordSize);   // discard arguments

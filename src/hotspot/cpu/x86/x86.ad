@@ -1343,7 +1343,7 @@ int HandlerImpl::emit_deopt_handler(CodeBuffer& cbuf) {
   __ subptr(Address(rsp, 0), __ offset() - offset);
 #else
   InternalAddress here(__ pc());
-  __ pushptr(here.addr());
+  __ pushptr(here.addr(), noreg);
 #endif
 
   __ jump(RuntimeAddress(SharedRuntime::deopt_blob()->unpack()));

@@ -345,7 +345,7 @@ class StubGenerator: public StubCodeGenerator {
     __ verify_oop(rax);
     __ movptr(Address(rcx, Thread::pending_exception_offset()), rax          );
     __ lea(Address(rcx, Thread::exception_file_offset   ()),
-           ExternalAddress((address)__FILE__));
+           ExternalAddress((address)__FILE__), noreg);
     __ movl(Address(rcx, Thread::exception_line_offset   ()), __LINE__ );
     // complete return to VM
     assert(StubRoutines::_call_stub_return_address != NULL, "_call_stub_return_address must have been generated before");

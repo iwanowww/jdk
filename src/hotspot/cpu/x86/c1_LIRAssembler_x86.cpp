@@ -469,7 +469,7 @@ int LIR_Assembler::emit_unwind_handler() {
 #else
     __ get_thread(rax);
     __ movptr(Address(rsp, 0), rax);
-    __ mov_metadata(Address(rsp, sizeof(void*)), method()->constant_encoding());
+    __ mov_metadata(Address(rsp, sizeof(void*)), method()->constant_encoding(), noreg);
 #endif
     __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::dtrace_method_exit)));
   }
@@ -761,7 +761,7 @@ void LIR_Assembler::const2mem(LIR_Opr src, LIR_Opr dest, BasicType type, CodeEmi
             __ movptr(as_Address_lo(addr), rscratch1);
           }
 #else
-          __ movoop(as_Address(addr), c->as_jobject());
+          __ movoop(as_Address(addr), c->as_jobject(), noreg);
 #endif
         }
       }
@@ -1786,7 +1786,7 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
 #ifdef _LP64
         __ push(k_RInfo);
 #else
-        __ pushklass(k->constant_encoding());
+        __ pushklass(k->constant_encoding(), noreg);
 #endif // _LP64
         __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::slow_subtype_check_id)));
         __ pop(klass_RInfo);

@@ -744,7 +744,7 @@ public:
 #ifndef _LP64
   void cmpklass(Address dst, Metadata* obj);
   void cmpklass(Register dst, Metadata* obj);
-  void cmpoop(Address dst, jobject obj, Register rscratch);
+  void cmpoop(Address dst, jobject obj);
 #endif // _LP64
 
   void cmpoop(Register src1, Register src2);
@@ -1852,6 +1852,7 @@ public:
   void movptr(Register     dst, ArrayAddress   src);
   void movptr(Register     dst, intptr_t       src);
   void movptr(Address      dst, Register       src);
+  void movptr(Address      dst, int32_t        imm);
   void movptr(Address      dst, intptr_t       src, Register rscratch);
   void movptr(ArrayAddress dst, Register       src, Register rscratch);
 
@@ -1860,16 +1861,6 @@ public:
     else                   movptr(dst, src.as_register());
   }
 
-#ifdef _LP64
-  // Generally the next two are only used for moving NULL
-  // Although there are situations in initializing the mark word where
-  // they could be used. They are dangerous.
-
-  // They only exist on LP64 so that int32_t and intptr_t are not the same
-  // and we have ambiguous declarations.
-
-  void movptr(Address dst, int32_t imm32);
-#endif // _LP64
 
   // to avoid hiding movl
   void mov32(Register       dst, AddressLiteral src);

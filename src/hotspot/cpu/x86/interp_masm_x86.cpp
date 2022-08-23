@@ -880,13 +880,13 @@ void InterpreterMacroAssembler::dispatch_base(TosState state,
 
     jccb(Assembler::zero, no_safepoint);
     ArrayAddress dispatch_addr(ExternalAddress((address)safepoint_table), index);
-    jump(dispatch_addr);
+    jump(dispatch_addr, noreg);
     bind(no_safepoint);
   }
 
   {
     ArrayAddress dispatch_addr(ExternalAddress((address)table), index);
-    jump(dispatch_addr);
+    jump(dispatch_addr, noreg);
   }
 #endif // _LP64
 }
