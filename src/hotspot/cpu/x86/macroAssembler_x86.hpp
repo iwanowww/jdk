@@ -1274,7 +1274,7 @@ public:
 
   void movsd(Address     dst, XMMRegister    src) { Assembler::movsd(dst, src); }
   void movsd(XMMRegister dst, XMMRegister    src) { Assembler::movsd(dst, src); }
-  void movsd(XMMRegister dst, Address        src)     { Assembler::movsd(dst, src); }
+  void movsd(XMMRegister dst, Address        src) { Assembler::movsd(dst, src); }
   void movsd(XMMRegister dst, AddressLiteral src, Register rscratch = noreg);
 
   void mulpd(XMMRegister dst, XMMRegister    src) { Assembler::mulpd(dst, src); }
@@ -1315,10 +1315,6 @@ public:
   void roundsd(XMMRegister dst, XMMRegister    src, int32_t rmode) { Assembler::roundsd(dst, src, rmode); }
   void roundsd(XMMRegister dst, Address        src, int32_t rmode) { Assembler::roundsd(dst, src, rmode); }
   void roundsd(XMMRegister dst, AddressLiteral src, int32_t rmode, Register rscratch = noreg);
-
-  void sqrtsd(XMMRegister dst, XMMRegister    src) { Assembler::sqrtsd(dst, src); }
-  void sqrtsd(XMMRegister dst, Address        src) { Assembler::sqrtsd(dst, src); }
-  void sqrtsd(XMMRegister dst, AddressLiteral src, Register rscratch = noreg);
 
   void sqrtss(XMMRegister dst, XMMRegister     src) { Assembler::sqrtss(dst, src); }
   void sqrtss(XMMRegister dst, Address         src) { Assembler::sqrtss(dst, src); }
@@ -1882,9 +1878,10 @@ public:
   // Import other mov() methods from the parent class or else
   // they will be hidden by the following overriding declaration.
   using Assembler::movdl;
-  using Assembler::movq;
   void movdl(XMMRegister dst, AddressLiteral src, Register rscratch = noreg);
-  void movq (XMMRegister dst, AddressLiteral src, Register rscratch = noreg);
+
+  using Assembler::movq;
+  void movq(XMMRegister dst, AddressLiteral src, Register rscratch = noreg);
 
   // Can push value or effective address
   void pushptr(AddressLiteral src, Register rscratch);
