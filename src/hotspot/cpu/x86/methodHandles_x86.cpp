@@ -78,7 +78,7 @@ void MethodHandles::verify_klass(MacroAssembler* _masm,
   InstanceKlass** klass_addr = vmClasses::klass_addr_at(klass_id);
   Klass* klass = vmClasses::klass_at(klass_id);
   Register temp = rdi;
-  Register temp2 = LP64_ONLY( rscratch1 ) NOT_LP64( noreg );  // used by MacroAssembler::cmpptr and load_klass
+  Register temp2 = rscratch1;
   Label L_ok, L_bad;
   BLOCK_COMMENT("verify_klass {");
   __ verify_oop(obj);
