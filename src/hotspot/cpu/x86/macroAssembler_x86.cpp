@@ -4496,14 +4496,22 @@ void MacroAssembler::_verify_oop(Register reg, const char* s, const char* file, 
 #endif
   push(rax);                          // save rax
   push(reg);                          // pass register argument
+
   // Pass register number to verify_oop_subroutine
-  ExternalAddress msg = (address)code_string_format("verify_oop: %s: %s (%s:%d)", reg->name(), s, file, line);
-  pushptr(msg.addr(), rax /*rscratch*/);
+  const char* b = NULL;
+  {
+    ResourceMark rm;
+    stringStream ss;
+    ss.print("verify_oop: %s: %s (%s:%d)", reg->name(), s, file, line);
+    b = code_string(ss.as_string());
+  }
+  ExternalAddress buffer((address) b);
+  pushptr(buffer.addr(), rax /*rscratch*/);
 
   // call indirectly to solve generation ordering problem
   movptr(rax, ExternalAddress(StubRoutines::verify_oop_subroutine_entry_address()));
   call(rax);
-  // Caller pops the arguments (oop, message) and restores rax
+  // Caller pops the arguments (oop, message) and restores rax, r10
   BLOCK_COMMENT("} verify_oop");
 }
 
@@ -4560,14 +4568,20 @@ void MacroAssembler::_verify_oop_addr(Address addr, const char* s, const char* f
   }
 
   // Pass register number to verify_oop_subroutine
-  ExternalAddress msg = (address)code_string_format("verify_oop_addr: %s (%s:%d)", s, file, line);
-
-  pushptr(msg.addr(), rax /*rscratch*/);
+  const char* b = NULL;
+  {
+    ResourceMark rm;
+    stringStream ss;
+    ss.print("verify_oop_addr: %s (%s:%d)", s, file, line);
+    b = code_string(ss.as_string());
+  }
+  ExternalAddress buffer((address) b);
+  pushptr(buffer.addr(), rax /*rscratch*/);
 
   // call indirectly to solve generation ordering problem
   movptr(rax, ExternalAddress(StubRoutines::verify_oop_subroutine_entry_address()));
   call(rax);
-  // Caller pops the arguments (addr, message) and restores rax.
+  // Caller pops the arguments (addr, message) and restores rax, r10.
 }
 
 void MacroAssembler::verify_tlab() {
