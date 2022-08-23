@@ -1286,7 +1286,6 @@ private:
 
   void fld_d(Address adr);
   void fld_s(Address adr);
-  void fld_x(Address adr);  // extended-precision (80-bit) format
   void fld_s(int index);
 
   void fldcw(Address src);
@@ -1326,14 +1325,12 @@ private:
 
   void fsqrt();
 
-
   void fst_d(Address adr);
   void fst_s(Address adr);
 
   void fstp_d(Address adr);
-  void fstp_s(Address adr);
-  void fstp_x(Address adr); // extended-precision (80-bit) format
   void fstp_d(int index);
+  void fstp_s(Address adr);
 
   void fsub(int i);
   void fsub_d(Address src);
@@ -1371,6 +1368,8 @@ private:
   // operands that only take the original 32bit registers
   void emit_operand32(Register reg, Address adr);
 
+  void fld_x(Address adr);  // extended-precision (80-bit) format
+  void fstp_x(Address adr); // extended-precision (80-bit) format
   void fxrstor(Address src);
   void xrstor(Address src);
 
