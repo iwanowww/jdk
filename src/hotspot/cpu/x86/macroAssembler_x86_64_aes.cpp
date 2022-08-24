@@ -29,6 +29,112 @@
 #include "runtime/stubRoutines.hpp"
 #include "macroAssembler_x86.hpp"
 
+/*
+  address counter_mask_addr() {
+    __ align64();
+    StubCodeMark mark(this, "StubRoutines", "counter_mask_addr");
+    address start = __ pc();
+    __ emit_data64(0x08090a0b0c0d0e0f, relocInfo::none);//lbswapmask
+    __ emit_data64(0x0001020304050607, relocInfo::none);
+    __ emit_data64(0x08090a0b0c0d0e0f, relocInfo::none);
+    __ emit_data64(0x0001020304050607, relocInfo::none);
+    __ emit_data64(0x08090a0b0c0d0e0f, relocInfo::none);
+    __ emit_data64(0x0001020304050607, relocInfo::none);
+    __ emit_data64(0x08090a0b0c0d0e0f, relocInfo::none);
+    __ emit_data64(0x0001020304050607, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);//linc0 = counter_mask_addr+64
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000001, relocInfo::none);//counter_mask_addr() + 80
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000002, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000003, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000004, relocInfo::none);//linc4 = counter_mask_addr() + 128
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000004, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000004, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000004, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000008, relocInfo::none);//linc8 = counter_mask_addr() + 192
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000008, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000008, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000008, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000020, relocInfo::none);//linc32 = counter_mask_addr() + 256
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000020, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000020, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000020, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000010, relocInfo::none);//linc16 = counter_mask_addr() + 320
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000010, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000010, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+    __ emit_data64(0x0000000000000010, relocInfo::none);
+    __ emit_data64(0x0000000000000000, relocInfo::none);
+ */
+
+ATTRIBUTE_ALIGNED(64) juint COUNTER_MASK[] = {
+    0x08090a0b0c0d0e0f,
+    0x0001020304050607,
+    0x08090a0b0c0d0e0f,
+    0x0001020304050607,
+    0x08090a0b0c0d0e0f,
+    0x0001020304050607,
+    0x08090a0b0c0d0e0f,
+    0x0001020304050607,
+    0x0000000000000000,
+    0x0000000000000000,
+    0x0000000000000001,
+    0x0000000000000000,
+    0x0000000000000002,
+    0x0000000000000000,
+    0x0000000000000003,
+    0x0000000000000000,
+    0x0000000000000004,
+    0x0000000000000000,
+    0x0000000000000004,
+    0x0000000000000000,
+    0x0000000000000004,
+    0x0000000000000000,
+    0x0000000000000004,
+    0x0000000000000000,
+    0x0000000000000008,
+    0x0000000000000000,
+    0x0000000000000008,
+    0x0000000000000000,
+    0x0000000000000008,
+    0x0000000000000000,
+    0x0000000000000008,
+    0x0000000000000000,
+    0x0000000000000020,
+    0x0000000000000000,
+    0x0000000000000020,
+    0x0000000000000000,
+    0x0000000000000020,
+    0x0000000000000000,
+    0x0000000000000020,
+    0x0000000000000000,
+    0x0000000000000010,
+    0x0000000000000000,
+    0x0000000000000010,
+    0x0000000000000000,
+    0x0000000000000010,
+    0x0000000000000000,
+    0x0000000000000010,
+    0x0000000000000000,
+};
+
 void MacroAssembler::roundEnc(XMMRegister key, int rnum) {
     for (int xmm_reg_no = 0; xmm_reg_no <=rnum; xmm_reg_no++) {
       vaesenc(as_XMMRegister(xmm_reg_no), as_XMMRegister(xmm_reg_no), key, Assembler::AVX_512bit);
@@ -784,6 +890,8 @@ void MacroAssembler::aesctr_encrypt(Register src_addr, Register dest_addr, Regis
     const Register rounds = rax;
     const Register pos = r12;
 
+    address counter_mask_addr = (UseNewCode ? (address) COUNTER_MASK : StubRoutines::x86::counter_mask_addr());
+
     Label PRELOOP_START, EXIT_PRELOOP, REMAINDER, REMAINDER_16, LOOP, END, EXIT, END_LOOP,
     AES192, AES256, AES192_REMAINDER16, REMAINDER16_END_LOOP, AES256_REMAINDER16,
     REMAINDER_8, REMAINDER_4, AES192_REMAINDER8, REMAINDER_LOOP, AES256_REMINDER,
@@ -821,7 +929,7 @@ void MacroAssembler::aesctr_encrypt(Register src_addr, Register dest_addr, Regis
     evshufi64x2(xmm8, xmm0, xmm0, 0, Assembler::AVX_512bit);
 
     // load lbswap mask
-    evmovdquq(xmm16, ExternalAddress(StubRoutines::x86::counter_mask_addr()), Assembler::AVX_512bit, r15);
+    evmovdquq(xmm16, ExternalAddress(), Assembler::AVX_512bit, r15);
 
     //shuffle counter using lbswap_mask
     vpshufb(xmm8, xmm8, xmm16, Assembler::AVX_512bit);
@@ -831,17 +939,17 @@ void MacroAssembler::aesctr_encrypt(Register src_addr, Register dest_addr, Regis
     // The counter is incremented after each block i.e. 16 bytes is processed;
     // each zmm register has 4 counter values as its MSB
     // the counters are incremented in parallel
-    vpaddd(xmm8, xmm8, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 64), Assembler::AVX_512bit, r15);//linc0
-    vpaddd(xmm9, xmm8, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 128), Assembler::AVX_512bit, r15);//linc4(rip)
-    vpaddd(xmm10, xmm9, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 128), Assembler::AVX_512bit, r15);//Linc4(rip)
-    vpaddd(xmm11, xmm10, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 128), Assembler::AVX_512bit, r15);//Linc4(rip)
-    vpaddd(xmm12, xmm11, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 128), Assembler::AVX_512bit, r15);//Linc4(rip)
-    vpaddd(xmm13, xmm12, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 128), Assembler::AVX_512bit, r15);//Linc4(rip)
-    vpaddd(xmm14, xmm13, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 128), Assembler::AVX_512bit, r15);//Linc4(rip)
-    vpaddd(xmm15, xmm14, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 128), Assembler::AVX_512bit, r15);//Linc4(rip)
+    vpaddd(xmm8,  xmm8,  ExternalAddress(counter_mask_addr + 64), Assembler::AVX_512bit, r15);//linc0
+    vpaddd(xmm9,  xmm8,  ExternalAddress(counter_mask_addr + 128), Assembler::AVX_512bit, r15);//linc4(rip)
+    vpaddd(xmm10, xmm9,  ExternalAddress(counter_mask_addr + 128), Assembler::AVX_512bit, r15);//Linc4(rip)
+    vpaddd(xmm11, xmm10, ExternalAddress(counter_mask_addr + 128), Assembler::AVX_512bit, r15);//Linc4(rip)
+    vpaddd(xmm12, xmm11, ExternalAddress(counter_mask_addr + 128), Assembler::AVX_512bit, r15);//Linc4(rip)
+    vpaddd(xmm13, xmm12, ExternalAddress(counter_mask_addr + 128), Assembler::AVX_512bit, r15);//Linc4(rip)
+    vpaddd(xmm14, xmm13, ExternalAddress(counter_mask_addr + 128), Assembler::AVX_512bit, r15);//Linc4(rip)
+    vpaddd(xmm15, xmm14, ExternalAddress(counter_mask_addr + 128), Assembler::AVX_512bit, r15);//Linc4(rip)
 
     // load linc32 mask in zmm register.linc32 increments counter by 32
-    evmovdquq(xmm19, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 256), Assembler::AVX_512bit, r15);//Linc32
+    evmovdquq(xmm19, ExternalAddress(counter_mask_addr + 256), Assembler::AVX_512bit, r15);//Linc32
 
     // xmm31 contains the key shuffle mask.
     movdqu(xmm31, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
@@ -960,14 +1068,14 @@ void MacroAssembler::aesctr_encrypt(Register src_addr, Register dest_addr, Regis
     jcc(Assembler::aboveEqual, REMAINDER_4);
     // At this point, we will process 16 bytes of data at a time.
     // So load xmm19 with counter increment value as 1
-    evmovdquq(xmm19, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 80), Assembler::AVX_128bit, r15);
+    evmovdquq(xmm19, ExternalAddress(counter_mask_addr + 80), Assembler::AVX_128bit, r15);
     jmp(REMAINDER_LOOP);
 
     // Each ZMM register can be used to encode 64 bytes of data, so we have 4 ZMM registers to encode 256 bytes of data
     bind(REMAINDER_16);
     subq(len_reg, 256);
     // As we process 16 blocks at a time, load mask for incrementing the counter value by 16
-    evmovdquq(xmm19, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 320), Assembler::AVX_512bit, r15);//Linc16(rip)
+    evmovdquq(xmm19, ExternalAddress(counter_mask_addr + 320), Assembler::AVX_512bit, r15);//Linc16(rip)
     // shuffle counter and XOR counter with roundkey1
     vpshufb(xmm0, xmm8, xmm16, Assembler::AVX_512bit);
     evpxorq(xmm0, xmm0, xmm20, Assembler::AVX_512bit);
@@ -1032,14 +1140,14 @@ void MacroAssembler::aesctr_encrypt(Register src_addr, Register dest_addr, Regis
     cmpl(len_reg, 64);
     jcc(Assembler::aboveEqual, REMAINDER_4);
     //load mask for incrementing the counter value by 1
-    evmovdquq(xmm19, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 80), Assembler::AVX_128bit, r15);//Linc0 + 16(rip)
+    evmovdquq(xmm19, ExternalAddress(counter_mask_addr + 80), Assembler::AVX_128bit, r15);//Linc0 + 16(rip)
     jmp(REMAINDER_LOOP);
 
     // Each ZMM register can be used to encode 64 bytes of data, so we have 2 ZMM registers to encode 128 bytes of data
     bind(REMAINDER_8);
     subq(len_reg, 128);
     // As we process 8 blocks at a time, load mask for incrementing the counter value by 8
-    evmovdquq(xmm19, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 192), Assembler::AVX_512bit, r15);//Linc8(rip)
+    evmovdquq(xmm19, ExternalAddress(counter_mask_addr + 192), Assembler::AVX_512bit, r15);//Linc8(rip)
     // shuffle counters and xor with roundkey1
     vpshufb(xmm0, xmm8, xmm16, Assembler::AVX_512bit);
     evpxorq(xmm0, xmm0, xmm20, Assembler::AVX_512bit);
@@ -1092,14 +1200,14 @@ void MacroAssembler::aesctr_encrypt(Register src_addr, Register dest_addr, Regis
     cmpl(len_reg, 64);
     jcc(Assembler::aboveEqual, REMAINDER_4);
     // load mask for incrementing the counter value by 1
-    evmovdquq(xmm19, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 80), Assembler::AVX_128bit, r15);//Linc0 + 16(rip)
+    evmovdquq(xmm19, ExternalAddress(counter_mask_addr + 80), Assembler::AVX_128bit, r15);//Linc0 + 16(rip)
     jmp(REMAINDER_LOOP);
 
     // Each ZMM register can be used to encode 64 bytes of data, so we have 1 ZMM register used in this block of code
     bind(REMAINDER_4);
     subq(len_reg, 64);
     // As we process 4 blocks at a time, load mask for incrementing the counter value by 4
-    evmovdquq(xmm19, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 128), Assembler::AVX_512bit, r15);//Linc4(rip)
+    evmovdquq(xmm19, ExternalAddress(counter_mask_addr + 128), Assembler::AVX_512bit, r15);//Linc4(rip)
     // XOR counter with first roundkey
     vpshufb(xmm0, xmm8, xmm16, Assembler::AVX_512bit);
     evpxorq(xmm0, xmm0, xmm20, Assembler::AVX_512bit);
@@ -1658,7 +1766,9 @@ void MacroAssembler::aesgcm_encrypt(Register in, Register len, Register ct, Regi
     const XMMRegister ZTMP16 = xmm30;
     const XMMRegister COUNTER_INC_MASK = xmm18;
 
-    movl(pos, 0); // Total length processed
+  address counter_mask_addr = (UseNewCode ? (address) COUNTER_MASK : StubRoutines::x86::counter_mask_addr());
+
+  movl(pos, 0); // Total length processed
     // Min data size processed = 768 bytes
     cmpl(len, 768);
     jcc(Assembler::less, ENC_DEC_DONE);
@@ -1682,14 +1792,14 @@ void MacroAssembler::aesgcm_encrypt(Register in, Register len, Register ct, Regi
     // Broadcast counter value to 512 bit register
     evshufi64x2(CTR_BLOCKx, CTR_BLOCKx, CTR_BLOCKx, 0, Assembler::AVX_512bit);
     // Load counter shuffle mask
-    evmovdquq(xmm24, ExternalAddress(StubRoutines::x86::counter_mask_addr()), Assembler::AVX_512bit, rbx);
+    evmovdquq(xmm24, ExternalAddress(counter_mask_addr), Assembler::AVX_512bit, rbx);
     // Shuffle counter
     vpshufb(CTR_BLOCKx, CTR_BLOCKx, xmm24, Assembler::AVX_512bit);
 
     // Load mask for incrementing counter
-    evmovdquq(COUNTER_INC_MASK, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 128), Assembler::AVX_512bit, rbx);
+    evmovdquq(COUNTER_INC_MASK, ExternalAddress(counter_mask_addr + 128), Assembler::AVX_512bit, rbx);
     // Pre-increment counter
-    vpaddd(ZTMP5, CTR_BLOCKx, ExternalAddress(StubRoutines::x86::counter_mask_addr() + 64), Assembler::AVX_512bit, rbx);
+    vpaddd(ZTMP5, CTR_BLOCKx, ExternalAddress(counter_mask_addr + 64), Assembler::AVX_512bit, rbx);
     vpaddd(ZTMP6, ZTMP5, COUNTER_INC_MASK, Assembler::AVX_512bit);
     vpaddd(ZTMP7, ZTMP6, COUNTER_INC_MASK, Assembler::AVX_512bit);
     vpaddd(ZTMP8, ZTMP7, COUNTER_INC_MASK, Assembler::AVX_512bit);
