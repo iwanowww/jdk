@@ -29,8 +29,6 @@
 #include "runtime/stubRoutines.hpp"
 #include "macroAssembler_x86.hpp"
 
-#ifdef _LP64
-
 void MacroAssembler::roundEnc(XMMRegister key, int rnum) {
     for (int xmm_reg_no = 0; xmm_reg_no <=rnum; xmm_reg_no++) {
       vaesenc(as_XMMRegister(xmm_reg_no), as_XMMRegister(xmm_reg_no), key, Assembler::AVX_512bit);
@@ -1888,5 +1886,3 @@ void MacroAssembler::aesgcm_encrypt(Register in, Register len, Register ct, Regi
     bind(ENC_DEC_DONE);
     movq(rax, pos);
 }
-
-#endif // _LP64
