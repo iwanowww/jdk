@@ -1351,8 +1351,6 @@ void MacroAssembler::gfmul_avx512(XMMRegister GH, XMMRegister HK) {
     const XMMRegister TMP3 = xmm2;
 
     const address ghash_poly512_addr = (UseNewCode ? (address)GHASH_POLY512      : StubRoutines::x86::ghash_polynomial512_addr());
-    const address ghash_poly_addr    = (UseNewCode ? (address)GHASH_POLY512 + 64 : StubRoutines::x86::ghash_polynomial512_addr() + 64);
-    const address ghash_twoone_addr  = (UseNewCode ? (address)GHASH_POLY512 + 80 : StubRoutines::x86::ghash_polynomial512_addr() + 80);
 
     evpclmulqdq(TMP1, GH, HK, 0x11, Assembler::AVX_512bit);
     evpclmulqdq(TMP2, GH, HK, 0x00, Assembler::AVX_512bit);
@@ -1387,6 +1385,8 @@ void MacroAssembler::generateHtbl_48_block_zmm(Register htbl, Register avx512_ht
     movdqu(xmm10, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()));
     vpshufb(HK, HK, xmm10, Assembler::AVX_128bit);
 
+    const address ghash_poly_addr    = (UseNewCode ? (address)GHASH_POLY512 + 64 : StubRoutines::x86::ghash_polynomial512_addr() + 64);
+    const address ghash_twoone_addr  = (UseNewCode ? (address)GHASH_POLY512 + 80 : StubRoutines::x86::ghash_polynomial512_addr() + 80);
     movdqu(xmm11, ExternalAddress(ghash_poly_addr));
     movdqu(xmm12, ExternalAddress(ghash_twoone_addr));
     // Compute H ^ 2 from the input subkeyH
