@@ -5115,7 +5115,7 @@ void MacroAssembler::verify_heapbase(const char* msg) {
   assert (Universe::heap() != NULL, "java heap should be initialized");
   if (CheckCompressedOops) {
     Label ok;
-    const auto src2 = ExternalAddress((address)CompressedOops::ptrs_base_addr());
+    ExternalAddress src(CompressedOops::ptrs_base_addr());
     assert(!src2.is_lval(), "should not be lval");
     const bool is_src2_reachable = reachable(src2);
     if (!is_src2_reachable) {
