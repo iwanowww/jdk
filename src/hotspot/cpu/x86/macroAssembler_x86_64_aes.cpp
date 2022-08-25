@@ -99,6 +99,14 @@ ATTRIBUTE_ALIGNED(64) uint64_t COUNTER_MASK[] = {
     0x0000000000000010UL, 0x0000000000000000UL, 0x0000000000000010UL, 0x0000000000000000UL,
 };
 
+ATTRIBUTE_ALIGNED(64) uint64_t GHASH_POLY512[] = { // POLY for reduction
+    0x00000001C2000000UL, 0xC200000000000000UL, 0x00000001C2000000UL, 0xC200000000000000UL,
+    0x00000001C2000000UL, 0xC200000000000000UL, 0x00000001C2000000UL, 0xC200000000000000UL,
+    0x0000000000000001UL, 0xC200000000000000UL, // POLY
+    0x0000000000000001UL, 0x0000000100000000UL, // TWOONE
+};
+
+
 void MacroAssembler::roundEnc(XMMRegister key, int rnum) {
     for (int xmm_reg_no = 0; xmm_reg_no <=rnum; xmm_reg_no++) {
       vaesenc(as_XMMRegister(xmm_reg_no), as_XMMRegister(xmm_reg_no), key, Assembler::AVX_512bit);
@@ -1342,6 +1350,10 @@ void MacroAssembler::gfmul_avx512(XMMRegister GH, XMMRegister HK) {
     const XMMRegister TMP2 = xmm1;
     const XMMRegister TMP3 = xmm2;
 
+    const address ghash_poly512_addr = (UseNewCode ? (address)GHASH_POLY512      : StubRoutines::x86::ghash_polynomial512_addr());
+    const address ghash_poly_addr    = (UseNewCode ? (address)GHASH_POLY512 + 64 : StubRoutines::x86::ghash_polynomial512_addr() + 64);
+    const address ghash_twoone_addr  = (UseNewCode ? (address)GHASH_POLY512 + 80 : StubRoutines::x86::ghash_polynomial512_addr() + 80);
+
     evpclmulqdq(TMP1, GH, HK, 0x11, Assembler::AVX_512bit);
     evpclmulqdq(TMP2, GH, HK, 0x00, Assembler::AVX_512bit);
     evpclmulqdq(TMP3, GH, HK, 0x01, Assembler::AVX_512bit);
@@ -1352,7 +1364,7 @@ void MacroAssembler::gfmul_avx512(XMMRegister GH, XMMRegister HK) {
     evpxorq(TMP1, TMP1, TMP3, Assembler::AVX_512bit);
     evpxorq(GH, GH, TMP2, Assembler::AVX_512bit);
 
-    evmovdquq(TMP3, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr()), Assembler::AVX_512bit, r15);
+    evmovdquq(TMP3, ExternalAddress(ghash_poly512_addr), Assembler::AVX_512bit, r15);
     evpclmulqdq(TMP2, TMP3, GH, 0x01, Assembler::AVX_512bit);
     vpslldq(TMP2, TMP2, 8, Assembler::AVX_512bit);
     evpxorq(GH, GH, TMP2, Assembler::AVX_512bit);
@@ -1375,8 +1387,8 @@ void MacroAssembler::generateHtbl_48_block_zmm(Register htbl, Register avx512_ht
     movdqu(xmm10, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()));
     vpshufb(HK, HK, xmm10, Assembler::AVX_128bit);
 
-    movdqu(xmm11, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr() + 64)); // Poly
-    movdqu(xmm12, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr() + 80)); // Twoone
+    movdqu(xmm11, ExternalAddress(ghash_poly_addr));
+    movdqu(xmm12, ExternalAddress(ghash_twoone_addr));
     // Compute H ^ 2 from the input subkeyH
     movdqu(xmm2, xmm6);
     vpsllq(xmm6, xmm6, 1, Assembler::AVX_128bit);
@@ -1632,7 +1644,8 @@ void MacroAssembler::ghash16_encrypt16_parallel(Register key, Register subkeyHtb
         vpternlogq(ZTMP7, 0x96, xmm25, ZTMP11, Assembler::AVX_512bit);
         vpsrldq(ZTMP11, ZTMP7, 8, Assembler::AVX_512bit);
         vpslldq(ZTMP7, ZTMP7, 8, Assembler::AVX_512bit);
-        evmovdquq(ZTMP12, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr()), Assembler::AVX_512bit, rbx);
+        const address ghash_poly512_addr = (UseNewCode ? (address)GHASH_POLY512 : StubRoutines::x86::ghash_polynomial512_addr());
+        evmovdquq(ZTMP12, ExternalAddress(ghash_poly512_addr), Assembler::AVX_512bit, rbx);
     }
     // AES round 7
     roundEncode(ZTMP18, ZTMP0, ZTMP1, ZTMP2, ZTMP3);
@@ -1939,7 +1952,8 @@ void MacroAssembler::aesgcm_encrypt(Register in, Register len, Register ct, Regi
     vhpxori4x128(ZTMP1, ZTMP11);
     vhpxori4x128(ZTMP2, ZTMP12);
     // Load reduction polynomial and compute final reduction
-    evmovdquq(ZTMP15, ExternalAddress(StubRoutines::x86::ghash_polynomial512_addr()), Assembler::AVX_512bit, rbx);
+    const address ghash_poly512_addr = (UseNewCode ? (address)GHASH_POLY512 : StubRoutines::x86::ghash_polynomial512_addr());
+    evmovdquq(ZTMP15, ExternalAddress(ghash_poly512_addr), Assembler::AVX_512bit, rbx);
     vclmul_reduce(AAD_HASHx, ZTMP15, ZTMP1, ZTMP2, ZTMP3, ZTMP4);
 
     // Pre-increment counter for next operation
