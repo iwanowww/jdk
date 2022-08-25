@@ -52,6 +52,7 @@ ATTRIBUTE_ALIGNED(64) uint64_t GHASH_POLY512[] = { // POLY for reduction
 
 ATTRIBUTE_ALIGNED(16) uint64_t GHASH_POLY512_POLY[] = {
     0x0000000000000001UL, 0xC200000000000000UL,
+};
 
 ATTRIBUTE_ALIGNED(64) uint64_t GHASH_POLY512_TWOONE[] = {
     0x0000000000000001UL, 0x0000000100000000UL,
@@ -1335,8 +1336,6 @@ void MacroAssembler::generateHtbl_48_block_zmm(Register htbl, Register avx512_ht
     const XMMRegister ZT7 = xmm7;
     const XMMRegister ZT8 = xmm8;
 
-    Label GFMUL_AVX512;
-
     movdqu(HK, Address(htbl, 0));
     movdqu(xmm10, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()));
     vpshufb(HK, HK, xmm10, Assembler::AVX_128bit);
@@ -1361,42 +1360,42 @@ void MacroAssembler::generateHtbl_48_block_zmm(Register htbl, Register avx512_ht
     movdqu(ZT5, HK);
     vinserti32x4(ZT7, ZT7, HK, 3);
 
-    gfmul_avx512(ZT5, HK);
+    gfmul_avx512(ZT5, HK, rscratch);
     movdqu(Address(avx512_htbl, 16 * 46), ZT5); // H ^ 2 * 2
     vinserti32x4(ZT7, ZT7, ZT5, 2);
 
-    gfmul_avx512(ZT5, HK);
+    gfmul_avx512(ZT5, HK, rscratch);
     movdqu(Address(avx512_htbl, 16 * 45), ZT5); // H ^ 2 * 3
     vinserti32x4(ZT7, ZT7, ZT5, 1);
 
-    gfmul_avx512(ZT5, HK);
+    gfmul_avx512(ZT5, HK, rscratch);
     movdqu(Address(avx512_htbl, 16 * 44), ZT5); // H ^ 2 * 4
     vinserti32x4(ZT7, ZT7, ZT5, 0);
 
     evshufi64x2(ZT5, ZT5, ZT5, 0x00, Assembler::AVX_512bit);
     evmovdquq(ZT8, ZT7, Assembler::AVX_512bit);
-    gfmul_avx512(ZT7, ZT5);
+    gfmul_avx512(ZT7, ZT5, rscratch);
     evmovdquq(Address(avx512_htbl, 16 * 40), ZT7, Assembler::AVX_512bit);
     evshufi64x2(ZT5, ZT7, ZT7, 0x00, Assembler::AVX_512bit);
-    gfmul_avx512(ZT8, ZT5);
+    gfmul_avx512(ZT8, ZT5, rscratch);
     evmovdquq(Address(avx512_htbl, 16 * 36), ZT8, Assembler::AVX_512bit);
-    gfmul_avx512(ZT7, ZT5);
+    gfmul_avx512(ZT7, ZT5, rscratch);
     evmovdquq(Address(avx512_htbl, 16 * 32), ZT7, Assembler::AVX_512bit);
-    gfmul_avx512(ZT8, ZT5);
+    gfmul_avx512(ZT8, ZT5, rscratch);
     evmovdquq(Address(avx512_htbl, 16 * 28), ZT8, Assembler::AVX_512bit);
-    gfmul_avx512(ZT7, ZT5);
+    gfmul_avx512(ZT7, ZT5, rscratch);
     evmovdquq(Address(avx512_htbl, 16 * 24), ZT7, Assembler::AVX_512bit);
-    gfmul_avx512(ZT8, ZT5);
+    gfmul_avx512(ZT8, ZT5, rscratch);
     evmovdquq(Address(avx512_htbl, 16 * 20), ZT8, Assembler::AVX_512bit);
-    gfmul_avx512(ZT7, ZT5);
+    gfmul_avx512(ZT7, ZT5, rscratch);
     evmovdquq(Address(avx512_htbl, 16 * 16), ZT7, Assembler::AVX_512bit);
-    gfmul_avx512(ZT8, ZT5);
+    gfmul_avx512(ZT8, ZT5, rscratch);
     evmovdquq(Address(avx512_htbl, 16 * 12), ZT8, Assembler::AVX_512bit);
-    gfmul_avx512(ZT7, ZT5);
+    gfmul_avx512(ZT7, ZT5, rscratch);
     evmovdquq(Address(avx512_htbl, 16 * 8), ZT7, Assembler::AVX_512bit);
-    gfmul_avx512(ZT8, ZT5);
+    gfmul_avx512(ZT8, ZT5, rscratch);
     evmovdquq(Address(avx512_htbl, 16 * 4), ZT8, Assembler::AVX_512bit);
-    gfmul_avx512(ZT7, ZT5);
+    gfmul_avx512(ZT7, ZT5, rscratch);
     evmovdquq(Address(avx512_htbl, 16 * 0), ZT7, Assembler::AVX_512bit);
 }
 
