@@ -4424,25 +4424,6 @@ class StubGenerator: public StubCodeGenerator {
     return start;
   }
 
-  address ghash_polynomial512_addr() {
-    __ align(CodeEntryAlignment);
-    StubCodeMark mark(this, "StubRoutines", "_ghash_poly512_addr");
-    address start = __ pc();
-    __ emit_data64(0x00000001C2000000, relocInfo::none); // POLY for reduction
-    __ emit_data64(0xC200000000000000, relocInfo::none);
-    __ emit_data64(0x00000001C2000000, relocInfo::none);
-    __ emit_data64(0xC200000000000000, relocInfo::none);
-    __ emit_data64(0x00000001C2000000, relocInfo::none);
-    __ emit_data64(0xC200000000000000, relocInfo::none);
-    __ emit_data64(0x00000001C2000000, relocInfo::none);
-    __ emit_data64(0xC200000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000001, relocInfo::none); // POLY
-    __ emit_data64(0xC200000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000001, relocInfo::none); // TWOONE
-    __ emit_data64(0x0000000100000000, relocInfo::none);
-    return start;
-}
-
   // Vector AES Galois Counter Mode implementation. Parameters:
   // Windows regs            |  Linux regs
   // in = c_rarg0 (rcx)      |  c_rarg0 (rsi)
@@ -4524,62 +4505,6 @@ class StubGenerator: public StubCodeGenerator {
     __ leave(); // required for proper stackwalking of RuntimeStub frame
     __ ret(0);
      return start;
-  }
-
-  // This mask is used for incrementing counter value(linc0, linc4, etc.)
-  address counter_mask_addr() {
-    __ align64();
-    StubCodeMark mark(this, "StubRoutines", "counter_mask_addr");
-    address start = __ pc();
-    __ emit_data64(0x08090a0b0c0d0e0f, relocInfo::none);//lbswapmask
-    __ emit_data64(0x0001020304050607, relocInfo::none);
-    __ emit_data64(0x08090a0b0c0d0e0f, relocInfo::none);
-    __ emit_data64(0x0001020304050607, relocInfo::none);
-    __ emit_data64(0x08090a0b0c0d0e0f, relocInfo::none);
-    __ emit_data64(0x0001020304050607, relocInfo::none);
-    __ emit_data64(0x08090a0b0c0d0e0f, relocInfo::none);
-    __ emit_data64(0x0001020304050607, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);//linc0 = counter_mask_addr+64
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000001, relocInfo::none);//counter_mask_addr() + 80
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000002, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000003, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000004, relocInfo::none);//linc4 = counter_mask_addr() + 128
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000004, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000004, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000004, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000008, relocInfo::none);//linc8 = counter_mask_addr() + 192
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000008, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000008, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000008, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000020, relocInfo::none);//linc32 = counter_mask_addr() + 256
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000020, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000020, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000020, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000010, relocInfo::none);//linc16 = counter_mask_addr() + 320
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000010, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000010, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    __ emit_data64(0x0000000000000010, relocInfo::none);
-    __ emit_data64(0x0000000000000000, relocInfo::none);
-    return start;
   }
 
  // Vector AES Counter implementation
@@ -5256,16 +5181,6 @@ address generate_cipherBlockChaining_decryptVectorAESCrypt() {
 #endif
     __ leave(); // required for proper stackwalking of RuntimeStub frame
     __ ret(0);
-    return start;
-}
-
-// Polynomial x^128+x^127+x^126+x^121+1
-address ghash_polynomial_addr() {
-    __ align(CodeEntryAlignment);
-    StubCodeMark mark(this, "StubRoutines", "_ghash_poly_addr");
-    address start = __ pc();
-    __ emit_data64(0x0000000000000001, relocInfo::none);
-    __ emit_data64(0xc200000000000000, relocInfo::none);
     return start;
 }
 
@@ -7956,8 +7871,6 @@ address generate_avx_ghash_processBlocks() {
         StubRoutines::_cipherBlockChaining_decryptAESCrypt = generate_cipherBlockChaining_decryptVectorAESCrypt();
         StubRoutines::_electronicCodeBook_encryptAESCrypt = generate_electronicCodeBook_encryptAESCrypt();
         StubRoutines::_electronicCodeBook_decryptAESCrypt = generate_electronicCodeBook_decryptAESCrypt();
-        StubRoutines::x86::_counter_mask_addr = counter_mask_addr();
-        StubRoutines::x86::_ghash_poly512_addr = ghash_polynomial512_addr();
         StubRoutines::x86::_ghash_long_swap_mask_addr = generate_ghash_long_swap_mask();
         StubRoutines::_galoisCounterMode_AESCrypt = generate_galoisCounterMode_AESCrypt();
       } else {
@@ -7967,9 +7880,6 @@ address generate_avx_ghash_processBlocks() {
 
     if (UseAESCTRIntrinsics) {
       if (VM_Version::supports_avx512_vaes() && VM_Version::supports_avx512bw() && VM_Version::supports_avx512vl()) {
-        if (StubRoutines::x86::_counter_mask_addr == NULL) {
-          StubRoutines::x86::_counter_mask_addr = counter_mask_addr();
-        }
         StubRoutines::_counterMode_AESCrypt = generate_counterMode_VectorAESCrypt();
       } else {
         StubRoutines::x86::_counter_shuffle_mask_addr = generate_counter_shuffle_mask();
@@ -8015,7 +7925,6 @@ address generate_avx_ghash_processBlocks() {
     StubRoutines::x86::_ghash_byte_swap_mask_addr = generate_ghash_byte_swap_mask();
       if (VM_Version::supports_avx()) {
         StubRoutines::x86::_ghash_shuffmask_addr = ghash_shufflemask_addr();
-        StubRoutines::x86::_ghash_poly_addr = ghash_polynomial_addr();
         StubRoutines::_ghash_processBlocks = generate_avx_ghash_processBlocks();
       } else {
         StubRoutines::_ghash_processBlocks = generate_ghash_processBlocks();
