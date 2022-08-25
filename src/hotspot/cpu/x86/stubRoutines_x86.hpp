@@ -126,9 +126,6 @@ class x86 {
   // shuffle mask for fixing up 128-bit words consisting of big-endian 32-bit integers
   static address _key_shuffle_mask_addr;
 
-  //shuffle mask for big-endian 128-bit integers
-  static address _counter_shuffle_mask_addr;
-
   static address _method_entry_barrier;
 
   // masks and table for CRC32
@@ -146,10 +143,7 @@ class x86 {
   // table for CRC32C
   static juint* _crc32c_table;
   // swap mask for ghash
-  static address _ghash_long_swap_mask_addr;
   static address _ghash_byte_swap_mask_addr;
-  static address _ghash_poly_addr;
-  static address _ghash_shuffmask_addr;
 
   // upper word mask for sha1
   static address _upper_word_mask_addr;
@@ -213,7 +207,6 @@ class x86 {
   static address addr_mxcsr_std()        { return (address)&_mxcsr_std; }
   static address verify_mxcsr_entry()    { return _verify_mxcsr_entry; }
   static address key_shuffle_mask_addr() { return _key_shuffle_mask_addr; }
-  static address counter_shuffle_mask_addr() { return _counter_shuffle_mask_addr; }
   static address crc_by128_masks_addr()  { return (address)_crc_by128_masks; }
 #ifdef _LP64
   static address crc_by128_masks_avx512_addr()  { return (address)_crc_by128_masks_avx512; }
@@ -221,10 +214,7 @@ class x86 {
   static address crc_table_avx512_addr()  { return (address)_crc_table_avx512; }
   static address crc32c_table_avx512_addr()  { return (address)_crc32c_table_avx512; }
 #endif // _LP64
-  static address ghash_long_swap_mask_addr() { return _ghash_long_swap_mask_addr; }
   static address ghash_byte_swap_mask_addr() { return _ghash_byte_swap_mask_addr; }
-  static address ghash_shufflemask_addr() { return _ghash_shuffmask_addr; }
-  static address ghash_polynomial_addr() { return _ghash_poly_addr; }
   static address upper_word_mask_addr() { return _upper_word_mask_addr; }
   static address shuffle_byte_flip_mask_addr() { return _shuffle_byte_flip_mask_addr; }
   static address k256_addr()      { return _k256_adr; }

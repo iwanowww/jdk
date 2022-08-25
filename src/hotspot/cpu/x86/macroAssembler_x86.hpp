@@ -961,7 +961,7 @@ public:
                    XMMRegister msgtmp1, XMMRegister msgtmp2, XMMRegister msgtmp3, XMMRegister msgtmp4,
                    Register buf, Register state, Register ofs, Register limit, Register rsp,
                    bool multi_block, XMMRegister shuf_mask);
-  void avx_ghash(Register state, Register htbl, Register data, Register blocks);
+  void avx_ghash(Register state, Register htbl, Register data, Register blocks, Register rscratch);
 #endif
 
 #ifdef _LP64

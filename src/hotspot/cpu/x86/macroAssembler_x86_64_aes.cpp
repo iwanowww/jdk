@@ -50,17 +50,13 @@ ATTRIBUTE_ALIGNED(64) uint64_t GHASH_POLY512[] = { // POLY for reduction
     0x00000001C2000000UL, 0xC200000000000000UL, 0x00000001C2000000UL, 0xC200000000000000UL,
 };
 
-ATTRIBUTE_ALIGNED(16) uint64_t GHASH_POLY512_POLY[] = {
-    0x0000000000000001UL, 0xC200000000000000UL,
-};
+ATTRIBUTE_ALIGNED(16) uint64_t GHASH_POLY512_POLY[]   = { 0x0000000000000001UL, 0xC200000000000000UL };
+ATTRIBUTE_ALIGNED(16) uint64_t GHASH_POLY512_TWOONE[] = { 0x0000000000000001UL, 0x0000000100000000UL };
+ATTRIBUTE_ALIGNED(16) uint64_t GHASH_SHUFFLE_MASK[]   = { 0x0f0f0f0f0f0f0f0fUL, 0x0f0f0f0f0f0f0f0fUL };
+ATTRIBUTE_ALIGNED(16) uint64_t KEY_SHUFFLE_MASK[]     = { 0x0405060700010203UL, 0x0c0d0e0f08090a0bUL };
 
-ATTRIBUTE_ALIGNED(64) uint64_t GHASH_POLY512_TWOONE[] = {
-    0x0000000000000001UL, 0x0000000100000000UL,
-};
-
-ATTRIBUTE_ALIGNED(16) uint64_t GHASH_POLY[] = {
-    0x0000000000000001UL, 0xc200000000000000UL // Polynomial x^128+x^127+x^126+x^121+1
-};
+// Polynomial x^128+x^127+x^126+x^121+1
+ATTRIBUTE_ALIGNED(16) uint64_t GHASH_POLY[] = { 0x0000000000000001UL, 0xc200000000000000UL };
 
 void MacroAssembler::roundEnc(XMMRegister key, int rnum) {
     for (int xmm_reg_no = 0; xmm_reg_no <=rnum; xmm_reg_no++) {
@@ -87,14 +83,10 @@ void MacroAssembler::lastroundDec(XMMRegister key, int rnum) {
 }
 
 // Load key and shuffle operation
-void MacroAssembler::ev_load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask) {
-    movdqu(xmmdst, Address(key, offset));
-    if (xmm_shuf_mask != xnoreg) {
-        pshufb(xmmdst, xmm_shuf_mask);
-    } else {
-       pshufb(xmmdst, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
-    }
-   evshufi64x2(xmmdst, xmmdst, xmmdst, 0x0, Assembler::AVX_512bit);
+void MacroAssembler::ev_load_key(XMMRegister dst, Register key, int offset, XMMRegister shuf_mask) {
+  movdqu(dst, Address(key, offset));
+  pshufb(dst, shuf_mask);
+  evshufi64x2(dst, dst, dst, 0x0, Assembler::AVX_512bit);
 }
 
 // AES-ECB Encrypt Operation
@@ -126,19 +118,19 @@ void MacroAssembler::aesecb_encrypt(Register src_addr, Register dest_addr, Regis
 
     // Load Key shuf mask
     const XMMRegister xmm_key_shuf_mask = xmm31;  // used temporarily to swap key bytes up front
-    movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    movdqu(xmm_key_shuf_mask, ExternalAddress(KEY_SHUFFLE_MASK), rscratch);
 
     // Load and shuffle key based on number of rounds
-    ev_load_key(xmm8, key, 0 * 16, xmm_key_shuf_mask);
-    ev_load_key(xmm9, key, 1 * 16, xmm_key_shuf_mask);
-    ev_load_key(xmm10, key, 2 * 16, xmm_key_shuf_mask);
-    ev_load_key(xmm23, key, 3 * 16, xmm_key_shuf_mask);
-    ev_load_key(xmm12, key, 4 * 16, xmm_key_shuf_mask);
-    ev_load_key(xmm13, key, 5 * 16, xmm_key_shuf_mask);
-    ev_load_key(xmm14, key, 6 * 16, xmm_key_shuf_mask);
-    ev_load_key(xmm15, key, 7 * 16, xmm_key_shuf_mask);
-    ev_load_key(xmm16, key, 8 * 16, xmm_key_shuf_mask);
-    ev_load_key(xmm17, key, 9 * 16, xmm_key_shuf_mask);
+    ev_load_key(xmm8,  key,  0 * 16, xmm_key_shuf_mask);
+    ev_load_key(xmm9,  key,  1 * 16, xmm_key_shuf_mask);
+    ev_load_key(xmm10, key,  2 * 16, xmm_key_shuf_mask);
+    ev_load_key(xmm23, key,  3 * 16, xmm_key_shuf_mask);
+    ev_load_key(xmm12, key,  4 * 16, xmm_key_shuf_mask);
+    ev_load_key(xmm13, key,  5 * 16, xmm_key_shuf_mask);
+    ev_load_key(xmm14, key,  6 * 16, xmm_key_shuf_mask);
+    ev_load_key(xmm15, key,  7 * 16, xmm_key_shuf_mask);
+    ev_load_key(xmm16, key,  8 * 16, xmm_key_shuf_mask);
+    ev_load_key(xmm17, key,  9 * 16, xmm_key_shuf_mask);
     ev_load_key(xmm24, key, 10 * 16, xmm_key_shuf_mask);
     cmpl(rounds, 52);
     jcc(Assembler::greaterEqual, KEY_192);
@@ -586,12 +578,12 @@ void MacroAssembler::generateHtbl_one_block(Register htbl, Register rscratch) {
     // load the original subkey hash
     movdqu(t, Address(htbl, 0));
     // shuffle using long swap mask
-    movdqu(xmm10, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()));
+    movdqu(xmm10, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), rscratch);
     vpshufb(t, t, xmm10, Assembler::AVX_128bit);
 
     // Compute H' = GFMUL(H, 2)
     vpsrld(xmm3, t, 7, Assembler::AVX_128bit);
-    movdqu(xmm4, ExternalAddress(StubRoutines::x86::ghash_shufflemask_addr()));
+    movdqu(xmm4, ExternalAddress((address)GHASH_SHUFFLE_MASK), rscratch);
     vpshufb(xmm3, xmm3, xmm4, Assembler::AVX_128bit);
     movl(rax, 0xff00);
     movdl(xmm4, rax);
@@ -642,8 +634,7 @@ void MacroAssembler::generateHtbl_eight_blocks(Register htbl) {
 }
 
 // Multiblock and single block GHASH computation using Shift XOR reduction technique
-void MacroAssembler::avx_ghash(Register input_state, Register htbl,
-    Register input_data, Register blocks) {
+void MacroAssembler::avx_ghash(Register input_state, Register htbl, Register input_data, Register blocks, Register rscratch) {
 
     // temporary variables to hold input data and input state
     const XMMRegister data = xmm1;
@@ -797,7 +788,7 @@ void MacroAssembler::avx_ghash(Register input_state, Register htbl,
     gfmul(tmp0, state);
 
     bind(GENERATE_HTBL_1_BLK);
-    generateHtbl_one_block(htbl);
+    generateHtbl_one_block(htbl, rscratch);
 
     bind(GENERATE_HTBL_8_BLKS);
     generateHtbl_eight_blocks(htbl);
@@ -882,21 +873,21 @@ void MacroAssembler::aesctr_encrypt(Register src_addr, Register dest_addr, Regis
     evmovdquq(xmm19, ExternalAddress(linc32_addr), Assembler::AVX_512bit, r15);//Linc32
 
     // xmm31 contains the key shuffle mask.
-    movdqu(xmm31, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    movdqu(xmm31, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), r15);
     // Load key function loads 128 bit key and shuffles it. Then we broadcast the shuffled key to convert it into a 512 bit value.
     // For broadcasting the values to ZMM, vshufi64 is used instead of evbroadcasti64x2 as the source in this case is ZMM register
     // that holds shuffled key value.
-    ev_load_key(xmm20, key, 0, xmm31);
-    ev_load_key(xmm21, key, 1 * 16, xmm31);
-    ev_load_key(xmm22, key, 2 * 16, xmm31);
-    ev_load_key(xmm23, key, 3 * 16, xmm31);
-    ev_load_key(xmm24, key, 4 * 16, xmm31);
-    ev_load_key(xmm25, key, 5 * 16, xmm31);
-    ev_load_key(xmm26, key, 6 * 16, xmm31);
-    ev_load_key(xmm27, key, 7 * 16, xmm31);
-    ev_load_key(xmm28, key, 8 * 16, xmm31);
-    ev_load_key(xmm29, key, 9 * 16, xmm31);
-    ev_load_key(xmm30, key, 10 * 16, xmm31);
+    ev_load_key(xmm20, key,       0, xmm31, noreg);
+    ev_load_key(xmm21, key,  1 * 16, xmm31, noreg);
+    ev_load_key(xmm22, key,  2 * 16, xmm31, noreg);
+    ev_load_key(xmm23, key,  3 * 16, xmm31, noreg);
+    ev_load_key(xmm24, key,  4 * 16, xmm31, noreg);
+    ev_load_key(xmm25, key,  5 * 16, xmm31, noreg);
+    ev_load_key(xmm26, key,  6 * 16, xmm31, noreg);
+    ev_load_key(xmm27, key,  7 * 16, xmm31, noreg);
+    ev_load_key(xmm28, key,  8 * 16, xmm31, noreg);
+    ev_load_key(xmm29, key,  9 * 16, xmm31, noreg);
+    ev_load_key(xmm30, key, 10 * 16, xmm31, noreg);
 
     // Process 32 blocks or 512 bytes of data
     bind(LOOP);
@@ -1912,7 +1903,7 @@ void MacroAssembler::aesgcm_encrypt(Register in, Register len, Register ct, Regi
     vpshufb(CTR_BLOCKx, CTR_BLOCKx, xmm24, Assembler::AVX_512bit);
     movdqu(Address(counter, 0), CTR_BLOCKx);
     // Load ghash lswap mask
-    movdqu(xmm24, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()));
+    movdqu(xmm24, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()), rbx);
     // Shuffle ghash using lbswap_mask and store it
     vpshufb(AAD_HASHx, AAD_HASHx, xmm24, Assembler::AVX_128bit);
     movdqu(Address(state, 0), AAD_HASHx);

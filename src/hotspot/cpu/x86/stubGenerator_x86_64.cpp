@@ -83,6 +83,17 @@ OopMap* continuation_enter_setup(MacroAssembler* masm, int& stack_slots);
 void fill_continuation_entry(MacroAssembler* masm);
 void continuation_enter_cleanup(MacroAssembler* masm);
 
+// Shuffle mask for big-endian 128-bit integers.
+ATTRIBUTE_ALIGNED(16) uint64_t CNT_SHUFFLE_MASK[] = { 0x08090a0b0c0d0e0fUL, 0x0001020304050607UL };
+ATTRIBUTE_ALIGNED(16) uint64_t KEY_SHUFFLE_MASK[] = { 0x0405060700010203UL, 0x0c0d0e0f08090a0bUL };
+
+// byte swap x86 long
+ATTRIBUTE_ALIGNED(16) uint64_t GHASH_LONG_SWAP_MASK[] = { 0x0f0e0d0c0b0a0908UL, 0x0706050403020100UL };
+
+// byte swap x86 byte array
+ATTRIBUTE_ALIGNED(16) uint64_t GHASH_BYTE_SWAP_MASK[] = { 0x08090a0b0c0d0e0fUL, 0x0001020304050607UL };
+
+
 // Stub Code definitions
 
 class StubGenerator: public StubCodeGenerator {
@@ -3546,33 +3557,11 @@ class StubGenerator: public StubCodeGenerator {
   // AES intrinsic stubs
   enum {AESBlockSize = 16};
 
-  address generate_key_shuffle_mask() {
-    __ align(16);
-    StubCodeMark mark(this, "StubRoutines", "key_shuffle_mask");
-    address start = __ pc();
-    __ emit_data64( 0x0405060700010203, relocInfo::none );
-    __ emit_data64( 0x0c0d0e0f08090a0b, relocInfo::none );
-    return start;
-  }
-
-  address generate_counter_shuffle_mask() {
-    __ align(16);
-    StubCodeMark mark(this, "StubRoutines", "counter_shuffle_mask");
-    address start = __ pc();
-    __ emit_data64(0x08090a0b0c0d0e0f, relocInfo::none);
-    __ emit_data64(0x0001020304050607, relocInfo::none);
-    return start;
-  }
-
   // Utility routine for loading a 128-bit key word in little endian format
   // can optionally specify that the shuffle mask is already in an xmmregister
-  void load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask = xnoreg) {
+  void load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask) {
     __ movdqu(xmmdst, Address(key, offset));
-    if (xmm_shuf_mask != xnoreg) {
-      __ pshufb(xmmdst, xmm_shuf_mask);
-    } else {
-      __ pshufb(xmmdst, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
-    }
+    __ pshufb(xmmdst, xmm_shuf_mask);
   }
 
   // Utility routine for increase 128bit counter (iv in CTR mode)
@@ -3619,7 +3608,7 @@ class StubGenerator: public StubCodeGenerator {
     // keylen could be only {11, 13, 15} * 4 = {44, 52, 60}
     __ movl(keylen, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
 
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    __ movdqu(xmm_key_shuf_mask, ExternalAddress((address)KEY_SHUFFLE_MASK), rscratch1);
     __ movdqu(xmm_result, Address(from, 0));  // get 16 bytes of input
 
     // For encryption, the java expanded key ordering is just what we need
@@ -3713,7 +3702,7 @@ class StubGenerator: public StubCodeGenerator {
     // keylen could be only {11, 13, 15} * 4 = {44, 52, 60}
     __ movl(keylen, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
 
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    __ movdqu(xmm_key_shuf_mask, ExternalAddress((address)KEY_SHUFFLE_MASK), rscratch1);
     __ movdqu(xmm_result, Address(from, 0));
 
     // for decryption java expanded key ordering is rotated one position from what we want
@@ -3830,7 +3819,7 @@ class StubGenerator: public StubCodeGenerator {
 #endif
 
     const XMMRegister xmm_key_shuf_mask = xmm_temp;  // used temporarily to swap key bytes up front
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    __ movdqu(xmm_key_shuf_mask, ExternalAddress((address)KEY_SHUFFLE_MASK), rscratch1);
     // load up xmm regs xmm2 thru xmm12 with key 0x00 - 0xa0
     for (int rnum = XMM_REG_NUM_KEY_FIRST, offset = 0x00; rnum <= XMM_REG_NUM_KEY_FIRST+10; rnum++) {
       load_key(as_XMMRegister(rnum), key, offset, xmm_key_shuf_mask);
@@ -3985,7 +3974,7 @@ class StubGenerator: public StubCodeGenerator {
     // the java expanded key ordering is rotated one position from what we want
     // so we start from 0x10 here and hit 0x00 last
     const XMMRegister xmm_key_shuf_mask = xmm1;  // used temporarily to swap key bytes up front
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    __ movdqu(xmm_key_shuf_mask, ExternalAddress((address)KEY_SHUFFLE_MASK), rscratch1);
     // load up xmm regs 5 thru 15 with key 0x10 - 0xa0 - 0x00
     for (int rnum = XMM_REG_NUM_KEY_FIRST, offset = 0x10; rnum < XMM_REG_NUM_KEY_LAST; rnum++) {
       load_key(as_XMMRegister(rnum), key, offset, xmm_key_shuf_mask);
@@ -4678,7 +4667,7 @@ class StubGenerator: public StubCodeGenerator {
 
     __ push(rbx); // Save RBX
     __ movdqu(xmm_curr_counter, Address(counter, 0x00)); // initialize counter with initial counter
-    __ movdqu(xmm_counter_shuf_mask, ExternalAddress(StubRoutines::x86::counter_shuffle_mask_addr()), pos); // pos as scratch
+    __ movdqu(xmm_counter_shuf_mask, ExternalAddress((address)CNT_SHUFFLE_MASK), rbx /*rscratch*/);
     __ pshufb(xmm_curr_counter, xmm_counter_shuf_mask); //counter is shuffled
     __ movptr(pos, 0);
 
@@ -4701,7 +4690,7 @@ class StubGenerator: public StubCodeGenerator {
     __ movl(Address(used_addr, 0), used);
 
     // key length could be only {11, 13, 15} * 4 = {44, 52, 60}
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()), rbx); // rbx as scratch
+    __ movdqu(xmm_key_shuf_mask, ExternalAddress((address)KEY_SHUFFLE_MASK), rbx); // rbx as scratch
     __ movl(rbx, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
     __ cmpl(rbx, 52);
     __ jcc(Assembler::equal, L_multiBlock_loopTop[1]);
@@ -4899,16 +4888,6 @@ void roundDeclast(XMMRegister xmm_reg) {
   __ vaesdeclast(xmm8, xmm8, xmm_reg, Assembler::AVX_512bit);
 }
 
-void ev_load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask = xnoreg) {
-  __ movdqu(xmmdst, Address(key, offset));
-  if (xmm_shuf_mask != xnoreg) {
-    __ pshufb(xmmdst, xmm_shuf_mask);
-  } else {
-    __ pshufb(xmmdst, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
-  }
-  __ evshufi64x2(xmmdst, xmmdst, xmmdst, 0x0, Assembler::AVX_512bit);
-
-}
 
 address generate_cipherBlockChaining_decryptVectorAESCrypt() {
     assert(VM_Version::supports_avx512_vaes(), "need AES instructions and misaligned SSE support");
@@ -4944,7 +4923,7 @@ address generate_cipherBlockChaining_decryptVectorAESCrypt() {
 
     // Temporary variable declaration for swapping key bytes
     const XMMRegister xmm_key_shuf_mask = xmm1;
-    __ movdqu(xmm_key_shuf_mask, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+    __ movdqu(xmm_key_shuf_mask, ExternalAddress((address)KEY_SHUFFLE_MASK));
 
     // Calculate number of rounds from key size: 44 for 10-rounds, 52 for 12-rounds, 60 for 14-rounds
     const Register rounds = rbx;
@@ -4970,17 +4949,17 @@ address generate_cipherBlockChaining_decryptVectorAESCrypt() {
      // Load and shuffle key
     // the java expanded key ordering is rotated one position from what we want
     // so we start from 1*16 here and hit 0*16 last
-    ev_load_key(RK1, key, 1 * 16, xmm_key_shuf_mask);
-    ev_load_key(RK2, key, 2 * 16, xmm_key_shuf_mask);
-    ev_load_key(RK3, key, 3 * 16, xmm_key_shuf_mask);
-    ev_load_key(RK4, key, 4 * 16, xmm_key_shuf_mask);
-    ev_load_key(RK5, key, 5 * 16, xmm_key_shuf_mask);
-    ev_load_key(RK6, key, 6 * 16, xmm_key_shuf_mask);
-    ev_load_key(RK7, key, 7 * 16, xmm_key_shuf_mask);
-    ev_load_key(RK8, key, 8 * 16, xmm_key_shuf_mask);
-    ev_load_key(RK9, key, 9 * 16, xmm_key_shuf_mask);
-    ev_load_key(RK10, key, 10 * 16, xmm_key_shuf_mask);
-    ev_load_key(RK0, key, 0*16, xmm_key_shuf_mask);
+    __ ev_load_key( RK1, key,  1 * 16, xmm_key_shuf_mask);
+    __ ev_load_key( RK2, key,  2 * 16, xmm_key_shuf_mask);
+    __ ev_load_key( RK3, key,  3 * 16, xmm_key_shuf_mask);
+    __ ev_load_key( RK4, key,  4 * 16, xmm_key_shuf_mask);
+    __ ev_load_key( RK5, key,  5 * 16, xmm_key_shuf_mask);
+    __ ev_load_key( RK6, key,  6 * 16, xmm_key_shuf_mask);
+    __ ev_load_key( RK7, key,  7 * 16, xmm_key_shuf_mask);
+    __ ev_load_key( RK8, key,  8 * 16, xmm_key_shuf_mask);
+    __ ev_load_key( RK9, key,  9 * 16, xmm_key_shuf_mask);
+    __ ev_load_key(RK10, key, 10 * 16, xmm_key_shuf_mask);
+    __ ev_load_key( RK0, key,  0 * 16, xmm_key_shuf_mask);
 
     // Variables for storing source cipher text
     const XMMRegister S0 = xmm10;
@@ -5009,8 +4988,8 @@ address generate_cipherBlockChaining_decryptVectorAESCrypt() {
     __ BIND(KEY_192);
     const XMMRegister RK11 = xmm27;
     const XMMRegister RK12 = xmm28;
-    ev_load_key(RK11, key, 11*16, xmm_key_shuf_mask);
-    ev_load_key(RK12, key, 12*16, xmm_key_shuf_mask);
+    __ ev_load_key(RK11, key, 11*16, xmm_key_shuf_mask);
+    __ ev_load_key(RK12, key, 12*16, xmm_key_shuf_mask);
 
     __ cmpl(rounds, 52);
     __ jcc(Assembler::greater, KEY_256);
@@ -5019,8 +4998,8 @@ address generate_cipherBlockChaining_decryptVectorAESCrypt() {
     __ BIND(KEY_256);
     const XMMRegister RK13 = xmm29;
     const XMMRegister RK14 = xmm31;
-    ev_load_key(RK13, key, 13*16, xmm_key_shuf_mask);
-    ev_load_key(RK14, key, 14*16, xmm_key_shuf_mask);
+    __ ev_load_key(RK13, key, 13*16, xmm_key_shuf_mask);
+    __ ev_load_key(RK14, key, 14*16, xmm_key_shuf_mask);
 
     __ BIND(Loop);
     __ cmpl(len_reg, 512);
@@ -5184,15 +5163,6 @@ address generate_cipherBlockChaining_decryptVectorAESCrypt() {
     return start;
 }
 
-address ghash_shufflemask_addr() {
-    __ align(CodeEntryAlignment);
-    StubCodeMark mark(this, "StubRoutines", "_ghash_shuffmask_addr");
-    address start = __ pc();
-    __ emit_data64(0x0f0f0f0f0f0f0f0f, relocInfo::none);
-    __ emit_data64(0x0f0f0f0f0f0f0f0f, relocInfo::none);
-    return start;
-}
-
 // Ghash single and multi block operations using AVX instructions
 address generate_avx_ghash_processBlocks() {
     __ align(CodeEntryAlignment);
@@ -5207,30 +5177,10 @@ address generate_avx_ghash_processBlocks() {
     const Register blocks = c_rarg3;
     __ enter();
    // Save state before entering routine
-    __ avx_ghash(state, htbl, data, blocks);
+    __ avx_ghash(state, htbl, data, blocks, rscratch1);
     __ leave(); // required for proper stackwalking of RuntimeStub frame
     __ ret(0);
     return start;
-}
-
-  // byte swap x86 long
-  address generate_ghash_long_swap_mask() {
-    __ align(CodeEntryAlignment);
-    StubCodeMark mark(this, "StubRoutines", "ghash_long_swap_mask");
-    address start = __ pc();
-    __ emit_data64(0x0f0e0d0c0b0a0908, relocInfo::none );
-    __ emit_data64(0x0706050403020100, relocInfo::none );
-  return start;
-  }
-
-  // byte swap x86 byte array
-  address generate_ghash_byte_swap_mask() {
-    __ align(CodeEntryAlignment);
-    StubCodeMark mark(this, "StubRoutines", "ghash_byte_swap_mask");
-    address start = __ pc();
-    __ emit_data64(0x08090a0b0c0d0e0f, relocInfo::none );
-    __ emit_data64(0x0001020304050607, relocInfo::none );
-  return start;
   }
 
   /* Single and multi-block ghash operations */
@@ -5259,7 +5209,7 @@ address generate_avx_ghash_processBlocks() {
 
     __ enter();
 
-    __ movdqu(xmm_temp10, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()));
+    __ movdqu(xmm_temp10, ExternalAddress((address)GHASH_LONG_SWAP_MASK), rscratch1);
 
     __ movdqu(xmm_temp0, Address(state, 0));
     __ pshufb(xmm_temp0, xmm_temp10);
@@ -5267,7 +5217,7 @@ address generate_avx_ghash_processBlocks() {
 
     __ BIND(L_ghash_loop);
     __ movdqu(xmm_temp2, Address(data, 0));
-    __ pshufb(xmm_temp2, ExternalAddress(StubRoutines::x86::ghash_byte_swap_mask_addr()));
+    __ pshufb(xmm_temp2, ExternalAddress((address)GHASH_BYTE_SWAP_MASK), rscratch1);
 
     __ movdqu(xmm_temp1, Address(subkeyH, 0));
     __ pshufb(xmm_temp1, xmm_temp10);
@@ -5359,6 +5309,7 @@ address generate_avx_ghash_processBlocks() {
     __ movdqu(Address(state, 0), xmm_temp6);   // store the result
     __ leave();
     __ ret(0);
+
     return start;
   }
 
@@ -7863,7 +7814,6 @@ address generate_avx_ghash_processBlocks() {
 
     // don't bother generating these AES intrinsic stubs unless global flag is set
     if (UseAESIntrinsics) {
-      StubRoutines::x86::_key_shuffle_mask_addr = generate_key_shuffle_mask();  // needed by the others
       StubRoutines::_aescrypt_encryptBlock = generate_aescrypt_encryptBlock();
       StubRoutines::_aescrypt_decryptBlock = generate_aescrypt_decryptBlock();
       StubRoutines::_cipherBlockChaining_encryptAESCrypt = generate_cipherBlockChaining_encryptAESCrypt();
@@ -7871,7 +7821,6 @@ address generate_avx_ghash_processBlocks() {
         StubRoutines::_cipherBlockChaining_decryptAESCrypt = generate_cipherBlockChaining_decryptVectorAESCrypt();
         StubRoutines::_electronicCodeBook_encryptAESCrypt = generate_electronicCodeBook_encryptAESCrypt();
         StubRoutines::_electronicCodeBook_decryptAESCrypt = generate_electronicCodeBook_decryptAESCrypt();
-        StubRoutines::x86::_ghash_long_swap_mask_addr = generate_ghash_long_swap_mask();
         StubRoutines::_galoisCounterMode_AESCrypt = generate_galoisCounterMode_AESCrypt();
       } else {
         StubRoutines::_cipherBlockChaining_decryptAESCrypt = generate_cipherBlockChaining_decryptAESCrypt_Parallel();
@@ -7882,7 +7831,6 @@ address generate_avx_ghash_processBlocks() {
       if (VM_Version::supports_avx512_vaes() && VM_Version::supports_avx512bw() && VM_Version::supports_avx512vl()) {
         StubRoutines::_counterMode_AESCrypt = generate_counterMode_VectorAESCrypt();
       } else {
-        StubRoutines::x86::_counter_shuffle_mask_addr = generate_counter_shuffle_mask();
         StubRoutines::_counterMode_AESCrypt = generate_counterMode_AESCrypt_Parallel();
       }
     }
@@ -7919,9 +7867,6 @@ address generate_avx_ghash_processBlocks() {
 
     // Generate GHASH intrinsics code
     if (UseGHASHIntrinsics) {
-      if (StubRoutines::x86::_ghash_long_swap_mask_addr == NULL) {
-        StubRoutines::x86::_ghash_long_swap_mask_addr = generate_ghash_long_swap_mask();
-      }
     StubRoutines::x86::_ghash_byte_swap_mask_addr = generate_ghash_byte_swap_mask();
       if (VM_Version::supports_avx()) {
         StubRoutines::x86::_ghash_shuffmask_addr = ghash_shufflemask_addr();
