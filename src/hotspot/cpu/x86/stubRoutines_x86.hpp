@@ -123,8 +123,6 @@ class x86 {
   static jint    _mxcsr_std;
 
   static address _verify_mxcsr_entry;
-  // shuffle mask for fixing up 128-bit words consisting of big-endian 32-bit integers
-  static address _key_shuffle_mask_addr;
 
   static address _method_entry_barrier;
 
@@ -206,7 +204,6 @@ class x86 {
  public:
   static address addr_mxcsr_std()        { return (address)&_mxcsr_std; }
   static address verify_mxcsr_entry()    { return _verify_mxcsr_entry; }
-  static address key_shuffle_mask_addr() { return _key_shuffle_mask_addr; }
   static address crc_by128_masks_addr()  { return (address)_crc_by128_masks; }
 #ifdef _LP64
   static address crc_by128_masks_avx512_addr()  { return (address)_crc_by128_masks_avx512; }

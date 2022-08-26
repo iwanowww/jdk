@@ -3233,15 +3233,15 @@ void MacroAssembler::xorps(XMMRegister dst, AddressLiteral src, Register rscratc
   }
 }
 
-void MacroAssembler::pshufb(XMMRegister dst, AddressLiteral src) {
+void MacroAssembler::pshufb(XMMRegister dst, AddressLiteral src, Register rscratch) {
   // Used in sign-bit flipping with aligned address.
   bool aligned_adr = (((intptr_t)src.target() & 15) == 0);
   assert((UseAVX > 0) || aligned_adr, "SSE mode requires address alignment 16 bytes");
   if (reachable(src)) {
     Assembler::pshufb(dst, as_Address(src));
   } else {
-    lea(rscratch1, src);
-    Assembler::pshufb(dst, Address(rscratch1, 0));
+    lea(rscratch, src);
+    Assembler::pshufb(dst, Address(rscratch, 0));
   }
 }
 
@@ -4124,9 +4124,9 @@ void MacroAssembler::lookup_virtual_method(Register recv_klass,
 
 
 void MacroAssembler::check_klass_subtype(Register sub_klass,
-                           Register super_klass,
-                           Register temp_reg,
-                           Label& L_success) {
+                                         Register super_klass,
+                                         Register temp_reg,
+                                         Label& L_success) {
   Label L_failure;
   check_klass_subtype_fast_path(sub_klass, super_klass, temp_reg,        &L_success, &L_failure, NULL);
   check_klass_subtype_slow_path(sub_klass, super_klass, temp_reg, noreg, &L_success, NULL);
@@ -9453,3 +9453,100 @@ void MacroAssembler::get_thread(Register thread) {
 
 
 #endif // !WIN32 || _LP64
+
+#ifdef _LP64
+
+//---------------------------- continuation_enter_setup ---------------------------
+//
+// Arguments:
+//   None.
+//
+// Results:
+//   rsp: pointer to blank ContinuationEntry
+//
+// Kills:
+//   rax
+//
+OopMap* MacroAssembler::continuation_enter_setup(int& stack_slots) {
+  assert(ContinuationEntry::size() % VMRegImpl::stack_slot_size == 0, "");
+  assert(in_bytes(ContinuationEntry::cont_offset())  % VMRegImpl::stack_slot_size == 0, "");
+  assert(in_bytes(ContinuationEntry::chunk_offset()) % VMRegImpl::stack_slot_size == 0, "");
+
+  stack_slots += checked_cast<int>(ContinuationEntry::size()) / wordSize;
+  subptr(rsp, checked_cast<int32_t>(ContinuationEntry::size()));
+
+  int frame_size = (checked_cast<int>(ContinuationEntry::size()) + wordSize) / VMRegImpl::stack_slot_size;
+  OopMap* map = new OopMap(frame_size, 0);
+  ContinuationEntry::setup_oopmap(map);
+
+  movptr(rax, Address(r15_thread, JavaThread::cont_entry_offset()));
+  movptr(Address(rsp, ContinuationEntry::parent_offset()), rax);
+  movptr(Address(r15_thread, JavaThread::cont_entry_offset()), rsp);
+
+  return map;
+}
+
+//---------------------------- fill_continuation_entry ---------------------------
+//
+// Arguments:
+//   rsp: pointer to blank Continuation entry
+//   reg_cont_obj: pointer to the continuation
+//   reg_flags: flags
+//
+// Results:
+//   rsp: pointer to filled out ContinuationEntry
+//
+// Kills:
+//   rax
+//
+void MacroAssembler::fill_continuation_entry(Register reg_cont_obj, Register reg_flags) {
+  assert_different_registers(rax, reg_cont_obj, reg_flags);
+#ifdef ASSERT
+  movl(Address(rsp, ContinuationEntry::cookie_offset()), ContinuationEntry::cookie_value());
+#endif
+  movptr(Address(rsp, ContinuationEntry::cont_offset()), reg_cont_obj);
+  movl  (Address(rsp, ContinuationEntry::flags_offset()), reg_flags);
+  movptr(Address(rsp, ContinuationEntry::chunk_offset()), 0);
+  movl(Address(rsp, ContinuationEntry::argsize_offset()), 0);
+  movl(Address(rsp, ContinuationEntry::pin_count_offset()), 0);
+
+  movptr(rax, Address(r15_thread, JavaThread::cont_fastpath_offset()));
+  movptr(Address(rsp, ContinuationEntry::parent_cont_fastpath_offset()), rax);
+  movq(rax, Address(r15_thread, JavaThread::held_monitor_count_offset()));
+  movq(Address(rsp, ContinuationEntry::parent_held_monitor_count_offset()), rax);
+
+  movptr(Address(r15_thread, JavaThread::cont_fastpath_offset()), 0);
+  movq(Address(r15_thread, JavaThread::held_monitor_count_offset()), 0);
+}
+
+//---------------------------- continuation_enter_cleanup ---------------------------
+//
+// Arguments:
+//   rsp: pointer to the ContinuationEntry
+//
+// Results:
+//   rsp: pointer to the spilled rbp in the entry frame
+//
+// Kills:
+//   rbx
+//
+void MacroAssembler::continuation_enter_cleanup() {
+#ifdef ASSERT
+  Label L_good_sp;
+  cmpptr(rsp, Address(r15_thread, JavaThread::cont_entry_offset()));
+  jcc(Assembler::equal, L_good_sp);
+  stop("Incorrect rsp at continuation_enter_cleanup");
+  bind(L_good_sp);
+#endif
+
+  movptr(rbx, Address(rsp, ContinuationEntry::parent_cont_fastpath_offset()));
+  movptr(Address(r15_thread, JavaThread::cont_fastpath_offset()), rbx);
+  movq(rbx, Address(rsp, ContinuationEntry::parent_held_monitor_count_offset()));
+  movq(Address(r15_thread, JavaThread::held_monitor_count_offset()), rbx);
+
+  movptr(rbx, Address(rsp, ContinuationEntry::parent_offset()));
+  movptr(Address(r15_thread, JavaThread::cont_entry_offset()), rbx);
+  addptr(rsp, checked_cast<int32_t>(ContinuationEntry::size()));
+}
+
+#endif // _LP64
