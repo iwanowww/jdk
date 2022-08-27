@@ -554,7 +554,11 @@ class StubGenerator: public StubCodeGenerator {
 
   address generate_electronicCodeBook_encryptAESCrypt();
 
+  void aesecb_encrypt(Register source_addr, Register dest_addr, Register key, Register len);
+
   address generate_electronicCodeBook_decryptAESCrypt();
+
+  void aesecb_decrypt(Register source_addr, Register dest_addr, Register key, Register len);
 
   // ofs and limit are use for multi-block byte array.
   // int com.sun.security.provider.MD5.implCompress(byte[] b, int ofs)
@@ -592,12 +596,27 @@ class StubGenerator: public StubCodeGenerator {
   // counter = rsi           |  r12
   // return - number of processed bytes
   address generate_galoisCounterMode_AESCrypt();
+  void aesgcm_encrypt(Register in, Register len, Register ct, Register out, Register key,
+                      Register state, Register subkeyHtbl, Register avx512_subkeyHtbl, Register counter);
 
   // This mask is used for incrementing counter value(linc0, linc4, etc.)
   address counter_mask_addr();
 
  // Vector AES Counter implementation
   address generate_counterMode_VectorAESCrypt();
+  void aesctr_encrypt(Register src_addr, Register dest_addr, Register key, Register counter,
+                      Register len_reg, Register used, Register used_addr, Register saved_encCounter_start);
+
+  void roundEnc(XMMRegister key, int rnum);
+  void lastroundEnc(XMMRegister key, int rnum);
+  void roundDec(XMMRegister key, int rnum);
+  void lastroundDec(XMMRegister key, int rnum);
+  void gfmul_avx512(XMMRegister ghash, XMMRegister hkey);
+  void generateHtbl_48_block_zmm(Register htbl, Register avx512_subkeyHtbl);
+  void ghash16_encrypt16_parallel(Register key, Register subkeyHtbl, XMMRegister ctr_blockx,
+                                  XMMRegister aad_hashx, Register in, Register out, Register data, Register pos, bool reduction,
+                                  XMMRegister addmask, bool no_ghash_input, Register rounds, Register ghash_pos,
+                                  bool final_reduction, int index, XMMRegister counter_inc_mask);
 
   // This is a version of CTR/AES crypt which does 6 blocks in a loop at a time
   // to hide instruction latency
@@ -627,6 +646,7 @@ class StubGenerator: public StubCodeGenerator {
 
   void roundDeclast(XMMRegister xmm_reg);
 
+  // Load key and shuffle operation
   void ev_load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask = xnoreg);
 
   address generate_cipherBlockChaining_decryptVectorAESCrypt();
