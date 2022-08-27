@@ -62,10 +62,9 @@
 #define BLOCK_COMMENT(str) /* nothing */
 #else
 #define BLOCK_COMMENT(str) __ block_comment(str)
-#endif
+#endif // PRODUCT
 
 #define BIND(label) bind(label); BLOCK_COMMENT(#label ":")
-const int MXCSR_MASK = 0xFFC0;  // Mask out any pending exceptions
 
 #ifdef PRODUCT
 #define INC_COUNTER_NP(counter, rscratch) ((void)0)
@@ -169,7 +168,7 @@ static Address xmm_save(int reg) {
 //    We spill c_rarg0-c_rarg3 to this space.
 
 // Call stub stack layout word offsets from rbp
-enum call_stub_layout {
+  enum call_stub_layout {
 #ifdef _WIN64
   xmm_save_first     = 6,  // save from xmm6
   xmm_save_last      = 31, // to xmm31
@@ -289,7 +288,7 @@ address StubGenerator::generate_call_stub(address& return_address) {
     Label skip_ldmx;
     __ stmxcsr(mxcsr_save);
     __ movl(rax, mxcsr_save);
-    __ andl(rax, MXCSR_MASK);    // Only check control and mask bits
+    __ andl(rax, 0xFFC0); // Mask out any pending exceptions (only check control and mask bits)
     ExternalAddress mxcsr_std(StubRoutines::x86::addr_mxcsr_std());
     __ cmp32(rax, mxcsr_std, rscratch1);
     __ jcc(Assembler::equal, skip_ldmx);
@@ -611,7 +610,7 @@ address StubGenerator::generate_verify_mxcsr() {
     __ subptr(rsp, wordSize);      // allocate a temp location
     __ stmxcsr(mxcsr_save);
     __ movl(rax, mxcsr_save);
-    __ andl(rax, MXCSR_MASK);    // Only check control and mask bits
+    __ andl(rax, 0xFFC0); // Mask out any pending exceptions (only check control and mask bits)
     __ cmp32(rax, mxcsr_std, rscratch1);
     __ jcc(Assembler::equal, ok_ret);
 
@@ -6545,8 +6544,8 @@ address StubGenerator::generate_base64_decodeBlock() {
   const Register out_byte_count = rbx;
   const Register byte1 = r13;
   const Register byte2 = r15;
-  const Register byte3 = WINDOWS_ONLY(r8) NOT_WINDOWS(rdx);
-  const Register byte4 = WINDOWS_ONLY(r10) NOT_WINDOWS(r9);
+  const Register byte3 = WIN64_ONLY(r8) NOT_WIN64(rdx);
+  const Register byte4 = WIN64_ONLY(r10) NOT_WIN64(r9);
 
   __ shrl(length, 2);    // Multiple of 4 bytes only - length is # 4-byte chunks
   __ cmpl(length, 0);
@@ -7083,8 +7082,8 @@ address StubGenerator::generate_bigIntegerRightShift() {
   // For everything else, we prefer using r9 and r10 since we do not have to save them before use.
   const Register tmp1 = r11;                    // Caller save.
   const Register tmp2 = rax;                    // Caller save.
-  const Register tmp3 = WINDOWS_ONLY(r12) NOT_WINDOWS(r9);   // Windows: Callee save. Linux: Caller save.
-  const Register tmp4 = WINDOWS_ONLY(r13) NOT_WINDOWS(r10);  // Windows: Callee save. Linux: Caller save.
+  const Register tmp3 = WIN64_ONLY(r12) NOT_WIN64(r9);   // Windows: Callee save. Linux: Caller save.
+  const Register tmp4 = WIN64_ONLY(r13) NOT_WIN64(r10);  // Windows: Callee save. Linux: Caller save.
   const Register tmp5 = r14;                    // Callee save.
   const Register tmp6 = r15;
 
@@ -7095,7 +7094,7 @@ address StubGenerator::generate_bigIntegerRightShift() {
   BLOCK_COMMENT("Entry:");
   __ enter(); // required for proper stackwalking of RuntimeStub frame
 
-#ifdef _WINDOWS
+#ifdef _WIN64
   setup_arg_regs(4);
   // For windows, since last argument is on stack, we need to move it to the appropriate register.
   __ movl(totalNumIter, Address(rsp, 6 * wordSize));
@@ -7177,7 +7176,7 @@ address StubGenerator::generate_bigIntegerRightShift() {
   __ vzeroupper();
   // Restore callee save registers.
   __ pop(tmp5);
-#ifdef _WINDOWS
+#ifdef _WIN64
   __ pop(tmp4);
   __ pop(tmp3);
   restore_arg_regs();
@@ -7217,8 +7216,8 @@ address StubGenerator::generate_bigIntegerLeftShift() {
   // For everything else, we prefer using r9 and r10 since we do not have to save them before use.
   const Register tmp1 = r11;                    // Caller save.
   const Register tmp2 = rax;                    // Caller save.
-  const Register tmp3 = WINDOWS_ONLY(r12) NOT_WINDOWS(r9);   // Windows: Callee save. Linux: Caller save.
-  const Register tmp4 = WINDOWS_ONLY(r13) NOT_WINDOWS(r10);  // Windows: Callee save. Linux: Caller save.
+  const Register tmp3 = WIN64_ONLY(r12) NOT_WIN64(r9);   // Windows: Callee save. Linux: Caller save.
+  const Register tmp4 = WIN64_ONLY(r13) NOT_WIN64(r10);  // Windows: Callee save. Linux: Caller save.
   const Register tmp5 = r14;                    // Callee save.
 
   const XMMRegister x0 = xmm0;
@@ -7227,7 +7226,7 @@ address StubGenerator::generate_bigIntegerLeftShift() {
   BLOCK_COMMENT("Entry:");
   __ enter(); // required for proper stackwalking of RuntimeStub frame
 
-#ifdef _WINDOWS
+#ifdef _WIN64
   setup_arg_regs(4);
   // For windows, since last argument is on stack, we need to move it to the appropriate register.
   __ movl(totalNumIter, Address(rsp, 6 * wordSize));
@@ -7301,7 +7300,7 @@ address StubGenerator::generate_bigIntegerLeftShift() {
   __ vzeroupper();
   // Restore callee save registers.
   __ pop(tmp5);
-#ifdef _WINDOWS
+#ifdef _WIN64
   __ pop(tmp4);
   __ pop(tmp3);
   restore_arg_regs();
@@ -7537,7 +7536,7 @@ address StubGenerator::generate_cont_thaw(const char* label, Continuation::thaw_
     __ stop("Incorrect rsp at thaw entry");
     __ BIND(L_good_sp);
   }
-#endif
+#endif // ASSERT
 
   if (return_barrier) {
     // Preserve possible return value from a method returning to the return barrier.
@@ -7565,7 +7564,7 @@ address StubGenerator::generate_cont_thaw(const char* label, Continuation::thaw_
     __ stop("Incorrect rsp after prepare thaw");
     __ BIND(L_good_sp);
   }
-#endif
+#endif // ASSERT
 
   // rbx contains the size of the frames to thaw, 0 if overflow or no more frames
   Label L_thaw_success;
