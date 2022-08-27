@@ -147,7 +147,7 @@ class StubGenerator: public StubCodeGenerator {
 #endif
   };
 
-  address generate_call_stub(address& return_address); 
+  address generate_call_stub(address& return_address);
 
   // Return point for a Java call if there's an exception thrown in
   // Java code.  The exception is caught and transformed into a
@@ -603,7 +603,7 @@ class StubGenerator: public StubCodeGenerator {
   void generate_arraycopy_stubs();
 
   // AES intrinsic stubs
-  
+
   enum {
     AESBlockSize = 16
   };
@@ -935,7 +935,7 @@ class StubGenerator: public StubCodeGenerator {
   // For c2: c_rarg0 is junk, call to runtime to write a checkpoint.
   // It returns a jobject handle to the event writer.
   // The handle is dereferenced and the return value is the event writer oop.
-  RuntimeStub* generate_jfr_write_checkpoint(); 
+  RuntimeStub* generate_jfr_write_checkpoint();
 
 #endif // INCLUDE_JFR
 
@@ -976,4 +976,4 @@ class StubGenerator: public StubCodeGenerator {
       generate_all();
     }
   }
-}; 
+};

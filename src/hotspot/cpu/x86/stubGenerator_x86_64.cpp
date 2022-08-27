@@ -24,30 +24,17 @@
 
 #include "precompiled.hpp"
 #include "asm/macroAssembler.hpp"
-#include "asm/macroAssembler.inline.hpp"
-#include "ci/ciUtilities.hpp"
 #include "compiler/oopMap.hpp"
 #include "gc/shared/barrierSet.hpp"
 #include "gc/shared/barrierSetAssembler.hpp"
 #include "gc/shared/barrierSetNMethod.hpp"
 #include "gc/shared/gc_globals.hpp"
-#include "interpreter/interpreter.hpp"
 #include "memory/universe.hpp"
-#include "nativeInst_x86.hpp"
-#include "oops/instanceOop.hpp"
-#include "oops/method.hpp"
 #include "oops/objArrayKlass.hpp"
-#include "oops/oop.inline.hpp"
 #include "prims/jvmtiExport.hpp"
-#include "prims/methodHandles.hpp"
 #include "runtime/arguments.hpp"
-#include "runtime/continuation.hpp"
-#include "runtime/continuationEntry.inline.hpp"
-#include "runtime/frame.inline.hpp"
-#include "runtime/handles.inline.hpp"
 #include "runtime/javaThread.hpp"
 #include "runtime/sharedRuntime.hpp"
-#include "runtime/stubCodeGenerator.hpp"
 #include "runtime/stubRoutines.hpp"
 #ifdef COMPILER2
 #include "opto/runtime.hpp"
@@ -953,14 +940,14 @@ address StubGenerator::generate_verify_oop() {
   __ push(c_rarg3);
 
   enum {
-         // After previous pushes.
-         oop_to_verify = 6 * wordSize,
-         saved_rax     = 7 * wordSize,
-         saved_r10     = 8 * wordSize,
+    // After previous pushes.
+    oop_to_verify = 6 * wordSize,
+    saved_rax     = 7 * wordSize,
+    saved_r10     = 8 * wordSize,
 
-         // Before the call to MacroAssembler::debug(), see below.
-         return_addr   = 16 * wordSize,
-         error_msg     = 17 * wordSize
+    // Before the call to MacroAssembler::debug(), see below.
+    return_addr   = 16 * wordSize,
+    error_msg     = 17 * wordSize
   };
 
   // get object
@@ -1352,7 +1339,7 @@ void StubGenerator::restore_argument_regs(BasicType type) {
 //   used by generate_conjoint_[byte/int/short/long]_copy().
 //
 
-address StubGenerator::generate_disjoint_copy_avx3_masked(address* entry, const char *name, 
+address StubGenerator::generate_disjoint_copy_avx3_masked(address* entry, const char *name,
                                                           int shift, bool aligned, bool is_oop,
                                                           bool dest_uninitialized) {
   __ align(CodeEntryAlignment);
@@ -1573,7 +1560,7 @@ address StubGenerator::generate_disjoint_copy_avx3_masked(address* entry, const 
 //
 //
 address StubGenerator::generate_conjoint_copy_avx3_masked(address* entry, const char *name, int shift,
-                                                          address nooverlap_target, bool aligned, 
+                                                          address nooverlap_target, bool aligned,
                                                           bool is_oop, bool dest_uninitialized) {
   __ align(CodeEntryAlignment);
   StubCodeMark mark(this, "StubRoutines", name);
@@ -2557,8 +2544,8 @@ address StubGenerator::generate_disjoint_long_oop_copy(bool aligned, bool is_oop
 //   c_rarg1   - destination array address
 //   c_rarg2   - element count, treated as ssize_t, can be zero
 //
-address StubGenerator::generate_conjoint_long_oop_copy(bool aligned, bool is_oop, address nooverlap_target, 
-                                                       address *entry, const char *name, 
+address StubGenerator::generate_conjoint_long_oop_copy(bool aligned, bool is_oop, address nooverlap_target,
+                                                       address *entry, const char *name,
                                                        bool dest_uninitialized) {
 #if COMPILER2_OR_JVMCI
   if (VM_Version::supports_avx512vlbw() && VM_Version::supports_bmi2() && MaxVectorSize  >= 32) {
@@ -4340,7 +4327,7 @@ address StubGenerator::ghash_polynomial512_addr() {
   __ emit_data64(0xC200000000000000, relocInfo::none);
   __ emit_data64(0x0000000000000001, relocInfo::none); // TWOONE
   __ emit_data64(0x0000000100000000, relocInfo::none);
-  
+
   return start;
 }
 
