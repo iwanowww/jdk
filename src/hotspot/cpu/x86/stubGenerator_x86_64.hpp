@@ -22,8 +22,6 @@
  *
  */
 
-#include "precompiled.hpp"
-#include "asm/macroAssembler.hpp"
 #include "runtime/continuation.hpp"
 #include "runtime/stubCodeGenerator.hpp"
 
@@ -203,7 +201,7 @@ class StubGenerator: public StubCodeGenerator {
 
   address generate_count_leading_zeros_lut(const char *stub_name);
   address generate_popcount_avx_lut(const char *stub_name);
-  address generate_iota_indices(const char *stub_name) 
+  address generate_iota_indices(const char *stub_name);
   address generate_vector_reverse_bit_lut(const char *stub_name);
 
   address generate_vector_reverse_byte_perm_mask_long(const char *stub_name);

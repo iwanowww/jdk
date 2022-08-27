@@ -61,6 +61,7 @@
 #if INCLUDE_JFR
 #include "jfr/support/jfrIntrinsics.hpp"
 #endif
+#include "stubGenerator_x86_64.hpp"
 
 // Declaration and definition of StubGenerator (no .hpp file).
 // For a more detailed description of the stub routine structure
@@ -100,9 +101,7 @@ static int& get_profile_ctr(int shift) {
   else
     return SharedRuntime::_jlong_array_copy_ctr;
 }
-#endif
-
-#endif
+#endif // !PRODUCT
 
 #ifdef _WIN64
 static Address xmm_save(int reg) {
@@ -4884,7 +4883,7 @@ __ vaesdeclast(xmm7, xmm7, xmm_reg, Assembler::AVX_512bit);
 __ vaesdeclast(xmm8, xmm8, xmm_reg, Assembler::AVX_512bit);
 }
 
-void StubGenerator::ev_load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask = xnoreg) {
+void StubGenerator::ev_load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask) {
 __ movdqu(xmmdst, Address(key, offset));
 if (xmm_shuf_mask != xnoreg) {
   __ pshufb(xmmdst, xmm_shuf_mask);
@@ -7347,7 +7346,7 @@ address StubGenerator::generate_libmTan() {
   return start;
 }
 
-RuntimeStub* generate_cont_doYield() {
+RuntimeStub* StubGenerator::generate_cont_doYield() {
   if (!Continuations::enabled()) return nullptr;
 
   enum layout {
@@ -7549,7 +7548,7 @@ address StubGenerator::generate_cont_returnBarrier_exception() {
 // For c2: c_rarg0 is junk, call to runtime to write a checkpoint.
 // It returns a jobject handle to the event writer.
 // The handle is dereferenced and the return value is the event writer oop.
-RuntimeStub* generate_jfr_write_checkpoint() {
+RuntimeStub* StubGenerator::generate_jfr_write_checkpoint() {
   enum layout {
     rbp_off,
     rbpH_off,
