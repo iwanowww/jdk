@@ -28,11 +28,12 @@
 #include "asm/assembler.inline.hpp"
 #include "runtime/stubRoutines.hpp"
 #include "macroAssembler_x86.hpp"
+#include "stubGenerator_x86_64.hpp"
 
-#ifdef _LP64
+#define __ _masm->
 
 void StubGenerator::roundEnc(XMMRegister key, int rnum) {
-  for (int xmm_reg_no = 0; xmm_reg_no <=rnum; xmm_reg_no++ {
+  for (int xmm_reg_no = 0; xmm_reg_no <=rnum; xmm_reg_no++) {
     __ vaesenc(as_XMMRegister(xmm_reg_no), as_XMMRegister(xmm_reg_no), key, Assembler::AVX_512bit);
   }
 }
@@ -478,7 +479,7 @@ void StubGenerator::aesecb_decrypt(Register src_addr, Register dest_addr, Regist
 
 // Multiply 128 x 128 bits, using 4 pclmulqdq operations
 void StubGenerator::schoolbookAAD(int i, Register htbl, XMMRegister data,
-                                  XMMRegister tmp0, XMMRegister tmp1, 
+                                  XMMRegister tmp0, XMMRegister tmp1,
                                   XMMRegister tmp2, XMMRegister tmp3) {
   __ movdqu(xmm15, Address(htbl, i * 16));
   __ vpclmulhqlqdq(tmp3, data, xmm15); // 0x01
@@ -624,7 +625,7 @@ void StubGenerator::avx_ghash(Register input_state, Register htbl,
   // Check if Hashtable (1*16) has been already generated
   // For anything less than 8 blocks, we generate only the first power of H.
   __ movdqu(tmp2, Address(htbl, 1 * 16));
-  ptest(tmp2, tmp2);
+  __ ptest(tmp2, tmp2);
   __ jcc(Assembler::notZero, BEGIN_PROCESS);
   __ call(GENERATE_HTBL_1_BLK, relocInfo::none);
 
@@ -638,7 +639,7 @@ void StubGenerator::avx_ghash(Register input_state, Register htbl,
   __ jcc(Assembler::below, ONE_BLK_INIT);
   // If we have 8 blocks or more data, then generate remaining powers of H
   __ movdqu(tmp2, Address(htbl, 8 * 16));
-  ptest(tmp2, tmp2);
+  __ ptest(tmp2, tmp2);
   __ jcc(Assembler::notZero, PROCESS_8_BLOCKS);
   __ call(GENERATE_HTBL_8_BLKS, relocInfo::none);
 
@@ -723,7 +724,7 @@ void StubGenerator::avx_ghash(Register input_state, Register htbl,
   // Final result is in state
   __ vpxor(state, tmp0, tmp1, Assembler::AVX_128bit);
 
-  lea(input_data, Address(input_data, 16 * 8));
+  __ lea(input_data, Address(input_data, 16 * 8));
   __ cmpl(blocks, 8);
   __ jcc(Assembler::below, ONE_BLK_INIT);
   __ jmp(PROCESS_8_BLOCKS);
@@ -1306,7 +1307,7 @@ void StubGenerator::generateHtbl_48_block_zmm(Register htbl, Register avx512_htb
   __ vpor(xmm6, xmm6, xmm2, Assembler::AVX_128bit);
 
   __ vpshufd(xmm2, xmm1, 0x24, Assembler::AVX_128bit);
-  __ vpcmpeqd(xmm2, xmm2, xmm12, AVX_128bit);
+  __ vpcmpeqd(xmm2, xmm2, xmm12, Assembler::AVX_128bit);
   __ vpand(xmm2, xmm2, xmm11, Assembler::AVX_128bit);
   __ vpxor(xmm6, xmm6, xmm2, Assembler::AVX_128bit);
   __ movdqu(Address(avx512_htbl, 16 * 47), xmm6); // H ^ 2
@@ -1871,4 +1872,4 @@ void StubGenerator::aesgcm_encrypt(Register in, Register len, Register ct, Regis
   __ movq(rax, pos);
 }
 
-#endif // _LP64
+#undef __

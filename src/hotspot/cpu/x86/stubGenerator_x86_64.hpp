@@ -607,11 +607,17 @@ class StubGenerator: public StubCodeGenerator {
   void aesctr_encrypt(Register src_addr, Register dest_addr, Register key, Register counter,
                       Register len_reg, Register used, Register used_addr, Register saved_encCounter_start);
 
+  void schoolbookAAD(int i, Register subkeyH, XMMRegister data, XMMRegister tmp0,
+                     XMMRegister tmp1, XMMRegister tmp2, XMMRegister tmp3);
+  void avx_ghash(Register state, Register htbl, Register data, Register blocks);
   void roundEnc(XMMRegister key, int rnum);
   void lastroundEnc(XMMRegister key, int rnum);
   void roundDec(XMMRegister key, int rnum);
   void lastroundDec(XMMRegister key, int rnum);
+  void gfmul(XMMRegister tmp0, XMMRegister t);
   void gfmul_avx512(XMMRegister ghash, XMMRegister hkey);
+  void generateHtbl_one_block(Register htbl);
+  void generateHtbl_eight_blocks(Register htbl);
   void generateHtbl_48_block_zmm(Register htbl, Register avx512_subkeyHtbl);
   void ghash16_encrypt16_parallel(Register key, Register subkeyHtbl, XMMRegister ctr_blockx,
                                   XMMRegister aad_hashx, Register in, Register out, Register data, Register pos, bool reduction,

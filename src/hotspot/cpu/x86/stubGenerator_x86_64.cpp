@@ -4178,7 +4178,9 @@ address StubGenerator::generate_electronicCodeBook_encryptAESCrypt() {
   const Register key = c_rarg2;  // key array address
   const Register len = c_rarg3;  // src len (must be multiple of blocksize 16)
   __ enter(); // required for proper stackwalking of RuntimeStub frame
-  __ aesecb_encrypt(from, to, key, len);
+
+  aesecb_encrypt(from, to, key, len);
+
   __ vzeroupper();
   __ leave(); // required for proper stackwalking of RuntimeStub frame
   __ ret(0);
@@ -4196,7 +4198,9 @@ address StubGenerator::generate_electronicCodeBook_decryptAESCrypt() {
   const Register key = c_rarg2;  // key array address
   const Register len = c_rarg3;  // src len (must be multiple of blocksize 16)
   __ enter(); // required for proper stackwalking of RuntimeStub frame
-  __ aesecb_decrypt(from, to, key, len);
+
+  aesecb_decrypt(from, to, key, len);
+
   __ vzeroupper();
   __ leave(); // required for proper stackwalking of RuntimeStub frame
   __ ret(0);
@@ -4510,7 +4514,8 @@ address StubGenerator::generate_galoisCounterMode_AESCrypt() {
   __ subptr(rsp, 96 * longSize); // Create space on the stack for htbl entries
   __ movptr(avx512_subkeyHtbl, rsp);
 
-  __ aesgcm_encrypt(in, len, ct, out, key, state, subkeyHtbl, avx512_subkeyHtbl, counter);
+  aesgcm_encrypt(in, len, ct, out, key, state, subkeyHtbl, avx512_subkeyHtbl, counter);
+
   __ vzeroupper();
 
   __ movq(rsp, rbp);
@@ -4634,7 +4639,9 @@ address StubGenerator::generate_counterMode_VectorAESCrypt()  {
   __ movl(used, Address(used_addr, 0));
 #endif
   __ push(rbx);
-  __ aesctr_encrypt(from, to, key, counter, len_reg, used, used_addr, saved_encCounter_start);
+
+  aesctr_encrypt(from, to, key, counter, len_reg, used, used_addr, saved_encCounter_start);
+
   __ vzeroupper();
   // Restore state before leaving routine
   __ pop(rbx);
@@ -5308,8 +5315,9 @@ address StubGenerator::generate_avx_ghash_processBlocks() {
   const Register data = c_rarg2;
   const Register blocks = c_rarg3;
   __ enter();
- // Save state before entering routine
-  __ avx_ghash(state, htbl, data, blocks);
+
+  avx_ghash(state, htbl, data, blocks);
+
   __ leave(); // required for proper stackwalking of RuntimeStub frame
   __ ret(0);
 
