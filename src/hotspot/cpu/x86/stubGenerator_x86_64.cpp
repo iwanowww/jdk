@@ -97,7 +97,122 @@ static Address xmm_save(int reg) {
 }
 #endif
 
+//
+// Linux Arguments:
+//    c_rarg0:   call wrapper address                   address
+//    c_rarg1:   result                                 address
+//    c_rarg2:   result type                            BasicType
+//    c_rarg3:   method                                 Method*
+//    c_rarg4:   (interpreter) entry point              address
+//    c_rarg5:   parameters                             intptr_t*
+//    16(rbp): parameter size (in words)              int
+//    24(rbp): thread                                 Thread*
+//
+//     [ return_from_Java     ] <--- rsp
+//     [ argument word n      ]
+//      ...
+// -12 [ argument word 1      ]
+// -11 [ saved r15            ] <--- rsp_after_call
+// -10 [ saved r14            ]
+//  -9 [ saved r13            ]
+//  -8 [ saved r12            ]
+//  -7 [ saved rbx            ]
+//  -6 [ call wrapper         ]
+//  -5 [ result               ]
+//  -4 [ result type          ]
+//  -3 [ method               ]
+//  -2 [ entry point          ]
+//  -1 [ parameters           ]
+//   0 [ saved rbp            ] <--- rbp
+//   1 [ return address       ]
+//   2 [ parameter size       ]
+//   3 [ thread               ]
+//
+// Windows Arguments:
+//    c_rarg0:   call wrapper address                   address
+//    c_rarg1:   result                                 address
+//    c_rarg2:   result type                            BasicType
+//    c_rarg3:   method                                 Method*
+//    48(rbp): (interpreter) entry point              address
+//    56(rbp): parameters                             intptr_t*
+//    64(rbp): parameter size (in words)              int
+//    72(rbp): thread                                 Thread*
+//
+//     [ return_from_Java     ] <--- rsp
+//     [ argument word n      ]
+//      ...
+// -60 [ argument word 1      ]
+// -59 [ saved xmm31          ] <--- rsp after_call
+//     [ saved xmm16-xmm30    ] (EVEX enabled, else the space is blank)
+// -27 [ saved xmm15          ]
+//     [ saved xmm7-xmm14     ]
+//  -9 [ saved xmm6           ] (each xmm register takes 2 slots)
+//  -7 [ saved r15            ]
+//  -6 [ saved r14            ]
+//  -5 [ saved r13            ]
+//  -4 [ saved r12            ]
+//  -3 [ saved rdi            ]
+//  -2 [ saved rsi            ]
+//  -1 [ saved rbx            ]
+//   0 [ saved rbp            ] <--- rbp
+//   1 [ return address       ]
+//   2 [ call wrapper         ]
+//   3 [ result               ]
+//   4 [ result type          ]
+//   5 [ method               ]
+//   6 [ entry point          ]
+//   7 [ parameters           ]
+//   8 [ parameter size       ]
+//   9 [ thread               ]
+//
+//    Windows reserves the callers stack space for arguments 1-4.
+//    We spill c_rarg0-c_rarg3 to this space.
 address StubGenerator::generate_call_stub(address& return_address) {
+  // Call stub stack layout word offsets from rbp
+  enum call_stub_layout {
+#ifdef _WIN64
+    xmm_save_first     = 6,  // save from xmm6
+    xmm_save_last      = 31, // to xmm31
+    xmm_save_base      = -9,
+    rsp_after_call_off = xmm_save_base - 2 * (xmm_save_last - xmm_save_first), // -27
+    r15_off            = -7,
+    r14_off            = -6,
+    r13_off            = -5,
+    r12_off            = -4,
+    rdi_off            = -3,
+    rsi_off            = -2,
+    rbx_off            = -1,
+    rbp_off            =  0,
+    retaddr_off        =  1,
+    call_wrapper_off   =  2,
+    result_off         =  3,
+    result_type_off    =  4,
+    method_off         =  5,
+    entry_point_off    =  6,
+    parameters_off     =  7,
+    parameter_size_off =  8,
+    thread_off         =  9
+#else
+    rsp_after_call_off = -12,
+    mxcsr_off          = rsp_after_call_off,
+    r15_off            = -11,
+    r14_off            = -10,
+    r13_off            = -9,
+    r12_off            = -8,
+    rbx_off            = -7,
+    call_wrapper_off   = -6,
+    result_off         = -5,
+    result_type_off    = -4,
+    method_off         = -3,
+    entry_point_off    = -2,
+    parameters_off     = -1,
+    rbp_off            =  0,
+    retaddr_off        =  1,
+    parameter_size_off =  2,
+    thread_off         =  3
+#endif
+  };
+
   assert((int)frame::entry_frame_after_call_words == -(int)rsp_after_call_off + 1 &&
          (int)frame::entry_frame_call_wrapper_offset == (int)call_wrapper_off,
          "adjust this code");
