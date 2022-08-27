@@ -167,51 +167,53 @@ static Address xmm_save(int reg) {
 //
 //    Windows reserves the callers stack space for arguments 1-4.
 //    We spill c_rarg0-c_rarg3 to this space.
-address StubGenerator::generate_call_stub(address& return_address) {
-  // Call stub stack layout word offsets from rbp
-  enum call_stub_layout {
+
+// Call stub stack layout word offsets from rbp
+enum call_stub_layout {
 #ifdef _WIN64
-    xmm_save_first     = 6,  // save from xmm6
-    xmm_save_last      = 31, // to xmm31
-    xmm_save_base      = -9,
-    rsp_after_call_off = xmm_save_base - 2 * (xmm_save_last - xmm_save_first), // -27
-    r15_off            = -7,
-    r14_off            = -6,
-    r13_off            = -5,
-    r12_off            = -4,
-    rdi_off            = -3,
-    rsi_off            = -2,
-    rbx_off            = -1,
-    rbp_off            =  0,
-    retaddr_off        =  1,
-    call_wrapper_off   =  2,
-    result_off         =  3,
-    result_type_off    =  4,
-    method_off         =  5,
-    entry_point_off    =  6,
-    parameters_off     =  7,
-    parameter_size_off =  8,
-    thread_off         =  9
+  xmm_save_first     = 6,  // save from xmm6
+  xmm_save_last      = 31, // to xmm31
+  xmm_save_base      = -9,
+  rsp_after_call_off = xmm_save_base - 2 * (xmm_save_last - xmm_save_first), // -27
+  r15_off            = -7,
+  r14_off            = -6,
+  r13_off            = -5,
+  r12_off            = -4,
+  rdi_off            = -3,
+  rsi_off            = -2,
+  rbx_off            = -1,
+  rbp_off            =  0,
+  retaddr_off        =  1,
+  call_wrapper_off   =  2,
+  result_off         =  3,
+  result_type_off    =  4,
+  method_off         =  5,
+  entry_point_off    =  6,
+  parameters_off     =  7,
+  parameter_size_off =  8,
+  thread_off         =  9
 #else
-    rsp_after_call_off = -12,
-    mxcsr_off          = rsp_after_call_off,
-    r15_off            = -11,
-    r14_off            = -10,
-    r13_off            = -9,
-    r12_off            = -8,
-    rbx_off            = -7,
-    call_wrapper_off   = -6,
-    result_off         = -5,
-    result_type_off    = -4,
-    method_off         = -3,
-    entry_point_off    = -2,
-    parameters_off     = -1,
-    rbp_off            =  0,
-    retaddr_off        =  1,
-    parameter_size_off =  2,
-    thread_off         =  3
+  rsp_after_call_off = -12,
+  mxcsr_off          = rsp_after_call_off,
+  r15_off            = -11,
+  r14_off            = -10,
+  r13_off            = -9,
+  r12_off            = -8,
+  rbx_off            = -7,
+  call_wrapper_off   = -6,
+  result_off         = -5,
+  result_type_off    = -4,
+  method_off         = -3,
+  entry_point_off    = -2,
+  parameters_off     = -1,
+  rbp_off            =  0,
+  retaddr_off        =  1,
+  parameter_size_off =  2,
+  thread_off         =  3
 #endif
-  };
+};
+
+address StubGenerator::generate_call_stub(address& return_address) {
 
   assert((int)frame::entry_frame_after_call_words == -(int)rsp_after_call_off + 1 &&
          (int)frame::entry_frame_call_wrapper_offset == (int)call_wrapper_off,
