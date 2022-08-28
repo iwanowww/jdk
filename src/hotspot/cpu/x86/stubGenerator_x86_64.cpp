@@ -89,13 +89,6 @@ static int& get_profile_ctr(int shift) {
 }
 #endif // !PRODUCT
 
-#ifdef _WIN64
-static Address xmm_save(int reg) {
-  assert(reg >= xmm_save_first && reg <= xmm_save_last, "XMM register number out of range");
-  return Address(rbp, (xmm_save_base - (reg - xmm_save_first) * 2) * wordSize);
-}
-#endif
-
 //
 // Linux Arguments:
 //    c_rarg0:   call wrapper address                   address
@@ -168,8 +161,8 @@ static Address xmm_save(int reg) {
 //    We spill c_rarg0-c_rarg3 to this space.
 
 // Call stub stack layout word offsets from rbp
-  enum call_stub_layout {
 #ifdef _WIN64
+enum call_stub_layout {
   xmm_save_first     = 6,  // save from xmm6
   xmm_save_last      = 31, // to xmm31
   xmm_save_base      = -9,
@@ -191,7 +184,14 @@ static Address xmm_save(int reg) {
   parameters_off     =  7,
   parameter_size_off =  8,
   thread_off         =  9
-#else
+};
+
+static Address xmm_save(int reg) {
+  assert(reg >= xmm_save_first && reg <= xmm_save_last, "XMM register number out of range");
+  return Address(rbp, (xmm_save_base - (reg - xmm_save_first) * 2) * wordSize);
+}
+#else // !_WIN64
+enum call_stub_layout {
   rsp_after_call_off = -12,
   mxcsr_off          = rsp_after_call_off,
   r15_off            = -11,
@@ -209,8 +209,8 @@ static Address xmm_save(int reg) {
   retaddr_off        =  1,
   parameter_size_off =  2,
   thread_off         =  3
-#endif
 };
+#endif // _WIN64
 
 address StubGenerator::generate_call_stub(address& return_address) {
 
