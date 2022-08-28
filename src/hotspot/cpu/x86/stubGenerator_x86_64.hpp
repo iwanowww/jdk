@@ -851,7 +851,8 @@ class StubGenerator: public StubCodeGenerator {
   void generate_all();
 
  public:
-  StubGenerator(CodeBuffer* code, int phase) : StubCodeGenerator(code), _regs_in_thread(false) {
+  StubGenerator(CodeBuffer* code, int phase) : StubCodeGenerator(code) {
+    DEBUG_ONLY( _regs_in_thread = false; )
     if (phase == 0) {
       generate_initial();
     } else if (phase == 1) {
