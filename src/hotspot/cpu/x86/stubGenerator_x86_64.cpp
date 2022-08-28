@@ -4534,7 +4534,7 @@ address StubGenerator::generate_galoisCounterMode_AESCrypt() {
   __ leave(); // required for proper stackwalking of RuntimeStub frame
   __ ret(0);
 
-   return start;
+  return start;
 }
 
 // This mask is used for incrementing counter value(linc0, linc4, etc.)
@@ -4950,7 +4950,6 @@ address StubGenerator::generate_counterMode_AESCrypt_Parallel() {
       __ BIND(L_processTail_exit_extr[k]);
       __ movl(Address(used_addr, 0), len_reg);
       __ jmp(L_exit);
-
   }
 
   __ BIND(L_exit);
@@ -4972,36 +4971,35 @@ address StubGenerator::generate_counterMode_AESCrypt_Parallel() {
 }
 
 void StubGenerator::roundDec(XMMRegister xmm_reg) {
-__ vaesdec(xmm1, xmm1, xmm_reg, Assembler::AVX_512bit);
-__ vaesdec(xmm2, xmm2, xmm_reg, Assembler::AVX_512bit);
-__ vaesdec(xmm3, xmm3, xmm_reg, Assembler::AVX_512bit);
-__ vaesdec(xmm4, xmm4, xmm_reg, Assembler::AVX_512bit);
-__ vaesdec(xmm5, xmm5, xmm_reg, Assembler::AVX_512bit);
-__ vaesdec(xmm6, xmm6, xmm_reg, Assembler::AVX_512bit);
-__ vaesdec(xmm7, xmm7, xmm_reg, Assembler::AVX_512bit);
-__ vaesdec(xmm8, xmm8, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdec(xmm1, xmm1, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdec(xmm2, xmm2, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdec(xmm3, xmm3, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdec(xmm4, xmm4, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdec(xmm5, xmm5, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdec(xmm6, xmm6, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdec(xmm7, xmm7, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdec(xmm8, xmm8, xmm_reg, Assembler::AVX_512bit);
 }
 
 void StubGenerator::roundDeclast(XMMRegister xmm_reg) {
-__ vaesdeclast(xmm1, xmm1, xmm_reg, Assembler::AVX_512bit);
-__ vaesdeclast(xmm2, xmm2, xmm_reg, Assembler::AVX_512bit);
-__ vaesdeclast(xmm3, xmm3, xmm_reg, Assembler::AVX_512bit);
-__ vaesdeclast(xmm4, xmm4, xmm_reg, Assembler::AVX_512bit);
-__ vaesdeclast(xmm5, xmm5, xmm_reg, Assembler::AVX_512bit);
-__ vaesdeclast(xmm6, xmm6, xmm_reg, Assembler::AVX_512bit);
-__ vaesdeclast(xmm7, xmm7, xmm_reg, Assembler::AVX_512bit);
-__ vaesdeclast(xmm8, xmm8, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdeclast(xmm1, xmm1, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdeclast(xmm2, xmm2, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdeclast(xmm3, xmm3, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdeclast(xmm4, xmm4, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdeclast(xmm5, xmm5, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdeclast(xmm6, xmm6, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdeclast(xmm7, xmm7, xmm_reg, Assembler::AVX_512bit);
+  __ vaesdeclast(xmm8, xmm8, xmm_reg, Assembler::AVX_512bit);
 }
 
 void StubGenerator::ev_load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask) {
-__ movdqu(xmmdst, Address(key, offset));
-if (xmm_shuf_mask != xnoreg) {
-  __ pshufb(xmmdst, xmm_shuf_mask);
-} else {
-  __ pshufb(xmmdst, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
-}
-__ evshufi64x2(xmmdst, xmmdst, xmmdst, 0x0, Assembler::AVX_512bit);
-
+  __ movdqu(xmmdst, Address(key, offset));
+  if (xmm_shuf_mask != xnoreg) {
+    __ pshufb(xmmdst, xmm_shuf_mask);
+  } else {
+    __ pshufb(xmmdst, ExternalAddress(StubRoutines::x86::key_shuffle_mask_addr()));
+  }
+  __ evshufi64x2(xmmdst, xmmdst, xmmdst, 0x0, Assembler::AVX_512bit);
 }
 
 address StubGenerator::generate_cipherBlockChaining_decryptVectorAESCrypt() {
@@ -5061,7 +5059,7 @@ address StubGenerator::generate_cipherBlockChaining_decryptVectorAESCrypt() {
   const XMMRegister RK9 = xmm25;
   const XMMRegister RK10 = xmm26;
 
-   // Load and shuffle key
+  // Load and shuffle key
   // the java expanded key ordering is rotated one position from what we want
   // so we start from 1*16 here and hit 0*16 last
   ev_load_key(RK1, key, 1 * 16, xmm_key_shuf_mask);
