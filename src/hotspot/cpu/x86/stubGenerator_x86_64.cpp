@@ -3773,27 +3773,6 @@ address StubGenerator::ghash_shufflemask_addr() {
   return start;
 }
 
-// Ghash single and multi block operations using AVX instructions
-address StubGenerator::generate_avx_ghash_processBlocks() {
-  __ align(CodeEntryAlignment);
-
-  StubCodeMark mark(this, "StubRoutines", "ghash_processBlocks");
-  address start = __ pc();
-
-  // arguments
-  const Register state = c_rarg0;
-  const Register htbl = c_rarg1;
-  const Register data = c_rarg2;
-  const Register blocks = c_rarg3;
-  __ enter();
-
-  avx_ghash(state, htbl, data, blocks);
-
-  __ leave(); // required for proper stackwalking of RuntimeStub frame
-  __ ret(0);
-
-  return start;
-}
 
 // byte swap x86 long
 address StubGenerator::generate_ghash_long_swap_mask() {
@@ -3817,136 +3796,6 @@ address StubGenerator::generate_ghash_byte_swap_mask() {
   __ emit_data64(0x0001020304050607, relocInfo::none );
 
 return start;
-}
-
-/* Single and multi-block ghash operations */
-address StubGenerator::generate_ghash_processBlocks() {
-  __ align(CodeEntryAlignment);
-  Label L_ghash_loop, L_exit;
-  StubCodeMark mark(this, "StubRoutines", "ghash_processBlocks");
-  address start = __ pc();
-
-  const Register state        = c_rarg0;
-  const Register subkeyH      = c_rarg1;
-  const Register data         = c_rarg2;
-  const Register blocks       = c_rarg3;
-
-  const XMMRegister xmm_temp0 = xmm0;
-  const XMMRegister xmm_temp1 = xmm1;
-  const XMMRegister xmm_temp2 = xmm2;
-  const XMMRegister xmm_temp3 = xmm3;
-  const XMMRegister xmm_temp4 = xmm4;
-  const XMMRegister xmm_temp5 = xmm5;
-  const XMMRegister xmm_temp6 = xmm6;
-  const XMMRegister xmm_temp7 = xmm7;
-  const XMMRegister xmm_temp8 = xmm8;
-  const XMMRegister xmm_temp9 = xmm9;
-  const XMMRegister xmm_temp10 = xmm10;
-
-  __ enter();
-
-  __ movdqu(xmm_temp10, ExternalAddress(StubRoutines::x86::ghash_long_swap_mask_addr()));
-
-  __ movdqu(xmm_temp0, Address(state, 0));
-  __ pshufb(xmm_temp0, xmm_temp10);
-
-
-  __ BIND(L_ghash_loop);
-  __ movdqu(xmm_temp2, Address(data, 0));
-  __ pshufb(xmm_temp2, ExternalAddress(StubRoutines::x86::ghash_byte_swap_mask_addr()));
-
-  __ movdqu(xmm_temp1, Address(subkeyH, 0));
-  __ pshufb(xmm_temp1, xmm_temp10);
-
-  __ pxor(xmm_temp0, xmm_temp2);
-
-  //
-  // Multiply with the hash key
-  //
-  __ movdqu(xmm_temp3, xmm_temp0);
-  __ pclmulqdq(xmm_temp3, xmm_temp1, 0);      // xmm3 holds a0*b0
-  __ movdqu(xmm_temp4, xmm_temp0);
-  __ pclmulqdq(xmm_temp4, xmm_temp1, 16);     // xmm4 holds a0*b1
-
-  __ movdqu(xmm_temp5, xmm_temp0);
-  __ pclmulqdq(xmm_temp5, xmm_temp1, 1);      // xmm5 holds a1*b0
-  __ movdqu(xmm_temp6, xmm_temp0);
-  __ pclmulqdq(xmm_temp6, xmm_temp1, 17);     // xmm6 holds a1*b1
-
-  __ pxor(xmm_temp4, xmm_temp5);      // xmm4 holds a0*b1 + a1*b0
-
-  __ movdqu(xmm_temp5, xmm_temp4);    // move the contents of xmm4 to xmm5
-  __ psrldq(xmm_temp4, 8);    // shift by xmm4 64 bits to the right
-  __ pslldq(xmm_temp5, 8);    // shift by xmm5 64 bits to the left
-  __ pxor(xmm_temp3, xmm_temp5);
-  __ pxor(xmm_temp6, xmm_temp4);      // Register pair <xmm6:xmm3> holds the result
-                                      // of the carry-less multiplication of
-                                      // xmm0 by xmm1.
-
-  // We shift the result of the multiplication by one bit position
-  // to the left to cope for the fact that the bits are reversed.
-  __ movdqu(xmm_temp7, xmm_temp3);
-  __ movdqu(xmm_temp8, xmm_temp6);
-  __ pslld(xmm_temp3, 1);
-  __ pslld(xmm_temp6, 1);
-  __ psrld(xmm_temp7, 31);
-  __ psrld(xmm_temp8, 31);
-  __ movdqu(xmm_temp9, xmm_temp7);
-  __ pslldq(xmm_temp8, 4);
-  __ pslldq(xmm_temp7, 4);
-  __ psrldq(xmm_temp9, 12);
-  __ por(xmm_temp3, xmm_temp7);
-  __ por(xmm_temp6, xmm_temp8);
-  __ por(xmm_temp6, xmm_temp9);
-
-  //
-  // First phase of the reduction
-  //
-  // Move xmm3 into xmm7, xmm8, xmm9 in order to perform the shifts
-  // independently.
-  __ movdqu(xmm_temp7, xmm_temp3);
-  __ movdqu(xmm_temp8, xmm_temp3);
-  __ movdqu(xmm_temp9, xmm_temp3);
-  __ pslld(xmm_temp7, 31);    // packed right shift shifting << 31
-  __ pslld(xmm_temp8, 30);    // packed right shift shifting << 30
-  __ pslld(xmm_temp9, 25);    // packed right shift shifting << 25
-  __ pxor(xmm_temp7, xmm_temp8);      // xor the shifted versions
-  __ pxor(xmm_temp7, xmm_temp9);
-  __ movdqu(xmm_temp8, xmm_temp7);
-  __ pslldq(xmm_temp7, 12);
-  __ psrldq(xmm_temp8, 4);
-  __ pxor(xmm_temp3, xmm_temp7);      // first phase of the reduction complete
-
-  //
-  // Second phase of the reduction
-  //
-  // Make 3 copies of xmm3 in xmm2, xmm4, xmm5 for doing these
-  // shift operations.
-  __ movdqu(xmm_temp2, xmm_temp3);
-  __ movdqu(xmm_temp4, xmm_temp3);
-  __ movdqu(xmm_temp5, xmm_temp3);
-  __ psrld(xmm_temp2, 1);     // packed left shifting >> 1
-  __ psrld(xmm_temp4, 2);     // packed left shifting >> 2
-  __ psrld(xmm_temp5, 7);     // packed left shifting >> 7
-  __ pxor(xmm_temp2, xmm_temp4);      // xor the shifted versions
-  __ pxor(xmm_temp2, xmm_temp5);
-  __ pxor(xmm_temp2, xmm_temp8);
-  __ pxor(xmm_temp3, xmm_temp2);
-  __ pxor(xmm_temp6, xmm_temp3);      // the result is in xmm6
-
-  __ decrement(blocks);
-  __ jcc(Assembler::zero, L_exit);
-  __ movdqu(xmm_temp0, xmm_temp6);
-  __ addptr(data, 16);
-  __ jmp(L_ghash_loop);
-
-  __ BIND(L_exit);
-  __ pshufb(xmm_temp6, xmm_temp10);          // Byte swap 16-byte result
-  __ movdqu(Address(state, 0), xmm_temp6);   // store the result
-  __ leave();
-  __ ret(0);
-
-  return start;
 }
 
 address StubGenerator::base64_shuffle_addr() {
@@ -6463,6 +6312,8 @@ void StubGenerator::generate_all() {
 
   generate_aes_stubs();
 
+  generate_ghash_stubs();
+
   if (UseMD5Intrinsics) {
     StubRoutines::_md5_implCompress = generate_md5_implCompress(false, "md5_implCompress");
     StubRoutines::_md5_implCompressMB = generate_md5_implCompress(true, "md5_implCompressMB");
@@ -6492,22 +6343,6 @@ void StubGenerator::generate_all() {
     StubRoutines::_sha512_implCompress = generate_sha512_implCompress(false, "sha512_implCompress");
     StubRoutines::_sha512_implCompressMB = generate_sha512_implCompress(true, "sha512_implCompressMB");
   }
-
-  // Generate GHASH intrinsics code
-  if (UseGHASHIntrinsics) {
-    if (StubRoutines::x86::_ghash_long_swap_mask_addr == NULL) {
-      StubRoutines::x86::_ghash_long_swap_mask_addr = generate_ghash_long_swap_mask();
-    }
-  StubRoutines::x86::_ghash_byte_swap_mask_addr = generate_ghash_byte_swap_mask();
-    if (VM_Version::supports_avx()) {
-      StubRoutines::x86::_ghash_shuffmask_addr = ghash_shufflemask_addr();
-      StubRoutines::x86::_ghash_poly_addr = ghash_polynomial_addr();
-      StubRoutines::_ghash_processBlocks = generate_avx_ghash_processBlocks();
-    } else {
-      StubRoutines::_ghash_processBlocks = generate_ghash_processBlocks();
-    }
-  }
-
 
   if (UseBASE64Intrinsics) {
     if(VM_Version::supports_avx2() &&
