@@ -32,6 +32,15 @@
 
 #define __ _masm->
 
+#ifdef PRODUCT
+#define BLOCK_COMMENT(str) /* nothing */
+#else
+#define BLOCK_COMMENT(str) __ block_comment(str)
+#endif // PRODUCT
+
+#define BIND(label) bind(label); BLOCK_COMMENT(#label ":")
+
+
 // AES intrinsic stubs
 
 address StubGenerator::generate_key_shuffle_mask() {
