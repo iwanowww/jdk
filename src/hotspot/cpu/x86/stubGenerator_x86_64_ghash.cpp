@@ -48,6 +48,12 @@ ATTRIBUTE_ALIGNED(16) uint64_t GHASH_BYTE_SWAP_MASK[] = {
   0X08090A0B0C0D0E0FUL, 0X0001020304050607UL,
 };
 
+// Polynomial x^128+x^127+x^126+x^121+1
+ATTRIBUTE_ALIGNED(16) uint64_t GHASH_POLY[] = {
+    0x0000000000000001UL, 0xC200000000000000UL,
+};
+
+
 // Single and multi-block ghash operations.
 address StubGenerator::generate_ghash_processBlocks() {
   __ align(CodeEntryAlignment);

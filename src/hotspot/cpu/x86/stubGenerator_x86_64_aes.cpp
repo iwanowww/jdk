@@ -96,6 +96,31 @@ ATTRIBUTE_ALIGNED(64) uint64_t COUNTER_MASK_LINC32[] = {
     0x0000000000000020UL, 0x0000000000000000UL,
 };
 
+ATTRIBUTE_ALIGNED(64) uint64_t GHASH_POLY_REDUCITON[] = {
+    0x00000001C2000000UL, 0xC200000000000000UL,
+    0x00000001C2000000UL, 0xC200000000000000UL,
+    0x00000001C2000000UL, 0xC200000000000000UL,
+    0x00000001C2000000UL, 0xC200000000000000UL,
+};
+ 
+// Polynomial x^128+x^127+x^126+x^121+1
+ATTRIBUTE_ALIGNED(16) uint64_t GHASH_POLY_AES[] = {
+    0x0000000000000001UL, 0xC200000000000000UL,
+};
+
+ATTRIBUTE_ALIGNED(16) uint64_t GHASH_TWO_ONE[] = {
+    0x0000000000000001UL, 0x0000000100000000UL,
+};
+
+// byte swap x86 long
+ATTRIBUTE_ALIGNED(16) uint64_t GHASH_LONG_SWAP_MASK_AES[] = {
+    0X0F0E0D0C0B0A0908UL, 0X0706050403020100UL,
+};
+
+// byte swap x86 byte array
+ATTRIBUTE_ALIGNED(16) uint64_t GHASH_BYTE_SWAP_MASK_AES[] = {
+  0X08090A0B0C0D0E0FUL, 0X0001020304050607UL,
+};
 
 // Vector AES Galois Counter Mode implementation. Parameters:
 // Windows regs            |  Linux regs
@@ -1168,7 +1193,7 @@ address StubGenerator::generate_cipherBlockChaining_encryptAESCrypt() {
   for (int rnum = XMM_REG_NUM_KEY_FIRST + 1; rnum  <= XMM_REG_NUM_KEY_FIRST + 13; rnum++) {
     __ aesenc(xmm_result, as_XMMRegister(rnum));
   }
-  load_key(xmm_temp, key, 0xe0);
+  load_key(xmm_temp, key, 0xe0, rbx /*rscratch*/);
   __ aesenclast(xmm_result, xmm_temp);
   __ movdqu(Address(to, pos, Address::times_1, 0), xmm_result);     // store into the next 16 bytes of output
   // no need to store r to memory until we exit
@@ -1284,20 +1309,20 @@ __ opc(xmm_result3, src_reg);         \
     if (k == 1) {
       __ subptr(rsp, 6 * wordSize);
       __ movdqu(Address(rsp, 0), xmm15); //save last_key from xmm15
-      load_key(xmm15, key, 0xb0); // 0xb0; 192-bit key goes up to 0xc0
+      load_key(xmm15, key, 0xb0, rbx /*rscratch*/); // 0xb0; 192-bit key goes up to 0xc0
       __ movdqu(Address(rsp, 2 * wordSize), xmm15);
-      load_key(xmm1, key, 0xc0);  // 0xc0;
+      load_key(xmm1, key, 0xc0, rbx /*rscratch*/);  // 0xc0;
       __ movdqu(Address(rsp, 4 * wordSize), xmm1);
     } else if (k == 2) {
       __ subptr(rsp, 10 * wordSize);
       __ movdqu(Address(rsp, 0), xmm15); //save last_key from xmm15
-      load_key(xmm15, key, 0xd0); // 0xd0; 256-bit key goes up to 0xe0
+      load_key(xmm15, key, 0xd0, rbx /*rscratch*/); // 0xd0; 256-bit key goes up to 0xe0
       __ movdqu(Address(rsp, 6 * wordSize), xmm15);
-      load_key(xmm1, key, 0xe0);  // 0xe0;
+      load_key(xmm1, key, 0xe0, rbx /*rscratch*/);  // 0xe0;
       __ movdqu(Address(rsp, 8 * wordSize), xmm1);
-      load_key(xmm15, key, 0xb0); // 0xb0;
+      load_key(xmm15, key, 0xb0, rbx /*rscratch*/); // 0xb0;
       __ movdqu(Address(rsp, 2 * wordSize), xmm15);
-      load_key(xmm1, key, 0xc0);  // 0xc0;
+      load_key(xmm1, key, 0xc0, rbx /*rscratch*/);  // 0xc0;
       __ movdqu(Address(rsp, 4 * wordSize), xmm1);
     }
     __ align(OptoLoopAlignment);
@@ -1383,11 +1408,11 @@ __ opc(xmm_result3, src_reg);         \
     __ jcc(Assembler::equal, L_exit);
     __ BIND(L_singleBlock_loopTopHead2[k]);
     if (k == 1) {
-      load_key(xmm_key11, key, 0xb0); // 0xb0; 192-bit key goes up to 0xc0
-      load_key(xmm_key12, key, 0xc0); // 0xc0; 192-bit key goes up to 0xc0
+      load_key(xmm_key11, key, 0xb0, rbx /*rscratch*/); // 0xb0; 192-bit key goes up to 0xc0
+      load_key(xmm_key12, key, 0xc0, rbx /*rscratch*/); // 0xc0; 192-bit key goes up to 0xc0
     }
     if (k == 2) {
-      load_key(xmm_key11, key, 0xb0); // 0xb0; 256-bit key goes up to 0xe0
+      load_key(xmm_key11, key, 0xb0, rbx /*rscratch*/); // 0xb0; 256-bit key goes up to 0xe0
     }
     __ align(OptoLoopAlignment);
     __ BIND(L_singleBlock_loopTop[k]);
@@ -1403,11 +1428,11 @@ __ opc(xmm_result3, src_reg);         \
     }
     if (k == 2) {
       __ aesdec(xmm_result, xmm_key11);
-      load_key(key_tmp, key, 0xc0);
+      load_key(key_tmp, key, 0xc0, rbx /*rscratch*/);
       __ aesdec(xmm_result, key_tmp);
-      load_key(key_tmp, key, 0xd0);
+      load_key(key_tmp, key, 0xd0, rbx /*rscratch*/);
       __ aesdec(xmm_result, key_tmp);
-      load_key(key_tmp, key, 0xe0);
+      load_key(key_tmp, key, 0xe0, rbx /*rscratch*/);
       __ aesdec(xmm_result, key_tmp);
     }
 
@@ -2508,10 +2533,10 @@ void StubGenerator::generateHtbl_48_block_zmm(Register htbl, Register avx512_htb
   Label GFMUL_AVX512;
 
   __ movdqu(HK, Address(htbl, 0));
-  __ movdqu(xmm10, ExternalAddress((address)GHASH_LONG_SWAP_MASK), rscratch);
+  __ movdqu(xmm10, ExternalAddress((address)GHASH_LONG_SWAP_MASK_AES), rscratch);
   __ vpshufb(HK, HK, xmm10, Assembler::AVX_128bit);
 
-  __ movdqu(xmm11, ExternalAddress((address)GHASH_POLY),    rscratch);
+  __ movdqu(xmm11, ExternalAddress((address)GHASH_POLY_AES), rscratch);
   __ movdqu(xmm12, ExternalAddress((address)GHASH_TWO_ONE), rscratch);
   // Compute H ^ 2 from the input subkeyH
   __ movdqu(xmm2, xmm6);
@@ -2873,7 +2898,7 @@ void StubGenerator::aesgcm_encrypt(Register in, Register len, Register ct, Regis
   __ movdqu(CTR_BLOCKx, Address(counter, 0));
   __ movdqu(AAD_HASHx, Address(state, 0));
   // Load lswap mask for ghash
-  __ movdqu(xmm24, ExternalAddress((address)GHASH_LONG_SWAP_MASK), rbx);
+  __ movdqu(xmm24, ExternalAddress((address)GHASH_LONG_SWAP_MASK_AES), rbx /*rscratch*/);
   // Shuffle input state using lswap mask
   __ vpshufb(AAD_HASHx, AAD_HASHx, xmm24, Assembler::AVX_128bit);
 
@@ -3075,7 +3100,7 @@ void StubGenerator::aesgcm_encrypt(Register in, Register len, Register ct, Regis
   __ vpshufb(CTR_BLOCKx, CTR_BLOCKx, xmm24, Assembler::AVX_512bit);
   __ movdqu(Address(counter, 0), CTR_BLOCKx);
   // Load ghash lswap mask
-  __ movdqu(xmm24, ExternalAddress((address)GHASH_LONG_SWAP_MASK), rbx /*rscratch*/);
+  __ movdqu(xmm24, ExternalAddress((address)GHASH_LONG_SWAP_MASK_AES), rbx /*rscratch*/);
   // Shuffle ghash using lbswap_mask and store it
   __ vpshufb(AAD_HASHx, AAD_HASHx, xmm24, Assembler::AVX_128bit);
   __ movdqu(Address(state, 0), AAD_HASHx);

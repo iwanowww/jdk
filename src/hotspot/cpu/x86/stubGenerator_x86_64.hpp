@@ -638,7 +638,8 @@ class StubGenerator: public StubCodeGenerator {
                                   XMMRegister addmask, bool no_ghash_input, Register rounds, Register ghash_pos,
                                   bool final_reduction, int index, XMMRegister counter_inc_mask);
   // Load key and shuffle operation
-  void ev_load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask = xnoreg);
+  void ev_load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask);
+  void ev_load_key(XMMRegister xmmdst, Register key, int offset, Register rscratch);
 
   // Utility routine for loading a 128-bit key word in little endian format
   // can optionally specify that the shuffle mask is already in an xmmregister
