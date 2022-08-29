@@ -657,6 +657,8 @@ class StubGenerator: public StubCodeGenerator {
 
   address generate_cipherBlockChaining_decryptVectorAESCrypt();
 
+  void generate_aes_stubs();
+
   // Polynomial x^128+x^127+x^126+x^121+1
   address ghash_polynomial_addr();
 
