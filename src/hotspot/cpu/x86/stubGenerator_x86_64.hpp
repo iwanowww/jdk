@@ -625,13 +625,6 @@ class StubGenerator: public StubCodeGenerator {
 
   address generate_key_shuffle_mask();
 
-  address generate_counter_shuffle_mask();
-
-  // This mask is used for incrementing counter value(linc0, linc4, etc.)
-  address generate_counter_mask_addr();
-
-  address generate_ghash_polynomial512_addr();
-
   void roundDec(XMMRegister xmm_reg);
   void roundDeclast(XMMRegister xmm_reg);
   void roundEnc(XMMRegister key, int rnum);
@@ -639,7 +632,7 @@ class StubGenerator: public StubCodeGenerator {
   void roundDec(XMMRegister key, int rnum);
   void lastroundDec(XMMRegister key, int rnum);
   void gfmul_avx512(XMMRegister ghash, XMMRegister hkey);
-  void generateHtbl_48_block_zmm(Register htbl, Register avx512_subkeyHtbl);
+  void generateHtbl_48_block_zmm(Register htbl, Register avx512_subkeyHtbl, Register rscratch);
   void ghash16_encrypt16_parallel(Register key, Register subkeyHtbl, XMMRegister ctr_blockx,
                                   XMMRegister aad_hashx, Register in, Register out, Register data, Register pos, bool reduction,
                                   XMMRegister addmask, bool no_ghash_input, Register rounds, Register ghash_pos,
@@ -649,7 +642,8 @@ class StubGenerator: public StubCodeGenerator {
 
   // Utility routine for loading a 128-bit key word in little endian format
   // can optionally specify that the shuffle mask is already in an xmmregister
-  void load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask = xnoreg);
+  void load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask);
+  void load_key(XMMRegister xmmdst, Register key, int offset, Register rscratch);
 
   // Utility routine for increase 128bit counter (iv in CTR mode)
   void inc_counter(Register reg, XMMRegister xmmdst, int inc_delta, Label& next_block);
@@ -664,11 +658,9 @@ class StubGenerator: public StubCodeGenerator {
   void schoolbookAAD(int i, Register subkeyH, XMMRegister data, XMMRegister tmp0,
                      XMMRegister tmp1, XMMRegister tmp2, XMMRegister tmp3);
   void gfmul(XMMRegister tmp0, XMMRegister t);
-  void generateHtbl_one_block(Register htbl);
+  void generateHtbl_one_block(Register htbl, Register rscratch);
   void generateHtbl_eight_blocks(Register htbl);
   void avx_ghash(Register state, Register htbl, Register data, Register blocks);
-
-  address generate_ghash_polynomial_addr();
 
   address generate_ghash_shufflemask_addr();
 
