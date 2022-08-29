@@ -3750,54 +3750,6 @@ address StubGenerator::generate_sha512_implCompress(bool multi_block, const char
   return start;
 }
 
-// Polynomial x^128+x^127+x^126+x^121+1
-address StubGenerator::ghash_polynomial_addr() {
-  __ align(CodeEntryAlignment);
-  StubCodeMark mark(this, "StubRoutines", "_ghash_poly_addr");
-  address start = __ pc();
-
-  __ emit_data64(0x0000000000000001, relocInfo::none);
-  __ emit_data64(0xc200000000000000, relocInfo::none);
-
-  return start;
-}
-
-address StubGenerator::ghash_shufflemask_addr() {
-  __ align(CodeEntryAlignment);
-  StubCodeMark mark(this, "StubRoutines", "_ghash_shuffmask_addr");
-  address start = __ pc();
-
-  __ emit_data64(0x0f0f0f0f0f0f0f0f, relocInfo::none);
-  __ emit_data64(0x0f0f0f0f0f0f0f0f, relocInfo::none);
-
-  return start;
-}
-
-
-// byte swap x86 long
-address StubGenerator::generate_ghash_long_swap_mask() {
-  __ align(CodeEntryAlignment);
-  StubCodeMark mark(this, "StubRoutines", "ghash_long_swap_mask");
-  address start = __ pc();
-
-  __ emit_data64(0x0f0e0d0c0b0a0908, relocInfo::none );
-  __ emit_data64(0x0706050403020100, relocInfo::none );
-
-return start;
-}
-
-// byte swap x86 byte array
-address StubGenerator::generate_ghash_byte_swap_mask() {
-  __ align(CodeEntryAlignment);
-  StubCodeMark mark(this, "StubRoutines", "ghash_byte_swap_mask");
-  address start = __ pc();
-
-  __ emit_data64(0x08090a0b0c0d0e0f, relocInfo::none );
-  __ emit_data64(0x0001020304050607, relocInfo::none );
-
-return start;
-}
-
 address StubGenerator::base64_shuffle_addr() {
   __ align64();
   StubCodeMark mark(this, "StubRoutines", "shuffle_base64");

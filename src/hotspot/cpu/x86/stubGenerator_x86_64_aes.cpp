@@ -3131,7 +3131,7 @@ void StubGenerator::generate_aes_stubs() {
       StubRoutines::_electronicCodeBook_encryptAESCrypt = generate_electronicCodeBook_encryptAESCrypt();
       StubRoutines::_electronicCodeBook_decryptAESCrypt = generate_electronicCodeBook_decryptAESCrypt();
       StubRoutines::x86::_counter_mask_addr = generate_counter_mask_addr();
-      StubRoutines::x86::_ghash_poly512_addr = ghash_polynomial512_addr();
+      StubRoutines::x86::_ghash_poly512_addr = generate_ghash_polynomial512_addr();
       StubRoutines::x86::_ghash_long_swap_mask_addr = generate_ghash_long_swap_mask();
       StubRoutines::_galoisCounterMode_AESCrypt = generate_galoisCounterMode_AESCrypt();
     } else {

@@ -33,7 +33,56 @@
 #define __ _masm->
 
 // GHASH intrinsic stubs
-//
+
+
+// Polynomial x^128+x^127+x^126+x^121+1
+address StubGenerator::generate_ghash_polynomial_addr() {
+  __ align(CodeEntryAlignment);
+  StubCodeMark mark(this, "StubRoutines", "_ghash_poly_addr");
+  address start = __ pc();
+
+  __ emit_data64(0x0000000000000001, relocInfo::none);
+  __ emit_data64(0xc200000000000000, relocInfo::none);
+
+  return start;
+}
+
+address StubGenerator::generate_ghash_shufflemask_addr() {
+  __ align(CodeEntryAlignment);
+  StubCodeMark mark(this, "StubRoutines", "_ghash_shuffmask_addr");
+  address start = __ pc();
+
+  __ emit_data64(0x0f0f0f0f0f0f0f0f, relocInfo::none);
+  __ emit_data64(0x0f0f0f0f0f0f0f0f, relocInfo::none);
+
+  return start;
+}
+
+
+// byte swap x86 long
+address StubGenerator::generate_ghash_long_swap_mask() {
+  __ align(CodeEntryAlignment);
+  StubCodeMark mark(this, "StubRoutines", "ghash_long_swap_mask");
+  address start = __ pc();
+
+  __ emit_data64(0x0f0e0d0c0b0a0908, relocInfo::none );
+  __ emit_data64(0x0706050403020100, relocInfo::none );
+
+return start;
+}
+
+// byte swap x86 byte array
+address StubGenerator::generate_ghash_byte_swap_mask() {
+  __ align(CodeEntryAlignment);
+  StubCodeMark mark(this, "StubRoutines", "ghash_byte_swap_mask");
+  address start = __ pc();
+
+  __ emit_data64(0x08090a0b0c0d0e0f, relocInfo::none );
+  __ emit_data64(0x0001020304050607, relocInfo::none );
+
+return start;
+}
+
 
 // Single and multi-block ghash operations.
 address StubGenerator::generate_ghash_processBlocks() {
@@ -67,7 +116,7 @@ address StubGenerator::generate_ghash_processBlocks() {
   __ pshufb(xmm_temp0, xmm_temp10);
 
 
-  __ BIND(L_ghash_loop);
+  __ bind(L_ghash_loop);
   __ movdqu(xmm_temp2, Address(data, 0));
   __ pshufb(xmm_temp2, ExternalAddress(StubRoutines::x86::ghash_byte_swap_mask_addr()));
 
@@ -156,7 +205,7 @@ address StubGenerator::generate_ghash_processBlocks() {
   __ addptr(data, 16);
   __ jmp(L_ghash_loop);
 
-  __ BIND(L_exit);
+  __ bind(L_exit);
   __ pshufb(xmm_temp6, xmm_temp10);          // Byte swap 16-byte result
   __ movdqu(Address(state, 0), xmm_temp6);   // store the result
   __ leave();
@@ -493,7 +542,7 @@ void StubGenerator::generate_ghash_stubs() {
     }
     StubRoutines::x86::_ghash_byte_swap_mask_addr = generate_ghash_byte_swap_mask();
     if (VM_Version::supports_avx()) {
-      StubRoutines::x86::_ghash_shuffmask_addr = ghash_shufflemask_addr();
+      StubRoutines::x86::_ghash_shuffmask_addr = generate_ghash_shufflemask_addr();
       StubRoutines::x86::_ghash_poly_addr = ghash_polynomial_addr();
       StubRoutines::_ghash_processBlocks = generate_avx_ghash_processBlocks();
     } else {
