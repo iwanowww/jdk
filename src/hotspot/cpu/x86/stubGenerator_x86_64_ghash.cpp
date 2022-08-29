@@ -543,7 +543,7 @@ void StubGenerator::generate_ghash_stubs() {
     StubRoutines::x86::_ghash_byte_swap_mask_addr = generate_ghash_byte_swap_mask();
     if (VM_Version::supports_avx()) {
       StubRoutines::x86::_ghash_shuffmask_addr = generate_ghash_shufflemask_addr();
-      StubRoutines::x86::_ghash_poly_addr = ghash_polynomial_addr();
+      StubRoutines::x86::_ghash_poly_addr = generate_ghash_polynomial_addr();
       StubRoutines::_ghash_processBlocks = generate_avx_ghash_processBlocks();
     } else {
       StubRoutines::_ghash_processBlocks = generate_ghash_processBlocks();
