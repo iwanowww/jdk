@@ -663,6 +663,7 @@ class StubGenerator: public StubCodeGenerator {
   void generateHtbl_eight_blocks(Register htbl);
   void avx_ghash(Register state, Register htbl, Register data, Register blocks);
 
+  // Used by GHASH and AES stubs.
   address ghash_polynomial_addr();
   address ghash_long_swap_mask_addr(); // byte swap x86 long
   address ghash_byte_swap_mask_addr(); // byte swap x86 byte array
