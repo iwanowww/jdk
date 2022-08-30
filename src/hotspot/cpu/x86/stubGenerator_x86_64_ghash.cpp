@@ -484,7 +484,7 @@ void StubGenerator::generateHtbl_one_block(Register htbl, Register rscratch) {
   __ movl(rax, 0xff00);
   __ movdl(xmm4, rax);
   __ vpshufb(xmm4, xmm4, xmm3, Assembler::AVX_128bit);
-  __ movdqu(xmm5, ExternalAddress((address)GHASH_POLY), rscratch);
+  __ movdqu(xmm5, ExternalAddress(ghash_polynomial_addr()), rscratch);
   __ vpand(xmm5, xmm5, xmm4, Assembler::AVX_128bit);
   __ vpsrld(xmm3, t, 31, Assembler::AVX_128bit);
   __ vpslld(xmm4, t, 1, Assembler::AVX_128bit);
