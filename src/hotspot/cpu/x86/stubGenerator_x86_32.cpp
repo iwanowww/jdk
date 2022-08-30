@@ -67,19 +67,19 @@ const int FPU_CNTRL_WRD_MASK = 0xFFFF;
 
 ATTRIBUTE_ALIGNED(16) uint32_t KEY_SHUFFLE_MASK[] = {
     0x00010203UL, 0x04050607UL, 0x08090A0BUL, 0x0C0D0E0FUL,
-}
+};
 
 ATTRIBUTE_ALIGNED(16) uint32_t COUNTER_SHUFFLE_MASK[] = {
     0x0C0D0E0FUL, 0x08090A0BUL, 0x04050607UL, 0x00010203UL,
-}
+};
 
 ATTRIBUTE_ALIGNED(16) uint32_t GHASH_BYTE_SWAP_MASK[] = {
     0x0C0D0E0FUL, 0x08090A0BUL, 0x04050607UL, 0x00010203UL,
-}
+};
 
 ATTRIBUTE_ALIGNED(16) uint32_t GHASH_LONG_SWAP_MASK[] = {
     0x0B0A0908UL, 0x0F0E0D0CUL, 0x03020100UL, 0x07060504UL,
-}
+};
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Stub Code definitions
@@ -3292,7 +3292,7 @@ class StubGenerator: public StubCodeGenerator {
   }
 
   // byte swap x86 byte array
-  address ghash_byte_swap_mask() {
+  address ghash_byte_swap_mask_addr() {
     return (address)GHASH_BYTE_SWAP_MASK;
   }
 
