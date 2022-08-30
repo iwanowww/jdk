@@ -38,20 +38,39 @@ ATTRIBUTE_ALIGNED(16) uint64_t GHASH_SHUFFLE_MASK[] = {
     0X0F0F0F0F0F0F0F0FUL, 0X0F0F0F0F0F0F0F0FUL,
 };
 
+static address ghash_shuffle_mask_addr() {
+  return (address)GHASH_SHUFFLE_MASK;
+}
+
+
 // byte swap x86 long
 ATTRIBUTE_ALIGNED(16) uint64_t GHASH_LONG_SWAP_MASK[] = {
     0X0F0E0D0C0B0A0908UL, 0X0706050403020100UL,
 };
+
+address StubGenerator::ghash_long_swap_mask_addr() {
+  return (address)GHASH_LONG_SWAP_MASK;
+}
+
 
 // byte swap x86 byte array
 ATTRIBUTE_ALIGNED(16) uint64_t GHASH_BYTE_SWAP_MASK[] = {
   0X08090A0B0C0D0E0FUL, 0X0001020304050607UL,
 };
 
+address StubGenerator::ghash_byte_swap_mask_addr() {
+  return (address)GHASH_BYTE_SWAP_MASK;
+}
+
+
 // Polynomial x^128+x^127+x^126+x^121+1
-ATTRIBUTE_ALIGNED(16) uint64_t GHASH_POLY[] = {
+ATTRIBUTE_ALIGNED(16) uint64_t GHASH_POLYNOMIAL[] = {
     0x0000000000000001UL, 0xC200000000000000UL,
 };
+
+address StubGenerator::ghash_polynomial_addr() {
+  return (address)GHASH_POLYNOMIAL;
+}
 
 
 // Single and multi-block ghash operations.
@@ -82,7 +101,7 @@ address StubGenerator::generate_ghash_processBlocks() {
 
   __ push(rbx);
 
-  __ movdqu(xmm_temp10, ExternalAddress((address)GHASH_LONG_SWAP_MASK), rbx /*rscratch*/);
+  __ movdqu(xmm_temp10, ExternalAddress(ghash_long_swap_mask_addr()), rbx /*rscratch*/);
 
   __ movdqu(xmm_temp0, Address(state, 0));
   __ pshufb(xmm_temp0, xmm_temp10);
@@ -90,7 +109,7 @@ address StubGenerator::generate_ghash_processBlocks() {
 
   __ bind(L_ghash_loop);
   __ movdqu(xmm_temp2, Address(data, 0));
-  __ pshufb(xmm_temp2, ExternalAddress((address)GHASH_BYTE_SWAP_MASK), rbx /*rscratch*/);
+  __ pshufb(xmm_temp2, ExternalAddress(ghash_byte_swap_mask_addr()), rbx /*rscratch*/);
 
   __ movdqu(xmm_temp1, Address(subkeyH, 0));
   __ pshufb(xmm_temp1, xmm_temp10);
@@ -245,7 +264,7 @@ void StubGenerator::avx_ghash(Register input_state, Register htbl,
 
   // Shuffle the input state
   __ bind(BEGIN_PROCESS);
-  __ movdqu(lswap_mask, ExternalAddress((address)GHASH_LONG_SWAP_MASK), rbx /*rscratch*/);
+  __ movdqu(lswap_mask, ExternalAddress(ghash_long_swap_mask_addr()), rbx /*rscratch*/);
   __ movdqu(state, Address(input_state, 0));
   __ vpshufb(state, state, lswap_mask, Assembler::AVX_128bit);
 
@@ -261,7 +280,7 @@ void StubGenerator::avx_ghash(Register input_state, Register htbl,
   //Each block = 16 bytes.
   __ bind(PROCESS_8_BLOCKS);
   __ subl(blocks, 8);
-  __ movdqu(bswap_mask, ExternalAddress((address)GHASH_BYTE_SWAP_MASK), rbx /*rscratch*/);
+  __ movdqu(bswap_mask, ExternalAddress(ghash_byte_swap_mask_addr()), rbx /*rscratch*/);
   __ movdqu(data, Address(input_data, 16 * 7));
   __ vpshufb(data, data, bswap_mask, Assembler::AVX_128bit);
   //Loading 1*16 as calculated powers of H required starts at that location.
@@ -346,7 +365,7 @@ void StubGenerator::avx_ghash(Register input_state, Register htbl,
   // Since this is one block operation we will only use H * 2 i.e. the first power of H
   __ bind(ONE_BLK_INIT);
   __ movdqu(tmp0, Address(htbl, 1 * 16));
-  __ movdqu(bswap_mask, ExternalAddress((address)GHASH_BYTE_SWAP_MASK), rbx /*rscratch*/);
+  __ movdqu(bswap_mask, ExternalAddress(ghash_byte_swap_mask_addr()), rbx /*rscratch*/);
 
   //Do one (128 bit x 128 bit) carry-less multiplication at a time followed by a reduction.
   __ bind(PROCESS_1_BLOCK);
@@ -455,12 +474,12 @@ void StubGenerator::generateHtbl_one_block(Register htbl, Register rscratch) {
   // load the original subkey hash
   __ movdqu(t, Address(htbl, 0));
   // shuffle using long swap mask
-  __ movdqu(xmm10, ExternalAddress((address)GHASH_LONG_SWAP_MASK), rscratch);
+  __ movdqu(xmm10, ExternalAddress(ghash_long_swap_mask_addr()), rscratch);
   __ vpshufb(t, t, xmm10, Assembler::AVX_128bit);
 
   // Compute H' = GFMUL(H, 2)
   __ vpsrld(xmm3, t, 7, Assembler::AVX_128bit);
-  __ movdqu(xmm4, ExternalAddress((address)GHASH_SHUFFLE_MASK), rscratch);
+  __ movdqu(xmm4, ExternalAddress(ghash_shuffle_mask_addr()), rscratch);
   __ vpshufb(xmm3, xmm3, xmm4, Assembler::AVX_128bit);
   __ movl(rax, 0xff00);
   __ movdl(xmm4, rax);

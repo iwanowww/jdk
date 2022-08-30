@@ -48,6 +48,11 @@ ATTRIBUTE_ALIGNED(16) uint64_t KEY_SHUFFLE_MASK[] = {
     0x0405060700010203UL, 0x0c0d0e0f08090a0bUL
 };
 
+static address key_shuffle_mask_addr() {
+  return (address)KEY_SHUFFLE_MASK;
+}
+
+
 // Shuffle mask for big-endian 128-bit integers.
 ATTRIBUTE_ALIGNED(64) uint64_t COUNTER_SHUFFLE_MASK[] = {
     0x08090a0b0c0d0e0fUL, 0x0001020304050607UL,
@@ -55,6 +60,11 @@ ATTRIBUTE_ALIGNED(64) uint64_t COUNTER_SHUFFLE_MASK[] = {
     0x08090a0b0c0d0e0fUL, 0x0001020304050607UL,
     0x08090a0b0c0d0e0fUL, 0x0001020304050607UL,
 };
+
+static address counter_shuffle_mask_addr() {
+  return (address)COUNTER_SHUFFLE_MASK;
+}
+
 
 // This mask is used for incrementing counter value
 ATTRIBUTE_ALIGNED(64) uint64_t COUNTER_MASK_LINC0[] = {
@@ -64,9 +74,19 @@ ATTRIBUTE_ALIGNED(64) uint64_t COUNTER_MASK_LINC0[] = {
     0x0000000000000003UL, 0x0000000000000000UL,
 };
 
+static address counter_mask_linc0_addr() {
+  return (address)COUNTER_MASK_LINC0;
+}
+
+
 ATTRIBUTE_ALIGNED(16) uint64_t COUNTER_MASK_LINC1[] = {
     0x0000000000000001UL, 0x0000000000000000UL,
 };
+
+static address counter_mask_linc1_addr() {
+  return (address)COUNTER_MASK_LINC1;
+}
+
 
 ATTRIBUTE_ALIGNED(64) uint64_t COUNTER_MASK_LINC4[] = {
     0x0000000000000004UL, 0x0000000000000000UL,
@@ -75,12 +95,22 @@ ATTRIBUTE_ALIGNED(64) uint64_t COUNTER_MASK_LINC4[] = {
     0x0000000000000004UL, 0x0000000000000000UL,
 };
 
+static address counter_mask_linc4_addr() {
+  return (address)COUNTER_MASK_LINC4;
+}
+
+
 ATTRIBUTE_ALIGNED(64) uint64_t COUNTER_MASK_LINC8[] = {
     0x0000000000000008UL, 0x0000000000000000UL,
     0x0000000000000008UL, 0x0000000000000000UL,
     0x0000000000000008UL, 0x0000000000000000UL,
     0x0000000000000008UL, 0x0000000000000000UL,
 };
+
+static address counter_mask_linc8_addr() {
+  return (address)COUNTER_MASK_LINC8;
+}
+
 
 ATTRIBUTE_ALIGNED(64) uint64_t COUNTER_MASK_LINC16[] = {
     0x0000000000000010UL, 0x0000000000000000UL,
@@ -89,6 +119,11 @@ ATTRIBUTE_ALIGNED(64) uint64_t COUNTER_MASK_LINC16[] = {
     0x0000000000000010UL, 0x0000000000000000UL,
 };
 
+static address counter_mask_linc16_addr() {
+  return (address)COUNTER_MASK_LINC16;
+}
+
+
 ATTRIBUTE_ALIGNED(64) uint64_t COUNTER_MASK_LINC32[] = {
     0x0000000000000020UL, 0x0000000000000000UL,
     0x0000000000000020UL, 0x0000000000000000UL,
@@ -96,31 +131,31 @@ ATTRIBUTE_ALIGNED(64) uint64_t COUNTER_MASK_LINC32[] = {
     0x0000000000000020UL, 0x0000000000000000UL,
 };
 
-ATTRIBUTE_ALIGNED(64) uint64_t GHASH_POLY_REDUCITON[] = {
+static address counter_mask_linc32_addr() {
+  return (address)COUNTER_MASK_LINC32;
+}
+
+
+ATTRIBUTE_ALIGNED(64) uint64_t GHASH_POLYNOMIAL512_REDUCITON[] = {
     0x00000001C2000000UL, 0xC200000000000000UL,
     0x00000001C2000000UL, 0xC200000000000000UL,
     0x00000001C2000000UL, 0xC200000000000000UL,
     0x00000001C2000000UL, 0xC200000000000000UL,
-};
- 
-// Polynomial x^128+x^127+x^126+x^121+1
-ATTRIBUTE_ALIGNED(16) uint64_t GHASH_POLY_AES[] = {
-    0x0000000000000001UL, 0xC200000000000000UL,
 };
 
-ATTRIBUTE_ALIGNED(16) uint64_t GHASH_TWO_ONE[] = {
+static address ghash_polynomial512_reduction_addr() {
+  return (address)GHASH_POLYNOMIAL512_REDUCITON;
+}
+
+
+ATTRIBUTE_ALIGNED(16) uint64_t GHASH_POLYNOMIAL512_TWO_ONE[] = {
     0x0000000000000001UL, 0x0000000100000000UL,
 };
 
-// byte swap x86 long
-ATTRIBUTE_ALIGNED(16) uint64_t GHASH_LONG_SWAP_MASK_AES[] = {
-    0X0F0E0D0C0B0A0908UL, 0X0706050403020100UL,
-};
+static address ghash_polynomial512_two_one_addr() {
+  return (address)GHASH_TWO_ONE;
+}
 
-// byte swap x86 byte array
-ATTRIBUTE_ALIGNED(16) uint64_t GHASH_BYTE_SWAP_MASK_AES[] = {
-  0X08090A0B0C0D0E0FUL, 0X0001020304050607UL,
-};
 
 // Vector AES Galois Counter Mode implementation. Parameters:
 // Windows regs            |  Linux regs
@@ -384,7 +419,7 @@ address StubGenerator::generate_counterMode_AESCrypt_Parallel() {
 
   __ push(rbx); // Save RBX
   __ movdqu(xmm_curr_counter, Address(counter, 0x00)); // initialize counter with initial counter
-  __ movdqu(xmm_counter_shuf_mask, ExternalAddress((address)COUNTER_SHUFFLE_MASK), pos /*rscratch*/);
+  __ movdqu(xmm_counter_shuf_mask, ExternalAddress(counter_shuffle_mask_addr()), pos /*rscratch*/);
   __ pshufb(xmm_curr_counter, xmm_counter_shuf_mask); //counter is shuffled
   __ movptr(pos, 0);
 
@@ -407,7 +442,7 @@ address StubGenerator::generate_counterMode_AESCrypt_Parallel() {
   __ movl(Address(used_addr, 0), used);
 
   // key length could be only {11, 13, 15} * 4 = {44, 52, 60}
-  __ movdqu(xmm_key_shuf_mask, ExternalAddress((address)KEY_SHUFFLE_MASK), rbx /*rscratch*/);
+  __ movdqu(xmm_key_shuf_mask, ExternalAddress(key_shuffle_mask_addr()), rbx /*rscratch*/);
   __ movl(rbx, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
   __ cmpl(rbx, 52);
   __ jcc(Assembler::equal, L_multiBlock_loopTop[1]);
@@ -617,7 +652,7 @@ address StubGenerator::generate_cipherBlockChaining_decryptVectorAESCrypt() {
 
   // Temporary variable declaration for swapping key bytes
   const XMMRegister xmm_key_shuf_mask = xmm1;
-  __ movdqu(xmm_key_shuf_mask, ExternalAddress((address)KEY_SHUFFLE_MASK), rbx /*rscratch*/);
+  __ movdqu(xmm_key_shuf_mask, ExternalAddress(key_shuffle_mask_addr()), rbx /*rscratch*/);
 
   // Calculate number of rounds from key size: 44 for 10-rounds, 52 for 12-rounds, 60 for 14-rounds
   const Register rounds = rbx;
@@ -892,7 +927,7 @@ address StubGenerator::generate_aescrypt_encryptBlock() {
   // keylen could be only {11, 13, 15} * 4 = {44, 52, 60}
   __ movl(keylen, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
 
-  __ movdqu(xmm_key_shuf_mask, ExternalAddress((address)KEY_SHUFFLE_MASK), rbx /*rscratch*/);
+  __ movdqu(xmm_key_shuf_mask, ExternalAddress(key_shuffle_mask_addr()), rbx /*rscratch*/);
   __ movdqu(xmm_result, Address(from, 0));  // get 16 bytes of input
 
   // For encryption, the java expanded key ordering is just what we need
@@ -990,7 +1025,7 @@ address StubGenerator::generate_aescrypt_decryptBlock() {
   // keylen could be only {11, 13, 15} * 4 = {44, 52, 60}
   __ movl(keylen, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
 
-  __ movdqu(xmm_key_shuf_mask, ExternalAddress((address)KEY_SHUFFLE_MASK), rbx /*rscratch*/);
+  __ movdqu(xmm_key_shuf_mask, ExternalAddress(key_shuffle_mask_addr()), rbx /*rscratch*/);
   __ movdqu(xmm_result, Address(from, 0));
 
   // for decryption java expanded key ordering is rotated one position from what we want
@@ -1111,7 +1146,7 @@ address StubGenerator::generate_cipherBlockChaining_encryptAESCrypt() {
   __ push(rbx);
 
   const XMMRegister xmm_key_shuf_mask = xmm_temp;  // used temporarily to swap key bytes up front
-  __ movdqu(xmm_key_shuf_mask, ExternalAddress((address)KEY_SHUFFLE_MASK), rbx /*rscratch*/);
+  __ movdqu(xmm_key_shuf_mask, ExternalAddress(key_shuffle_mask_addr()), rbx /*rscratch*/);
   // load up xmm regs xmm2 thru xmm12 with key 0x00 - 0xa0
   for (int rnum = XMM_REG_NUM_KEY_FIRST, offset = 0x00; rnum <= XMM_REG_NUM_KEY_FIRST+10; rnum++) {
     load_key(as_XMMRegister(rnum), key, offset, xmm_key_shuf_mask);
@@ -1267,7 +1302,7 @@ address StubGenerator::generate_cipherBlockChaining_decryptAESCrypt_Parallel() {
   // the java expanded key ordering is rotated one position from what we want
   // so we start from 0x10 here and hit 0x00 last
   const XMMRegister xmm_key_shuf_mask = xmm1;  // used temporarily to swap key bytes up front
-  __ movdqu(xmm_key_shuf_mask, ExternalAddress((address)KEY_SHUFFLE_MASK), rbx /*rscratch*/);
+  __ movdqu(xmm_key_shuf_mask, ExternalAddress(key_shuffle_mask_addr()), rbx /*rscratch*/);
   // load up xmm regs 5 thru 15 with key 0x10 - 0xa0 - 0x00
   for (int rnum = XMM_REG_NUM_KEY_FIRST, offset = 0x10; rnum < XMM_REG_NUM_KEY_LAST; rnum++) {
     load_key(as_XMMRegister(rnum), key, offset, xmm_key_shuf_mask);
@@ -1571,7 +1606,7 @@ void StubGenerator::load_key(XMMRegister xmmdst, Register key, int offset, XMMRe
 
 void StubGenerator::load_key(XMMRegister xmmdst, Register key, int offset, Register rscratch) {
   __ movdqu(xmmdst, Address(key, offset));
-  __ pshufb(xmmdst, ExternalAddress((address)KEY_SHUFFLE_MASK), rscratch);
+  __ pshufb(xmmdst, ExternalAddress(key_shuffle_mask_addr()), rscratch);
 }
 
 void StubGenerator::ev_load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask) {
@@ -1582,7 +1617,7 @@ void StubGenerator::ev_load_key(XMMRegister xmmdst, Register key, int offset, XM
 
 void StubGenerator::ev_load_key(XMMRegister xmmdst, Register key, int offset, Register rscratch) {
   __ movdqu(xmmdst, Address(key, offset));
-  __ pshufb(xmmdst, ExternalAddress((address)KEY_SHUFFLE_MASK), rscratch);
+  __ pshufb(xmmdst, ExternalAddress(key_shuffle_mask_addr()), rscratch);
   __ evshufi64x2(xmmdst, xmmdst, xmmdst, 0x0, Assembler::AVX_512bit);
 }
 
@@ -1615,7 +1650,7 @@ void StubGenerator::aesecb_encrypt(Register src_addr, Register dest_addr, Regist
 
   // Load Key shuf mask
   const XMMRegister xmm_key_shuf_mask = xmm31;  // used temporarily to swap key bytes up front
-  __ movdqu(xmm_key_shuf_mask, ExternalAddress((address)KEY_SHUFFLE_MASK), rbx /*rscratch*/);
+  __ movdqu(xmm_key_shuf_mask, ExternalAddress(key_shuffle_mask_addr()), rbx /*rscratch*/);
 
   // Load and shuffle key based on number of rounds
   ev_load_key(xmm8, key, 0 * 16, xmm_key_shuf_mask);
@@ -1825,7 +1860,7 @@ void StubGenerator::aesecb_decrypt(Register src_addr, Register dest_addr, Regist
 
   // Load Key shuf mask
   const XMMRegister xmm_key_shuf_mask = xmm31;  // used temporarily to swap key bytes up front
-  __ movdqu(xmm_key_shuf_mask, ExternalAddress((address)KEY_SHUFFLE_MASK), rbx /*rscratch*/);
+  __ movdqu(xmm_key_shuf_mask, ExternalAddress(key_shuffle_mask_addr()), rbx /*rscratch*/);
 
   // Load and shuffle round keys. The java expanded key ordering is rotated one position in decryption.
   // So the first round key is loaded from 1*16 here and last round key is loaded from 0*16
@@ -2054,7 +2089,7 @@ void StubGenerator::aesctr_encrypt(Register src_addr, Register dest_addr, Regist
   __ evshufi64x2(xmm8, xmm0, xmm0, 0, Assembler::AVX_512bit);
 
   // load lbswap mask
-  __ evmovdquq(xmm16, ExternalAddress((address)COUNTER_SHUFFLE_MASK), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ evmovdquq(xmm16, ExternalAddress(counter_shuffle_mask_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
 
   //shuffle counter using lbswap_mask
   __ vpshufb(xmm8, xmm8, xmm16, Assembler::AVX_512bit);
@@ -2064,20 +2099,20 @@ void StubGenerator::aesctr_encrypt(Register src_addr, Register dest_addr, Regist
   // The counter is incremented after each block i.e. 16 bytes is processed;
   // each zmm register has 4 counter values as its MSB
   // the counters are incremented in parallel
-  __ vpaddd(xmm8,  xmm8,  ExternalAddress((address)COUNTER_MASK_LINC0), Assembler::AVX_512bit, r15 /*rscratch*/);
-  __ vpaddd(xmm9,  xmm8,  ExternalAddress((address)COUNTER_MASK_LINC4), Assembler::AVX_512bit, r15 /*rscratch*/);
-  __ vpaddd(xmm10, xmm9,  ExternalAddress((address)COUNTER_MASK_LINC4), Assembler::AVX_512bit, r15 /*rscratch*/);
-  __ vpaddd(xmm11, xmm10, ExternalAddress((address)COUNTER_MASK_LINC4), Assembler::AVX_512bit, r15 /*rscratch*/);
-  __ vpaddd(xmm12, xmm11, ExternalAddress((address)COUNTER_MASK_LINC4), Assembler::AVX_512bit, r15 /*rscratch*/);
-  __ vpaddd(xmm13, xmm12, ExternalAddress((address)COUNTER_MASK_LINC4), Assembler::AVX_512bit, r15 /*rscratch*/);
-  __ vpaddd(xmm14, xmm13, ExternalAddress((address)COUNTER_MASK_LINC4), Assembler::AVX_512bit, r15 /*rscratch*/);
-  __ vpaddd(xmm15, xmm14, ExternalAddress((address)COUNTER_MASK_LINC4), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ vpaddd(xmm8,  xmm8,  ExternalAddress(counter_mask_linc0_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ vpaddd(xmm9,  xmm8,  ExternalAddress(counter_mask_linc4_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ vpaddd(xmm10, xmm9,  ExternalAddress(counter_mask_linc4_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ vpaddd(xmm11, xmm10, ExternalAddress(counter_mask_linc4_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ vpaddd(xmm12, xmm11, ExternalAddress(counter_mask_linc4_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ vpaddd(xmm13, xmm12, ExternalAddress(counter_mask_linc4_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ vpaddd(xmm14, xmm13, ExternalAddress(counter_mask_linc4_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ vpaddd(xmm15, xmm14, ExternalAddress(counter_mask_linc4_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
 
   // load linc32 mask in zmm register.linc32 increments counter by 32
-  __ evmovdquq(xmm19, ExternalAddress((address)COUNTER_MASK_LINC32), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ evmovdquq(xmm19, ExternalAddress(counter_mask_linc32_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
 
   // xmm31 contains the key shuffle mask.
-  __ movdqu(xmm31, ExternalAddress((address)KEY_SHUFFLE_MASK), r15 /*rscratch*/);
+  __ movdqu(xmm31, ExternalAddress(key_shuffle_mask_addr()), r15 /*rscratch*/);
   // Load key function loads 128 bit key and shuffles it. Then we broadcast the shuffled key to convert it into a 512 bit value.
   // For broadcasting the values to ZMM, vshufi64 is used instead of evbroadcasti64x2 as the source in this case is ZMM register
   // that holds shuffled key value.
@@ -2193,14 +2228,14 @@ void StubGenerator::aesctr_encrypt(Register src_addr, Register dest_addr, Regist
   __ jcc(Assembler::aboveEqual, REMAINDER_4);
   // At this point, we will process 16 bytes of data at a time.
   // So load xmm19 with counter increment value as 1
-  __ evmovdquq(xmm19, ExternalAddress((address)COUNTER_MASK_LINC1), Assembler::AVX_128bit, r15 /*rscratch*/);
+  __ evmovdquq(xmm19, ExternalAddress(counter_mask_linc1_addr()), Assembler::AVX_128bit, r15 /*rscratch*/);
   __ jmp(REMAINDER_LOOP);
 
   // Each ZMM register can be used to encode 64 bytes of data, so we have 4 ZMM registers to encode 256 bytes of data
   __ bind(REMAINDER_16);
   __ subq(len_reg, 256);
   // As we process 16 blocks at a time, load mask for incrementing the counter value by 16
-  __ evmovdquq(xmm19, ExternalAddress((address)COUNTER_MASK_LINC16), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ evmovdquq(xmm19, ExternalAddress(counter_mask_linc16_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
   // shuffle counter and XOR counter with roundkey1
   __ vpshufb(xmm0, xmm8, xmm16, Assembler::AVX_512bit);
   __ evpxorq(xmm0, xmm0, xmm20, Assembler::AVX_512bit);
@@ -2265,14 +2300,14 @@ void StubGenerator::aesctr_encrypt(Register src_addr, Register dest_addr, Regist
   __ cmpl(len_reg, 64);
   __ jcc(Assembler::aboveEqual, REMAINDER_4);
   //load mask for incrementing the counter value by 1
-  __ evmovdquq(xmm19, ExternalAddress((address)COUNTER_MASK_LINC1), Assembler::AVX_128bit, r15 /*rscratch*/);
+  __ evmovdquq(xmm19, ExternalAddress(counter_mask_linc1_addr()), Assembler::AVX_128bit, r15 /*rscratch*/);
   __ jmp(REMAINDER_LOOP);
 
   // Each ZMM register can be used to encode 64 bytes of data, so we have 2 ZMM registers to encode 128 bytes of data
   __ bind(REMAINDER_8);
   __ subq(len_reg, 128);
   // As we process 8 blocks at a time, load mask for incrementing the counter value by 8
-  __ evmovdquq(xmm19, ExternalAddress((address)COUNTER_MASK_LINC8), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ evmovdquq(xmm19, ExternalAddress(counter_mask_linc8_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
   // shuffle counters and xor with roundkey1
   __ vpshufb(xmm0, xmm8, xmm16, Assembler::AVX_512bit);
   __ evpxorq(xmm0, xmm0, xmm20, Assembler::AVX_512bit);
@@ -2325,14 +2360,14 @@ void StubGenerator::aesctr_encrypt(Register src_addr, Register dest_addr, Regist
   __ cmpl(len_reg, 64);
   __ jcc(Assembler::aboveEqual, REMAINDER_4);
   // load mask for incrementing the counter value by 1
-  __ evmovdquq(xmm19, ExternalAddress((address)COUNTER_MASK_LINC1), Assembler::AVX_128bit, r15 /*rscratch*/);
+  __ evmovdquq(xmm19, ExternalAddress(counter_mask_linc1_addr()), Assembler::AVX_128bit, r15 /*rscratch*/);
   __ jmp(REMAINDER_LOOP);
 
   // Each ZMM register can be used to encode 64 bytes of data, so we have 1 ZMM register used in this block of code
   __ bind(REMAINDER_4);
   __ subq(len_reg, 64);
   // As we process 4 blocks at a time, load mask for incrementing the counter value by 4
-  __ evmovdquq(xmm19, ExternalAddress((address)COUNTER_MASK_LINC4), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ evmovdquq(xmm19, ExternalAddress(counter_mask_linc4_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
   // XOR counter with first roundkey
   __ vpshufb(xmm0, xmm8, xmm16, Assembler::AVX_512bit);
   __ evpxorq(xmm0, xmm0, xmm20, Assembler::AVX_512bit);
@@ -2376,7 +2411,7 @@ void StubGenerator::aesctr_encrypt(Register src_addr, Register dest_addr, Regist
   __ evmovdquq(Address(dest_addr, pos, Address::times_1, 0), xmm0, Assembler::AVX_512bit);
   __ addq(pos, 64);
   // load mask for incrementing the counter value by 1
-  __ evmovdquq(xmm19, ExternalAddress((address)COUNTER_MASK_LINC1), Assembler::AVX_128bit, r15 /*rscratch*/);
+  __ evmovdquq(xmm19, ExternalAddress(counter_mask_linc1_addr()), Assembler::AVX_128bit, r15 /*rscratch*/);
 
   // For a single block, the AES rounds start here.
   __ bind(REMAINDER_LOOP);
@@ -2513,7 +2548,7 @@ void StubGenerator::gfmul_avx512(XMMRegister GH, XMMRegister HK) {
   __ evpxorq(TMP1, TMP1, TMP3, Assembler::AVX_512bit);
   __ evpxorq(GH, GH, TMP2, Assembler::AVX_512bit);
 
-  __ evmovdquq(TMP3, ExternalAddress((address)GHASH_POLY_REDUCITON), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ evmovdquq(TMP3, ExternalAddress(ghash_polynomial512_reduciton_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
   __ evpclmulqdq(TMP2, TMP3, GH, 0x01, Assembler::AVX_512bit);
   __ vpslldq(TMP2, TMP2, 8, Assembler::AVX_512bit);
   __ evpxorq(GH, GH, TMP2, Assembler::AVX_512bit);
@@ -2533,11 +2568,11 @@ void StubGenerator::generateHtbl_48_block_zmm(Register htbl, Register avx512_htb
   Label GFMUL_AVX512;
 
   __ movdqu(HK, Address(htbl, 0));
-  __ movdqu(xmm10, ExternalAddress((address)GHASH_LONG_SWAP_MASK_AES), rscratch);
+  __ movdqu(xmm10, ExternalAddress(ghash_long_swap_mask_addr()), rscratch);
   __ vpshufb(HK, HK, xmm10, Assembler::AVX_128bit);
 
-  __ movdqu(xmm11, ExternalAddress((address)GHASH_POLY_AES), rscratch);
-  __ movdqu(xmm12, ExternalAddress((address)GHASH_TWO_ONE), rscratch);
+  __ movdqu(xmm11, ExternalAddress(ghash_polynomial512_addr()), rscratch);
+  __ movdqu(xmm12, ExternalAddress(ghash_polynomial512_two_one_addr()), rscratch);
   // Compute H ^ 2 from the input subkeyH
   __ movdqu(xmm2, xmm6);
   __ vpsllq(xmm6, xmm6, 1, Assembler::AVX_128bit);
@@ -2791,7 +2826,7 @@ void StubGenerator::ghash16_encrypt16_parallel(Register key, Register subkeyHtbl
     __ vpternlogq(ZTMP7, 0x96, xmm25, ZTMP11, Assembler::AVX_512bit);
     __ vpsrldq(ZTMP11, ZTMP7, 8, Assembler::AVX_512bit);
     __ vpslldq(ZTMP7, ZTMP7, 8, Assembler::AVX_512bit);
-    __ evmovdquq(ZTMP12, ExternalAddress((address)GHASH_POLY_REDUCITON), Assembler::AVX_512bit, rbx /*rscratch*/);
+    __ evmovdquq(ZTMP12, ExternalAddress(ghash_polynomial512_reduciton_addr()), Assembler::AVX_512bit, rbx /*rscratch*/);
   }
   // AES round 7
   roundEncode(ZTMP18, ZTMP0, ZTMP1, ZTMP2, ZTMP3);
@@ -2898,7 +2933,7 @@ void StubGenerator::aesgcm_encrypt(Register in, Register len, Register ct, Regis
   __ movdqu(CTR_BLOCKx, Address(counter, 0));
   __ movdqu(AAD_HASHx, Address(state, 0));
   // Load lswap mask for ghash
-  __ movdqu(xmm24, ExternalAddress((address)GHASH_LONG_SWAP_MASK_AES), rbx /*rscratch*/);
+  __ movdqu(xmm24, ExternalAddress(ghash_long_swap_mask_addr()), rbx /*rscratch*/);
   // Shuffle input state using lswap mask
   __ vpshufb(AAD_HASHx, AAD_HASHx, xmm24, Assembler::AVX_128bit);
 
@@ -2908,14 +2943,14 @@ void StubGenerator::aesgcm_encrypt(Register in, Register len, Register ct, Regis
   // Broadcast counter value to 512 bit register
   __ evshufi64x2(CTR_BLOCKx, CTR_BLOCKx, CTR_BLOCKx, 0, Assembler::AVX_512bit);
   // Load counter shuffle mask
-  __ evmovdquq(xmm24, ExternalAddress((address)COUNTER_SHUFFLE_MASK), Assembler::AVX_512bit, rbx);
+  __ evmovdquq(xmm24, ExternalAddress(counter_shuffle_mask_addr()), Assembler::AVX_512bit, rbx);
   // Shuffle counter
   __ vpshufb(CTR_BLOCKx, CTR_BLOCKx, xmm24, Assembler::AVX_512bit);
 
   // Load mask for incrementing counter
-  __ evmovdquq(COUNTER_INC_MASK, ExternalAddress((address)COUNTER_MASK_LINC4), Assembler::AVX_512bit, rbx /*rscratch*/);
+  __ evmovdquq(COUNTER_INC_MASK, ExternalAddress(counter_mask_linc4_addr()), Assembler::AVX_512bit, rbx /*rscratch*/);
   // Pre-increment counter
-  __ vpaddd(ZTMP5, CTR_BLOCKx, ExternalAddress((address)COUNTER_MASK_LINC0), Assembler::AVX_512bit, rbx /*rscratch*/);
+  __ vpaddd(ZTMP5, CTR_BLOCKx, ExternalAddress(counter_mask_linc0_addr()), Assembler::AVX_512bit, rbx /*rscratch*/);
   __ vpaddd(ZTMP6, ZTMP5, COUNTER_INC_MASK, Assembler::AVX_512bit);
   __ vpaddd(ZTMP7, ZTMP6, COUNTER_INC_MASK, Assembler::AVX_512bit);
   __ vpaddd(ZTMP8, ZTMP7, COUNTER_INC_MASK, Assembler::AVX_512bit);
@@ -2928,7 +2963,7 @@ void StubGenerator::aesgcm_encrypt(Register in, Register len, Register ct, Regis
   // Move 256 bytes of data
   loadData(in, pos, ZTMP0, ZTMP1, ZTMP2, ZTMP3);
   // Load key shuffle mask
-  __ movdqu(xmm29, ExternalAddress((address)KEY_SHUFFLE_MASK), rbx /*rscratch*/);
+  __ movdqu(xmm29, ExternalAddress(key_shuffle_mask_addr()), rbx /*rscratch*/);
   // Load 0th AES round key
   ev_load_key(ZTMP4, key, 0, xmm29);
   // AES-ROUND0, xmm24 has the shuffle mask
@@ -3091,7 +3126,7 @@ void StubGenerator::aesgcm_encrypt(Register in, Register len, Register ct, Regis
   vhpxori4x128(ZTMP1, ZTMP11);
   vhpxori4x128(ZTMP2, ZTMP12);
   // Load reduction polynomial and compute final reduction
-  __ evmovdquq(ZTMP15, ExternalAddress((address)GHASH_POLY_REDUCITON), Assembler::AVX_512bit, rbx /*rscratch*/);
+  __ evmovdquq(ZTMP15, ExternalAddress(ghash_polynomial512_reduciton_addr()), Assembler::AVX_512bit, rbx /*rscratch*/);
   vclmul_reduce(AAD_HASHx, ZTMP15, ZTMP1, ZTMP2, ZTMP3, ZTMP4);
 
   // Pre-increment counter for next operation
@@ -3100,7 +3135,7 @@ void StubGenerator::aesgcm_encrypt(Register in, Register len, Register ct, Regis
   __ vpshufb(CTR_BLOCKx, CTR_BLOCKx, xmm24, Assembler::AVX_512bit);
   __ movdqu(Address(counter, 0), CTR_BLOCKx);
   // Load ghash lswap mask
-  __ movdqu(xmm24, ExternalAddress((address)GHASH_LONG_SWAP_MASK_AES), rbx /*rscratch*/);
+  __ movdqu(xmm24, ExternalAddress(ghash_long_swap_mask_addr()), rbx /*rscratch*/);
   // Shuffle ghash using lbswap_mask and store it
   __ vpshufb(AAD_HASHx, AAD_HASHx, xmm24, Assembler::AVX_128bit);
   __ movdqu(Address(state, 0), AAD_HASHx);

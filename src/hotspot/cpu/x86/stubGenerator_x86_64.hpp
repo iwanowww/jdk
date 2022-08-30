@@ -663,11 +663,9 @@ class StubGenerator: public StubCodeGenerator {
   void generateHtbl_eight_blocks(Register htbl);
   void avx_ghash(Register state, Register htbl, Register data, Register blocks);
 
-  address generate_ghash_shufflemask_addr();
-
-  address generate_ghash_long_swap_mask(); // byte swap x86 long
-
-  address generate_ghash_byte_swap_mask(); // byte swap x86 byte array
+  address ghash_polynomial_addr();
+  address ghash_long_swap_mask_addr(); // byte swap x86 long
+  address ghash_byte_swap_mask_addr(); // byte swap x86 byte array
 
   // Single and multi-block ghash operations
   address generate_ghash_processBlocks();
