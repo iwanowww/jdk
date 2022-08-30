@@ -2200,27 +2200,8 @@ class StubGenerator: public StubCodeGenerator {
     return (address)KEY_SHUFFLE_MASK;
   }
 
-    __ align(16);
-    StubCodeMark mark(this, "StubRoutines", "key_shuffle_mask");
-    address start = __ pc();
-    __ emit_data(0x00010203, relocInfo::none, 0 );
-    __ emit_data(0x04050607, relocInfo::none, 0 );
-    __ emit_data(0x08090a0b, relocInfo::none, 0 );
-    __ emit_data(0x0c0d0e0f, relocInfo::none, 0 );
-    return start;
-  }
-
   address counter_shuffle_mask_addr() {
     return (address)COUNTER_SHUFFLE_MASK;
-  }
-    __ align(16);
-    StubCodeMark mark(this, "StubRoutines", "counter_shuffle_mask");
-    address start = __ pc();
-    __ emit_data(0x0c0d0e0f, relocInfo::none, 0);
-    __ emit_data(0x08090a0b, relocInfo::none, 0);
-    __ emit_data(0x04050607, relocInfo::none, 0);
-    __ emit_data(0x00010203, relocInfo::none, 0);
-    return start;
   }
 
   // Utility routine for loading a 128-bit key word in little endian format
