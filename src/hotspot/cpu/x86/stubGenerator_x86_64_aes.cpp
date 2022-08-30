@@ -136,24 +136,24 @@ static address counter_mask_linc32_addr() {
 }
 
 
-ATTRIBUTE_ALIGNED(64) uint64_t GHASH_POLYNOMIAL512_REDUCITON[] = {
+ATTRIBUTE_ALIGNED(64) uint64_t GHASH_POLYNOMIAL_REDUCITON[] = {
     0x00000001C2000000UL, 0xC200000000000000UL,
     0x00000001C2000000UL, 0xC200000000000000UL,
     0x00000001C2000000UL, 0xC200000000000000UL,
     0x00000001C2000000UL, 0xC200000000000000UL,
 };
 
-static address ghash_polynomial512_reduction_addr() {
-  return (address)GHASH_POLYNOMIAL512_REDUCITON;
+static address ghash_polynomial_reduction_addr() {
+  return (address)GHASH_POLYNOMIAL_REDUCITON;
 }
 
 
-ATTRIBUTE_ALIGNED(16) uint64_t GHASH_POLYNOMIAL512_TWO_ONE[] = {
+ATTRIBUTE_ALIGNED(16) uint64_t GHASH_POLYNOMIAL_TWO_ONE[] = {
     0x0000000000000001UL, 0x0000000100000000UL,
 };
 
-static address ghash_polynomial512_two_one_addr() {
-  return (address)GHASH_TWO_ONE;
+static address ghash_polynomial_two_one_addr() {
+  return (address)GHASH_POLYNOMIAL_TWO_ONE;
 }
 
 
@@ -2548,7 +2548,7 @@ void StubGenerator::gfmul_avx512(XMMRegister GH, XMMRegister HK) {
   __ evpxorq(TMP1, TMP1, TMP3, Assembler::AVX_512bit);
   __ evpxorq(GH, GH, TMP2, Assembler::AVX_512bit);
 
-  __ evmovdquq(TMP3, ExternalAddress(ghash_polynomial512_reduciton_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
+  __ evmovdquq(TMP3, ExternalAddress(ghash_polynomial_reduciton_addr()), Assembler::AVX_512bit, r15 /*rscratch*/);
   __ evpclmulqdq(TMP2, TMP3, GH, 0x01, Assembler::AVX_512bit);
   __ vpslldq(TMP2, TMP2, 8, Assembler::AVX_512bit);
   __ evpxorq(GH, GH, TMP2, Assembler::AVX_512bit);
@@ -2571,8 +2571,8 @@ void StubGenerator::generateHtbl_48_block_zmm(Register htbl, Register avx512_htb
   __ movdqu(xmm10, ExternalAddress(ghash_long_swap_mask_addr()), rscratch);
   __ vpshufb(HK, HK, xmm10, Assembler::AVX_128bit);
 
-  __ movdqu(xmm11, ExternalAddress(ghash_polynomial512_addr()), rscratch);
-  __ movdqu(xmm12, ExternalAddress(ghash_polynomial512_two_one_addr()), rscratch);
+  __ movdqu(xmm11, ExternalAddress(ghash_polynomial_addr()), rscratch);
+  __ movdqu(xmm12, ExternalAddress(ghash_polynomial_two_one_addr()), rscratch);
   // Compute H ^ 2 from the input subkeyH
   __ movdqu(xmm2, xmm6);
   __ vpsllq(xmm6, xmm6, 1, Assembler::AVX_128bit);
@@ -2826,7 +2826,7 @@ void StubGenerator::ghash16_encrypt16_parallel(Register key, Register subkeyHtbl
     __ vpternlogq(ZTMP7, 0x96, xmm25, ZTMP11, Assembler::AVX_512bit);
     __ vpsrldq(ZTMP11, ZTMP7, 8, Assembler::AVX_512bit);
     __ vpslldq(ZTMP7, ZTMP7, 8, Assembler::AVX_512bit);
-    __ evmovdquq(ZTMP12, ExternalAddress(ghash_polynomial512_reduciton_addr()), Assembler::AVX_512bit, rbx /*rscratch*/);
+    __ evmovdquq(ZTMP12, ExternalAddress(ghash_polynomial_reduciton_addr()), Assembler::AVX_512bit, rbx /*rscratch*/);
   }
   // AES round 7
   roundEncode(ZTMP18, ZTMP0, ZTMP1, ZTMP2, ZTMP3);
@@ -3126,7 +3126,7 @@ void StubGenerator::aesgcm_encrypt(Register in, Register len, Register ct, Regis
   vhpxori4x128(ZTMP1, ZTMP11);
   vhpxori4x128(ZTMP2, ZTMP12);
   // Load reduction polynomial and compute final reduction
-  __ evmovdquq(ZTMP15, ExternalAddress(ghash_polynomial512_reduciton_addr()), Assembler::AVX_512bit, rbx /*rscratch*/);
+  __ evmovdquq(ZTMP15, ExternalAddress(ghash_polynomial_reduciton_addr()), Assembler::AVX_512bit, rbx /*rscratch*/);
   vclmul_reduce(AAD_HASHx, ZTMP15, ZTMP1, ZTMP2, ZTMP3, ZTMP4);
 
   // Pre-increment counter for next operation
