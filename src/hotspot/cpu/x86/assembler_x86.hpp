@@ -2815,16 +2815,15 @@ private:
 class InstructionAttr {
 public:
   InstructionAttr(
-    Assembler* assm,    // Current assembler instance
-    int vector_len,     // The length of vector to be applied in encoding - for both AVX and EVEX
-    bool rex_vex_w,     // Width of data: if 32-bits or less, false, else if 64-bit or specially defined, true
-    bool legacy_mode,   // Details if either this instruction is conditionally encoded to AVX or earlier if true else possibly EVEX
-    bool no_reg_mask,   // when true, k0 is used when EVEX encoding is chosen, else embedded_opmask_register_specifier is used
-    bool uses_vl)       // This instruction may have legacy constraints based on vector length for EVEX
+    Assembler* assm,  // Current assembler instance
+    int vector_len,   // The length of vector to be applied in encoding - for both AVX and EVEX
+    bool rex_vex_w,   // Width of data: if 32-bits or less, false, else if 64-bit or specially defined, true
+    bool legacy_mode, // Details if either this instruction is conditionally encoded to AVX or earlier if true else possibly EVEX
+    bool uses_vl)     // This instruction may have legacy constraints based on vector length for EVEX
     : _assembler(*assm)
     , _rex_vex_w(rex_vex_w)
     , _legacy_mode(legacy_mode || UseAVX < 3)
-    , _no_reg_mask(no_reg_mask)
+    , _kreg(knoreg)
     , _uses_vl(uses_vl)
     , _rex_vex_w_reverted(false)
     , _is_evex_instruction(false)
@@ -2834,7 +2833,7 @@ public:
     , _tuple_type(Assembler::EVEX_ETUP)
     , _input_size_in_bits(Assembler::EVEX_NObit)
     , _evex_encoding(0)
-    , _embedded_opmask_register_specifier(0) // hard code k0
+    , _mask_reg(0) // hard code k0
   {
     assert(_assembler._attributes == NULL, "nested attributes");
     _assembler._attributes = this;
@@ -2850,7 +2849,6 @@ private:
 
   bool _rex_vex_w;
   bool _legacy_mode;
-  bool _no_reg_mask;
   bool _uses_vl;
   bool _rex_vex_w_reverted;
   bool _is_evex_instruction;
@@ -2860,23 +2858,25 @@ private:
   int  _tuple_type;
   int  _input_size_in_bits;
   int  _evex_encoding;
-  int _embedded_opmask_register_specifier;
+
+  KRegister _kreg;
 
 public:
   // query functions for field accessors
-  bool is_rex_vex_w(void) const { return _rex_vex_w; }
-  bool is_legacy_mode(void) const { return _legacy_mode; }
-  bool is_no_reg_mask(void) const { return _no_reg_mask; }
-  bool uses_vl(void) const { return _uses_vl; }
-  bool is_rex_vex_w_reverted(void) { return _rex_vex_w_reverted; }
-  bool is_evex_instruction(void) const { return _is_evex_instruction; }
-  bool is_clear_context(void) const { return _is_clear_context; }
-  bool is_extended_context(void) const { return _is_extended_context; }
-  int  get_vector_len(void) const { return _avx_vector_len; }
-  int  get_tuple_type(void) const { return _tuple_type; }
-  int  get_input_size(void) const { return _input_size_in_bits; }
-  int  get_evex_encoding(void) const { return _evex_encoding; }
-  int  get_embedded_opmask_register_specifier(void) const { return _embedded_opmask_register_specifier; }
+  bool          is_rex_vex_w() const { return _rex_vex_w; }
+  bool        is_legacy_mode() const { return _legacy_mode; }
+  bool               uses_vl() const { return _uses_vl; }
+  bool is_rex_vex_w_reverted() const { return _rex_vex_w_reverted; }
+  bool   is_evex_instruction() const { return _is_evex_instruction; }
+  bool      is_clear_context() const { return _is_clear_context; }
+  bool   is_extended_context() const { return _is_extended_context; }
+  int             vector_len() const { return _avx_vector_len; }
+  int             tuple_type() const { return _tuple_type; }
+  int             input_size() const { return _input_size_in_bits; }
+  int          evex_encoding() const { return _evex_encoding; }
+
+  bool              has_kreg() const { return _kreg != knoreg; }
+  int                   kreg() const { return _kreg; }
 
   // Set the vector len manually
   void set_vector_len(int vector_len) { _avx_vector_len = vector_len; }
@@ -2904,9 +2904,7 @@ public:
   void set_address_attributes(int tuple_type, int input_size_in_bits);
 
   // Set embedded opmask register specifier.
-  void set_embedded_opmask_register_specifier(KRegister mask) {
-    _embedded_opmask_register_specifier = mask->encoding() & 0x7;
-  }
+  void set_opmask_reg(KRegister k) { _kreg = k; }
 
 };
 
