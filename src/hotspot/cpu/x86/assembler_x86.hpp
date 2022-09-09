@@ -2823,7 +2823,6 @@ public:
     : _assembler(*assm)
     , _rex_vex_w(rex_vex_w)
     , _legacy_mode(legacy_mode || UseAVX < 3)
-    , _kreg(knoreg)
     , _uses_vl(uses_vl)
     , _rex_vex_w_reverted(false)
     , _is_evex_instruction(false)
@@ -2833,7 +2832,7 @@ public:
     , _tuple_type(Assembler::EVEX_ETUP)
     , _input_size_in_bits(Assembler::EVEX_NObit)
     , _evex_encoding(0)
-    , _mask_reg(0) // hard code k0
+    , _kreg(knoreg)
   {
     assert(_assembler._attributes == NULL, "nested attributes");
     _assembler._attributes = this;
@@ -2858,7 +2857,6 @@ private:
   int  _tuple_type;
   int  _input_size_in_bits;
   int  _evex_encoding;
-
   KRegister _kreg;
 
 public:
@@ -2876,7 +2874,7 @@ public:
   int          evex_encoding() const { return _evex_encoding; }
 
   bool              has_kreg() const { return _kreg != knoreg; }
-  int                   kreg() const { return _kreg; }
+  KRegister             kreg() const { return _kreg; }
 
   // Set the vector len manually
   void set_vector_len(int vector_len) { _avx_vector_len = vector_len; }

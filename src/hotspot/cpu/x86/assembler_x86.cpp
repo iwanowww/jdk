@@ -446,8 +446,8 @@ bool Assembler::emit_compressed_disp_byte(int &disp) {
   // We will test if the displacement fits the compressed format and if so
   // apply the compression to the displacement iff the result is8bit.
   if (VM_Version::supports_evex() && _attributes != NULL && _attributes->is_evex_instruction()) {
-    int evex_encoding = _attributes->get_evex_encoding();
-    int tuple_type = _attributes->get_tuple_type();
+    int evex_encoding = _attributes->evex_encoding();
+    int tuple_type = _attributes->tuple_type();
     switch (tuple_type) {
     case EVEX_FV:
       if ((evex_encoding & VEX_W) == VEX_W) {
@@ -465,7 +465,7 @@ bool Assembler::emit_compressed_disp_byte(int &disp) {
       break;
 
     case EVEX_T1S:
-      switch (_attributes->get_input_size()) {
+      switch (_attributes->input_size()) {
       case EVEX_8bit:
         break;
 
@@ -486,7 +486,7 @@ bool Assembler::emit_compressed_disp_byte(int &disp) {
     case EVEX_T1F:
     case EVEX_T2:
     case EVEX_T4:
-      mod_idx = (_attributes->get_input_size() == EVEX_64bit) ? 1 : 0;
+      mod_idx = (_attributes->input_size() == EVEX_64bit) ? 1 : 0;
       break;
 
     case EVEX_T8:
@@ -512,7 +512,7 @@ bool Assembler::emit_compressed_disp_byte(int &disp) {
       break;
     }
 
-    int vector_len = _attributes->get_vector_len();
+    int vector_len = _attributes->vector_len();
     if (vector_len >= AVX_128bit && vector_len <= AVX_512bit) {
       int disp_factor = tuple_table[tuple_type + mod_idx][vector_len];
       if ((disp % disp_factor) == 0) {
@@ -11121,7 +11121,7 @@ int Assembler::rex_prefix_and_encode(int dst_enc, int src_enc, VexSimdPrefix pre
 void Assembler::vex_prefix(bool vex_r, bool vex_b, bool vex_x, int nds_enc, VexSimdPrefix pre, VexOpcode opc) {
   assert(_attributes != NULL, "required");
 
-  int vector_len = _attributes->get_vector_len();
+  int vector_len = _attributes->vector_len();
   bool vex_w = _attributes->is_rex_vex_w();
   if (vex_b || vex_x || vex_w || (opc == VEX_OPCODE_0F_38) || (opc == VEX_OPCODE_0F_3A)) {
     int byte1 = (vex_r ? VEX_R : 0) | (vex_x ? VEX_X : 0) | (vex_b ? VEX_B : 0);
@@ -11178,7 +11178,7 @@ void Assembler::evex_prefix(bool vex_r, bool vex_b, bool vex_x, bool evex_r, boo
   // third EXEC.b for broadcast actions
   byte4 |= (_attributes->is_extended_context() ? EVEX_Rb : 0);
   // fourth EVEX.L'L for vector length : 0 is 128, 1 is 256, 2 is 512, currently we do not support 1024
-  byte4 |= ((_attributes->get_vector_len())& 0x3) << 5;
+  byte4 |= ((_attributes->vector_len())& 0x3) << 5;
   if (_attributes->has_kreg()) {
     KRegister kreg = _attributes->kreg();
     if (kreg != k0) {
@@ -11207,13 +11207,13 @@ void Assembler::vex_prefix(Address adr, int nds_enc, int xreg_enc, VexSimdPrefix
   // Pure EVEX instructions will have is_evex_instruction set in their definition.
   if (VM_Version::supports_evex()) {
     if (!_attributes->is_legacy_mode() && !_attributes->is_evex_instruction() && !is_managed() &&
-        (_attributes->get_vector_len() != AVX_512bit) && (nds_enc < 16) && (xreg_enc < 16)) {
+        (_attributes->vector_len() != AVX_512bit) && (nds_enc < 16) && (xreg_enc < 16)) {
        _attributes->set_is_legacy_mode();
     }
     assert(((nds_enc < 16 && xreg_enc < 16) || !_attributes->is_legacy_mode()),"XMM register should be 0-15");
 
     assert(!_attributes->uses_vl() ||
-           _attributes->get_vector_len() == AVX_512bit ||
+           _attributes->vector_len() == AVX_512bit ||
            !_legacy_mode_vl ||
            _attributes->is_legacy_mode(),"XMM register should be 0-15");
 
@@ -11255,7 +11255,7 @@ int Assembler::vex_prefix_and_encode(int dst_enc, int nds_enc, int src_enc, VexS
   if (VM_Version::supports_evex()) {
     if (!_attributes->is_legacy_mode() &&
         !_attributes->is_evex_instruction() && !is_managed() &&
-        (!_attributes->uses_vl() || (_attributes->get_vector_len() != AVX_512bit)) &&
+        (!_attributes->uses_vl() || (_attributes->vector_len() != AVX_512bit)) &&
         (dst_enc < 16) && (nds_enc < 16) && (src_enc < 16)) {
       _attributes->set_is_legacy_mode();
     }
@@ -11266,7 +11266,7 @@ int Assembler::vex_prefix_and_encode(int dst_enc, int nds_enc, int src_enc, VexS
     // All the vector instructions with < AVX_512bit length can have legacy_mode as false if AVX512vl() is supported
     // Rest all should have legacy_mode set as true
     assert(((!_attributes->uses_vl()) ||
-            (_attributes->get_vector_len() == AVX_512bit) ||
+            (_attributes->vector_len() == AVX_512bit) ||
             (!_legacy_mode_vl) ||
             (_attributes->is_legacy_mode())),"XMM register should be 0-15");
     // Instruction with legacy_mode true should have dst, nds and src < 15
