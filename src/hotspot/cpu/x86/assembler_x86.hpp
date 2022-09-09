@@ -678,7 +678,7 @@ private:
   bool _legacy_mode_vlbw;
   NOT_LP64(bool _is_managed;)
 
-  class InstructionAttr *_attributes;
+  class InstructionAttr* _attributes;
 
   // 64bit prefixes
   void prefix(Register reg);
@@ -718,19 +718,13 @@ private:
   void evex_prefix(bool vex_r, bool vex_b, bool vex_x, bool evex_r, bool evex_v,
                    int nds_enc, VexSimdPrefix pre, VexOpcode opc);
 
-  void vex_prefix(Address adr, int nds_enc, int xreg_enc,
-                  VexSimdPrefix pre, VexOpcode opc,
-                  InstructionAttr *attributes);
+  void vex_prefix(Address adr, int nds_enc, int xreg_enc, VexSimdPrefix pre, VexOpcode opc);
 
-  int  vex_prefix_and_encode(int dst_enc, int nds_enc, int src_enc,
-                             VexSimdPrefix pre, VexOpcode opc,
-                             InstructionAttr *attributes);
+  int  vex_prefix_and_encode(int dst_enc, int nds_enc, int src_enc, VexSimdPrefix pre, VexOpcode opc);
 
-  void simd_prefix(XMMRegister xreg, XMMRegister nds, Address adr, VexSimdPrefix pre,
-                   VexOpcode opc, InstructionAttr *attributes);
+  void simd_prefix(XMMRegister xreg, XMMRegister nds, Address adr, VexSimdPrefix pre, VexOpcode opc);
 
-  int simd_prefix_and_encode(XMMRegister dst, XMMRegister nds, XMMRegister src, VexSimdPrefix pre,
-                             VexOpcode opc, InstructionAttr *attributes);
+  int simd_prefix_and_encode(XMMRegister dst, XMMRegister nds, XMMRegister src, VexSimdPrefix pre, VexOpcode opc);
 
   // Helper functions for groups of instructions
   void emit_arith_b(int op1, int op2, Register dst, int imm8);
@@ -913,9 +907,6 @@ private:
   // belong in macro assembler but there is no need for both varieties to exist
 
   void init_attributes(void);
-
-  void set_attributes(InstructionAttr *attributes) { _attributes = attributes; }
-  void clear_attributes(void) { _attributes = NULL; }
 
   void set_managed(void) { NOT_LP64(_is_managed = true;) }
   void clear_managed(void) { NOT_LP64(_is_managed = false;) }
@@ -2824,12 +2815,13 @@ private:
 class InstructionAttr {
 public:
   InstructionAttr(
+    Assembler& assm,    // Current assembler instance
     int vector_len,     // The length of vector to be applied in encoding - for both AVX and EVEX
     bool rex_vex_w,     // Width of data: if 32-bits or less, false, else if 64-bit or specially defined, true
     bool legacy_mode,   // Details if either this instruction is conditionally encoded to AVX or earlier if true else possibly EVEX
     bool no_reg_mask,   // when true, k0 is used when EVEX encoding is chosen, else embedded_opmask_register_specifier is used
     bool uses_vl)       // This instruction may have legacy constraints based on vector length for EVEX
-    :
+    : _assembler(assm),
       _rex_vex_w(rex_vex_w),
       _legacy_mode(legacy_mode || UseAVX < 3),
       _no_reg_mask(no_reg_mask),
@@ -2843,16 +2835,19 @@ public:
       _input_size_in_bits(Assembler::EVEX_NObit),
       _evex_encoding(0),
       _embedded_opmask_register_specifier(0), // hard code k0
-      _current_assembler(NULL) { }
+  {
+    assert(_assembler._attributes == NULL, "nested attributes");
+    _assembler.set_attributes(&this);
+  }
 
   ~InstructionAttr() {
-    if (_current_assembler != NULL) {
-      _current_assembler->clear_attributes();
-    }
-    _current_assembler = NULL;
+    _assembler.clear_attributes();
+    assert(_assembler._attributes == NULL, "nested attributes");
   }
 
 private:
+  Assembler& _assembler;
+
   bool _rex_vex_w;
   bool _legacy_mode;
   bool _no_reg_mask;
@@ -2866,8 +2861,6 @@ private:
   int  _input_size_in_bits;
   int  _evex_encoding;
   int _embedded_opmask_register_specifier;
-
-  Assembler *_current_assembler;
 
 public:
   // query functions for field accessors
