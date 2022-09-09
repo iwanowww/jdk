@@ -671,14 +671,15 @@ class Assembler : public AbstractAssembler  {
   // in a 32bit vm. This is somewhat unfortunate but keeps the ifdef noise down.
 
 private:
+  friend class InstructionAttr;
+
+  InstructionAttr* _attributes;
 
   bool _legacy_mode_bw;
   bool _legacy_mode_dq;
   bool _legacy_mode_vl;
   bool _legacy_mode_vlbw;
   NOT_LP64(bool _is_managed;)
-
-  class InstructionAttr* _attributes;
 
   // 64bit prefixes
   void prefix(Register reg);
@@ -708,8 +709,7 @@ private:
   int prefixq_and_encode(int reg_enc);
   int prefixq_and_encode(int dst_enc, int src_enc);
 
-  void rex_prefix(Address adr, XMMRegister xreg,
-                  VexSimdPrefix pre, VexOpcode opc, bool rex_w);
+  void rex_prefix(Address adr, XMMRegister xreg, VexSimdPrefix pre, VexOpcode opc);
   int  rex_prefix_and_encode(int dst_enc, int src_enc,
                              VexSimdPrefix pre, VexOpcode opc, bool rex_w);
 
@@ -2815,34 +2815,34 @@ private:
 class InstructionAttr {
 public:
   InstructionAttr(
-    Assembler& assm,    // Current assembler instance
+    Assembler* assm,    // Current assembler instance
     int vector_len,     // The length of vector to be applied in encoding - for both AVX and EVEX
     bool rex_vex_w,     // Width of data: if 32-bits or less, false, else if 64-bit or specially defined, true
     bool legacy_mode,   // Details if either this instruction is conditionally encoded to AVX or earlier if true else possibly EVEX
     bool no_reg_mask,   // when true, k0 is used when EVEX encoding is chosen, else embedded_opmask_register_specifier is used
     bool uses_vl)       // This instruction may have legacy constraints based on vector length for EVEX
-    : _assembler(assm),
-      _rex_vex_w(rex_vex_w),
-      _legacy_mode(legacy_mode || UseAVX < 3),
-      _no_reg_mask(no_reg_mask),
-      _uses_vl(uses_vl),
-      _rex_vex_w_reverted(false),
-      _is_evex_instruction(false),
-      _is_clear_context(true),
-      _is_extended_context(false),
-      _avx_vector_len(vector_len),
-      _tuple_type(Assembler::EVEX_ETUP),
-      _input_size_in_bits(Assembler::EVEX_NObit),
-      _evex_encoding(0),
-      _embedded_opmask_register_specifier(0), // hard code k0
+    : _assembler(*assm)
+    , _rex_vex_w(rex_vex_w)
+    , _legacy_mode(legacy_mode || UseAVX < 3)
+    , _no_reg_mask(no_reg_mask)
+    , _uses_vl(uses_vl)
+    , _rex_vex_w_reverted(false)
+    , _is_evex_instruction(false)
+    , _is_clear_context(true)
+    , _is_extended_context(false)
+    , _avx_vector_len(vector_len)
+    , _tuple_type(Assembler::EVEX_ETUP)
+    , _input_size_in_bits(Assembler::EVEX_NObit)
+    , _evex_encoding(0)
+    , _embedded_opmask_register_specifier(0) // hard code k0
   {
     assert(_assembler._attributes == NULL, "nested attributes");
-    _assembler.set_attributes(&this);
+    _assembler._attributes = this;
   }
 
   ~InstructionAttr() {
-    _assembler.clear_attributes();
-    assert(_assembler._attributes == NULL, "nested attributes");
+    assert(_assembler._attributes != NULL, "missing attribute");
+    _assembler._attributes = NULL;
   }
 
 private:
@@ -2899,9 +2899,6 @@ public:
   // When the Evex.Z field is set (true), it is used to clear all non directed XMM/YMM/ZMM components.
   // This method unsets it so that merge semantics are used instead.
   void reset_is_clear_context(void) { _is_clear_context = false; }
-
-  // Map back to current assembler so that we can manage object level association
-  void set_current_assembler(Assembler *current_assembler) { _current_assembler = current_assembler; }
 
   // Address modifiers used for compressed displacement calculation
   void set_address_attributes(int tuple_type, int input_size_in_bits);
