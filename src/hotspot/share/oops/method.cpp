@@ -1714,17 +1714,10 @@ bool Method::load_signature_classes(const methodHandle& m, TRAPS) {
     if (ss.is_reference()) {
       // load everything, including arrays "[Lfoo;"
       Klass* klass = ss.as_klass(SignatureStream::ReturnNull, THREAD);
-      // We are loading classes eagerly. If a ClassNotFoundException or
-      // a LinkageError was generated, be sure to ignore it.
       if (HAS_PENDING_EXCEPTION) {
-        if (PENDING_EXCEPTION->is_a(vmClasses::ClassNotFoundException_klass()) ||
-            PENDING_EXCEPTION->is_a(vmClasses::LinkageError_klass())) {
-          CLEAR_PENDING_EXCEPTION;
-        } else {
-          return false;
-        }
+        CLEAR_PENDING_NONASYNC_EXCEPTION;
       }
-      if( klass == NULL) { sig_is_loaded = false; }
+      if (klass == NULL) { sig_is_loaded = false; }
     }
   }
   return sig_is_loaded;

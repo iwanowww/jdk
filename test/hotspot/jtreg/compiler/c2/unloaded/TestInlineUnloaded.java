@@ -25,7 +25,7 @@
 /*
  * @test
  * @bug 8294609
- * @requires vm.compiler2.enabled & vm.flagless
+ * @requires vm.compiler2.enabled
  *
  * @library /test/lib
  *
@@ -183,7 +183,7 @@ public class TestInlineUnloaded {
         }
     }
 
-    static void run(String testCaseName, Consumer<OutputAnalyzer> processor) throws IOException {
+    static void run(String testCaseName) throws IOException {
         ProcessBuilder pb = new ProcessBuilder();
 
         pb.command(JDKToolFinder.getJDKTool("java"),
@@ -205,27 +205,17 @@ public class TestInlineUnloaded {
 
         analyzer.shouldContain("TestNull::run"); // ensure that relevant method is compiled
 
-        processor.accept(analyzer); // test-specific checks
+        analyzer.shouldMatch("TestNull::testArg .* inline");
+        analyzer.shouldMatch("TestNull::testRet .* inline");
+        analyzer.shouldMatch("TestNull::test .* inline");
+
+        analyzer.shouldNotMatch("TestNull::testArg .* unloaded signature classes");
+        analyzer.shouldNotMatch("TestNull::testRet .* unloaded signature classes");
+        analyzer.shouldNotMatch("TestNull::test .* unloaded signature classes");
     }
 
     public static void main(String[] args) throws Exception {
-        run("TestUnloaded", output -> {
-            output.shouldMatch("TestNull::testArg .* unloaded signature classes");
-            output.shouldMatch("TestNull::testRet .* unloaded signature classes");
-            output.shouldMatch("TestNull::test .* unloaded signature classes");
-
-            output.shouldNotMatch("TestNull::testArg .* inline");
-            output.shouldNotMatch("TestNull::testRet .* inline");
-            output.shouldNotMatch("TestNull::test .* inline");
-        });
-        run("TestLoadedRemotely", output -> {
-            output.shouldMatch("TestNull::testArg .* inline");
-            output.shouldMatch("TestNull::testRet .* inline");
-            output.shouldMatch("TestNull::test .* inline");
-
-            output.shouldNotMatch("TestNull::testArg .* unloaded signature classes");
-            output.shouldNotMatch("TestNull::testRet .* unloaded signature classes");
-            output.shouldNotMatch("TestNull::test .* unloaded signature classes");
-        });
+        run("TestUnloaded");
+        run("TestLoadedRemotely");
     }
 }

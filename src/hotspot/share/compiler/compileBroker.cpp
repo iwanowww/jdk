@@ -1354,7 +1354,9 @@ nmethod* CompileBroker::compile_method(const methodHandle& method, int osr_bci,
     method->constants()->resolve_string_constants(CHECK_AND_CLEAR_NONASYNC_NULL);
     // Resolve all classes seen in the signature of the method
     // we are compiling.
-    Method::load_signature_classes(method, CHECK_AND_CLEAR_NONASYNC_NULL);
+    if (!UseNewCode2) {
+      Method::load_signature_classes(method, CHECK_AND_CLEAR_NONASYNC_NULL);
+    }
   }
 
   // If the method is native, do the lookup in the thread requesting

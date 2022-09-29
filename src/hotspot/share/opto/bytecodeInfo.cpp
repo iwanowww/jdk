@@ -222,11 +222,6 @@ bool InlineTree::should_not_inline(ciMethod* callee_method, ciMethod* caller_met
     fail_msg = "method changes current thread";
   }
 
-  // one more inlining restriction
-  if (fail_msg == NULL && callee_method->has_unloaded_classes_in_signature()) {
-    fail_msg = "unloaded signature classes";
-  }
-
   if (fail_msg != NULL) {
     set_msg(fail_msg);
     return true;

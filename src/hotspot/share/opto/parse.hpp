@@ -440,6 +440,8 @@ class Parse : public GraphKit {
   // first actions (before BCI 0)
   void do_method_entry();
 
+  void handle_unloaded_arg_types();
+
   // implementation of monitorenter/monitorexit
   void do_monitor_enter();
   void do_monitor_exit();

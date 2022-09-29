@@ -1247,9 +1247,63 @@ void Parse::do_method_entry() {
     _synch_lock = shared_lock(lock_obj);
   }
 
+  handle_unloaded_arg_types();
+
   // Feed profiling data for parameters to the type system so it can
   // propagate it as speculative types
   record_profiled_parameters_for_speculation();
+}
+
+void Parse::handle_unloaded_arg_types() {
+  int max_locals = jvms()->loc_size();
+
+  assert(sp() == 0, "");
+
+  Node* bad_type_path = new RegionNode(1);
+
+  for (int index = 0; index < max_locals; index++) {
+    if (stopped())  break;
+    Node* l = local(index);
+    if (l->is_top())  continue;  // nothing here
+
+    const Type* type = start_block()->local_type_at(index);
+    const TypeOopPtr* toop = type->isa_oopptr();
+    if (type == TypePtr::NULL_PTR || (toop != NULL && !toop->is_loaded())) {
+      // TypeFlow may assert null-ness if a type appears unloaded.
+      // Value must be null, not a real oop.
+      Node* chk = _gvn.transform( new CmpPNode(l, null()) );
+      Node* tst = _gvn.transform( new BoolNode(chk, BoolTest::eq) );
+      IfNode* iff = create_and_map_if(control(), tst, PROB_MAX, COUNT_UNKNOWN);
+      set_control(_gvn.transform( new IfTrueNode(iff) ));
+      Node* bad_type = _gvn.transform( new IfFalseNode(iff) );
+      bad_type_path->add_req(bad_type);
+
+      set_local(index, null());
+    }
+  }
+
+  if (bad_type_path->req() > 1) {
+    if (UseNewCode3) {
+      tty->print("UNLOADED ON ENTRY: "); method()->print(); tty->cr();
+    }
+    bad_type_path = _gvn.transform(bad_type_path);
+    if (UseNewCode) {
+      Node* halt = _gvn.transform(new HaltNode(bad_type_path, frameptr(), "non-null value with an unloaded type"));
+      C->root()->add_req(halt);
+    } else {
+      // Build an uncommon trap here, if any inputs can be unexpected.
+      SafePointNode* bad_type_exit = clone_map();
+      bad_type_exit->set_control(bad_type_path);
+
+      SafePointNode* types_are_good = map();
+      set_map(bad_type_exit);
+
+      uncommon_trap(Deoptimization::Reason_constraint,
+                    Deoptimization::Action_reinterpret);
+
+      set_map(types_are_good);
+    }
+  }
 }
 
 //------------------------------init_blocks------------------------------------

@@ -401,7 +401,16 @@ const ciTypeFlow::StateVector* ciTypeFlow::get_start_state() {
   for (ciSignatureStream str(method()->signature());
        !str.at_return_type();
        str.next()) {
-    state->push_translate(str.type());
+    ciType* arg_type = str.type();
+    if (arg_type->is_loaded()) {
+      state->push_translate(str.type());
+    } else {
+      assert(arg_type->is_klass(), "sanity");
+      if (UseNewCode3) {
+        tty->print("CI: UNLOADED: "); method()->print(); tty->print(" "); arg_type->print(); tty->cr();
+      }
+      state->do_null_assert(arg_type->as_klass());
+    }
   }
   // Set the rest of the locals to bottom.
   Cell cell = state->next_cell(state->tos());
