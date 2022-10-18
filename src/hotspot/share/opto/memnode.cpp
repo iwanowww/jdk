@@ -3258,6 +3258,7 @@ MemBarNode* MemBarNode::make(Compile* C, int opcode, int atp, Node* pn) {
   case Op_OnSpinWait:        return new OnSpinWaitNode(C, atp, pn);
   case Op_Initialize:        return new InitializeNode(C, atp, pn);
   case Op_Blackhole:         return new BlackholeNode(C, atp, pn);
+  case Op_ReachabilityFence: return new ReachabilityFenceNode(C, atp, pn);
   default: ShouldNotReachHere(); return NULL;
   }
 }
@@ -3516,6 +3517,26 @@ void BlackholeNode::format(PhaseRegAlloc* ra, outputStream* st) const {
   }
   st->cr();
 }
+
+void ReachabilityFenceNode::format(PhaseRegAlloc* ra, outputStream* st) const {
+  st->print("reachability fence ");
+  bool first = true;
+  for (uint i = 0; i < req(); i++) {
+    Node* n = in(i);
+    if (n != NULL && OptoReg::is_valid(ra->get_reg_first(n))) {
+      if (first) {
+        first = false;
+      } else {
+        st->print(", ");
+      }
+      char buf[128];
+      ra->dump_register(n, buf);
+      st->print("%s", buf);
+    }
+  }
+  st->cr();
+}
+
 #endif
 
 //===========================InitializeNode====================================
