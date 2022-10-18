@@ -24,11 +24,10 @@
 
 /*
  * @test
- * @bug 8294609
  *
  * @library /test/lib
  *
- * @build compiler.c2.unloaded.TestLoadingConstraints
+ * @build compiler.ci.TestLoadingConstraints
  *
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar launcher.jar
  *                  compiler.ci.TestLoadingConstraints
