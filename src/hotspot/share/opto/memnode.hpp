@@ -1318,6 +1318,8 @@ public:
 
 //------------------------ReachabilityFenceNode--------------------------
 class ReachabilityFenceNode : public MemBarNode {
+  Node* post_dominating_fence(PhaseGVN* phase);
+
 public:
   ReachabilityFenceNode(Compile* C, int alias_idx, Node* precedent)
     : MemBarNode(C, alias_idx, precedent) {}
@@ -1329,6 +1331,7 @@ public:
     // for blackhole inputs.
     return RegMask::All;
   }
+  virtual Node* Ideal(PhaseGVN* phase, bool can_reshape);
 #ifndef PRODUCT
   virtual void format(PhaseRegAlloc* ra, outputStream* st) const;
 #endif

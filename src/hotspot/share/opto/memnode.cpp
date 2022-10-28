@@ -3498,6 +3498,31 @@ MemBarNode* MemBarNode::leading_membar() const {
   return mb;
 }
 
+Node* ReachabilityFenceNode::post_dominating_fence(PhaseGVN* phase) {
+  Node* n = in(TypeFunc::Parms); // TODO: skip casts
+  for (DUIterator_Fast imax, i = n->fast_outs(imax); i < imax; i++) {
+    Node* use = n->fast_out(i); // TODO: skip through casts
+    if (use != this && use->Opcode() == Op_ReachabilityFence) {
+      if (phase->is_dominator(this, use)) {
+        return use; // found a postdominating fence
+      }
+    }
+  }
+  return NULL;
+}
+
+Node* ReachabilityFenceNode::Ideal(PhaseGVN* phase, bool can_reshape) {
+  Node* n = MemBarNode::Ideal(phase, can_reshape);
+  if (n != NULL) {
+    return n;
+  }
+  Node* d = post_dominating_fence(phase);
+  if (d != NULL) {
+    return TupleNode::make(TypeTuple::MEMBAR, in(0), in(1), in(2), in(3), in(4));
+  }
+  return NULL;
+}
+
 #ifndef PRODUCT
 void BlackholeNode::format(PhaseRegAlloc* ra, outputStream* st) const {
   st->print("blackhole ");
