@@ -1982,6 +1982,7 @@ public:
 
   void check_stack_alignment(Register sp, const char* msg, unsigned bias = 0, Register tmp = noreg);
 
+  void repne_scan();
 };
 
 /**

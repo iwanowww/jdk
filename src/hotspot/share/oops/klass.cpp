@@ -122,7 +122,9 @@ bool Klass::search_secondary_supers(Klass* k) const {
   int cnt = secondary_supers()->length();
   for (int i = 0; i < cnt; i++) {
     if (secondary_supers()->at(i) == k) {
-      ((Klass*)this)->set_secondary_super_cache(k);
+      if (!UseNewCode) {
+        ((Klass *) this)->set_secondary_super_cache(k);
+      }
       return true;
     }
   }
@@ -350,6 +352,9 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
   #endif
 
     set_secondary_supers(s2);
+//    if (UseNewCode) {
+//      set_secondary_super_cache(s2->at(0));
+//    }
   }
 }
 

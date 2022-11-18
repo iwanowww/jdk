@@ -4439,8 +4439,8 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   // not change flags (only scas instruction which is repeated sets flags).
   // Set Z = 0 (not equal) before 'repne' to indicate that class was not found.
 
-    testptr(rax,rax); // Set Z = 0
-    repne_scan();
+  testptr(rax,rax); // Set Z = 0
+  repne_scan();
 
   // Unspill the temp. registers:
   if (pushed_rdi)  pop(rdi);
@@ -4453,12 +4453,16 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     // Also, the condition codes are properly set Z/NZ on succeed/failure.
   }
 
-  if (L_failure == &L_fallthrough)
-        jccb(Assembler::notEqual, *L_failure);
-  else  jcc(Assembler::notEqual, *L_failure);
+  if (L_failure == &L_fallthrough) {
+    jccb(Assembler::notEqual, *L_failure);
+  } else {
+    jcc(Assembler::notEqual, *L_failure);
+  }
 
-  // Success.  Cache the super we found and proceed in triumph.
-  movptr(super_cache_addr, super_klass);
+  if (!UseNewCode) {
+    // Success.  Cache the super we found and proceed in triumph.
+    movptr(super_cache_addr, super_klass);
+  }
 
   if (L_success != &L_fallthrough) {
     jmp(*L_success);
@@ -9601,4 +9605,30 @@ void MacroAssembler::check_stack_alignment(Register sp, const char* msg, unsigne
   block_comment(msg);
   stop(msg);
   bind(L_stack_ok);
+}
+
+void MacroAssembler::repne_scan() {
+  if (UseNewCode2) {
+    Label L_loop_entry, L_loop_exit, L_loop_end;
+    Register super_klass = rax;
+
+    bind(L_loop_entry);
+
+    testl(rcx, rcx); // == 0?
+    jccb(Assembler::zero, L_loop_end); // Z
+
+    cmpptr(super_klass, Address(rdi, 0));
+    jccb(Assembler::equal, L_loop_exit); // NZ
+
+    increment(rdi, BytesPerWord);
+    decrementl(rcx);
+    jmpb(L_loop_entry);
+
+    bind(L_loop_end);
+    testptr(super_klass, super_klass); // set NZ on failure
+
+    bind(L_loop_exit);
+  } else {
+    Assembler::repne_scan();
+  }
 }
