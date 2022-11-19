@@ -331,6 +331,10 @@ void print_statistics() {
   }
 
   ThreadsSMRSupport::log_statistics();
+
+  if (UseNewCode3) {
+    Klass::print_statistics();
+  }
 }
 
 #else // PRODUCT MODE STATISTICS
@@ -379,6 +383,10 @@ void print_statistics() {
   }
 
   ThreadsSMRSupport::log_statistics();
+
+  if (UseNewCode3) {
+    Klass::print_statistics();
+  }
 }
 
 #endif

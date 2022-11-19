@@ -4389,7 +4389,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     assert_different_registers(sub_klass, super_klass, temp_reg, temp2_reg);
 #define IS_A_TEMP(reg) ((reg) == temp_reg || (reg) == temp2_reg)
 
-  Label L_fallthrough;
+  Label L_fallthrough, L_failure_tmp;
   int label_nulls = 0;
   if (L_success == NULL)   { L_success   = &L_fallthrough; label_nulls++; }
   if (L_failure == NULL)   { L_failure   = &L_fallthrough; label_nulls++; }
@@ -4419,11 +4419,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   if (!IS_A_TEMP(rdi)) { push(rdi); pushed_rdi = true; }
 
 #ifndef PRODUCT
-  int* pst_counter = &SharedRuntime::_partial_subtype_ctr;
-  ExternalAddress pst_counter_addr((address) pst_counter);
-  NOT_LP64(  incrementl(pst_counter_addr) );
-  LP64_ONLY( lea(rcx, pst_counter_addr) );
-  LP64_ONLY( incrementl(Address(rcx, 0)) );
+  incrementl(ExternalAddress(SharedRuntime::partial_subtype_ctr_addr()), rcx /*rscratch*/) );
 #endif //PRODUCT
 
   // We will consult the secondary-super array.
@@ -4442,30 +4438,70 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   testptr(rax,rax); // Set Z = 0
   repne_scan();
 
-  // Unspill the temp. registers:
-  if (pushed_rdi)  pop(rdi);
-  if (pushed_rcx)  pop(rcx);
-  if (pushed_rax)  pop(rax);
-
   if (set_cond_codes) {
     // Special hack for the AD files:  rdi is guaranteed non-zero.
     assert(!pushed_rdi, "rdi must be left non-NULL");
     // Also, the condition codes are properly set Z/NZ on succeed/failure.
   }
 
-  if (L_failure == &L_fallthrough) {
-    jccb(Assembler::notEqual, *L_failure);
-  } else {
-    jcc(Assembler::notEqual, *L_failure);
-  }
+  jccb(Assembler::notEqual, *L_failure_tmp);
 
   if (!UseNewCode) {
     // Success.  Cache the super we found and proceed in triumph.
     movptr(super_cache_addr, super_klass);
   }
 
-  if (L_success != &L_fallthrough) {
-    jmp(*L_success);
+#ifndef PRODUCT
+  if (PrintC1Statistics || PrintOptoStatistics) {
+    {
+      address pst_slots_counter = (address) &SharedRuntime::_partial_subtype_success_slots_ctr;
+
+      movptr(rdi, secondary_supers_addr);
+      movl(rdi, Address(rdi, Array<Klass*>::length_offset_in_bytes()));
+      addl(ExternalAddress(pst_slots_counter), rdi, rcx /*rscratch*/);
+    }
+    {
+      address pst_counter = (address) &SharedRuntime::_partial_subtype_success_ctr;
+      incrementl(ExternalAddress(pst_counter), rcx /*rscratch*/);
+    }
+  }
+#endif //PRODUCT
+
+  // Unspill the temp. registers:
+  if (pushed_rdi)  pop(rdi);
+  if (pushed_rcx)  pop(rcx);
+  if (pushed_rax)  pop(rax);
+
+  jmp(*L_success);
+
+  bind(L_failure_tmp);
+
+#ifndef PRODUCT
+  if (PrintC1Statistics || PrintOptoStatistics) {
+    {
+      movptr(rdi, secondary_supers_addr);
+      movl(rdi, Address(rdi, Array<Klass*>::length_offset_in_bytes()));
+      subl(rdi, rcx);
+
+      int* pst_counter = &SharedRuntime::_partial_subtype_failure_slots_ctr;
+      ExternalAddress pst_counter_addr((address) pst_counter);
+      addl(pst_counter_addr, rdi, rcx /*rscratch*/);
+    }
+    {
+      int* pst_counter = &SharedRuntime::_partial_subtype_failure_ctr;
+      ExternalAddress pst_counter_addr((address) pst_counter);
+      incrementl(pst_counter_addr, 1, rcx /*rscratch*/);
+    }
+  }
+#endif //PRODUCT
+
+  // Unspill the temp. registers:
+  if (pushed_rdi)  pop(rdi);
+  if (pushed_rcx)  pop(rcx);
+  if (pushed_rax)  pop(rax);
+
+  if (L_failure != &L_fallthrough) {
+    jmp(Assembler::notEqual, *L_failure);
   }
 
 #undef IS_A_TEMP

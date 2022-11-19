@@ -55,6 +55,37 @@
 #include "utilities/powerOfTwo.hpp"
 #include "utilities/stack.inline.hpp"
 
+//                                          0  1  2  3  4  5  6  7  8  9  10 20 30 40 50 60 70 80 90 100+
+uint32_t Klass::_primaries_hist[]        = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+uint32_t Klass::_secondaries_hist[]      = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+uint32_t Klass::_secondary_supers_hist[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+static void print_header() {
+  tty->print("%24s", " ");
+  for (int i = 0; i < 10; i++) {
+    tty->print(" %5d", i);
+  }
+  for (int i = 10; i < 100; i+=10) {
+    tty->print(" %5d+", i);
+  }
+  tty->print_cr(" %5d+", 100);
+}
+
+static void print_hist(const char* name, uint32_t hist[]) {
+  tty->print("%20s: [ ", name);
+  for (int i = 0; i < 19; i++) {
+    tty->print(" %5d", hist[i]);
+  }
+  tty->print_cr("]");
+}
+
+static void update_hist(uint32_t hist[], int val) {
+  int idx = (val > 100 ? 19 :
+            (val >  10 ? 9 + (val / 10) :
+             val >   0 ? val : 0));
+  hist[idx]++;
+}
+
 void Klass::set_java_mirror(Handle m) {
   assert(!m.is_null(), "New mirror should never be null.");
   assert(_java_mirror.is_empty(), "should only be used to initialize mirror");
@@ -350,6 +381,11 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
       assert(s2->at(j) != NULL, "correct bootstrapping order");
     }
   #endif
+    if (UseNewCode3) {
+      update_hist(_primaries_hist, primaries->length());
+      update_hist(_secondaries_hist, secondaries->length());
+      update_hist(_secondary_supers_hist, s2->length());
+    }
 
     set_secondary_supers(s2);
 //    if (UseNewCode) {
@@ -963,4 +999,12 @@ const char* Klass::class_in_module_of_loader(bool use_are, bool include_parent_l
                parent_loader_name_and_id);
 
   return class_description;
+}
+
+void Klass::print_statistics() {
+  ttyLocker ttyl;
+  print_header();
+  print_hist("Primaries",        _primaries_hist);
+  print_hist("Secondaries",      _secondaries_hist);
+  print_hist("Secondary_supers", _secondary_supers_hist);
 }

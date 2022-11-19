@@ -164,6 +164,11 @@ int SharedRuntime::_mon_exit_stub_ctr=0;
 int SharedRuntime::_mon_enter_ctr=0;
 int SharedRuntime::_mon_exit_ctr=0;
 int SharedRuntime::_partial_subtype_ctr=0;
+int SharedRuntime::_partial_subtype_success_ctr=0;
+int SharedRuntime::_partial_subtype_success_slots_ctr=0;
+int SharedRuntime::_partial_subtype_failure_ctr=0;
+int SharedRuntime::_partial_subtype_failure_fast_ctr=0;
+int SharedRuntime::_partial_subtype_failure_slots_ctr=0;
 int SharedRuntime::_jbyte_array_copy_ctr=0;
 int SharedRuntime::_jshort_array_copy_ctr=0;
 int SharedRuntime::_jint_array_copy_ctr=0;
@@ -2345,7 +2350,21 @@ void SharedRuntime::print_statistics() {
   if (_mon_exit_stub_ctr) tty->print_cr("%5d monitor exit stub", _mon_exit_stub_ctr);
   if (_mon_enter_ctr) tty->print_cr("%5d monitor enter slow", _mon_enter_ctr);
   if (_mon_exit_ctr) tty->print_cr("%5d monitor exit slow", _mon_exit_ctr);
-  if (_partial_subtype_ctr) tty->print_cr("%5d slow partial subtype", _partial_subtype_ctr);
+  if (_partial_subtype_ctr) {
+    tty->print_cr("%5d slow partial subtype", _partial_subtype_ctr);
+    if (_partial_subtype_success_ctr) {
+      tty->print_cr("%5d slow partial subtype successes (%.1f%%), slots checked: %d (average: %d slots per check)",
+                    _partial_subtype_success_ctr, 100.0f * _partial_subtype_success_ctr / _partial_subtype_ctr,
+                    _partial_subtype_success_slots_ctr, _partial_subtype_success_slots_ctr / _partial_subtype_success_ctr);
+    }
+    if (_partial_subtype_failure_ctr) {
+      tty->print_cr("%5d slow partial subtype failures (%.1f%%), slots checked: %d (average: %d slots per check)",
+                    _partial_subtype_failure_ctr, 100.0f * _partial_subtype_failure_ctr / _partial_subtype_ctr,
+                    _partial_subtype_failure_slots_ctr, _partial_subtype_failure_slots_ctr / _partial_subtype_failure_ctr);
+    }
+    tty->print_cr("%5d fast partial subtype failures (%.1f%%)",
+                  _partial_subtype_failure_fast_ctr, 100.0f * _partial_subtype_failure_fast_ctr / _partial_subtype_ctr);
+  }
   if (_jbyte_array_copy_ctr) tty->print_cr("%5d byte array copies", _jbyte_array_copy_ctr);
   if (_jshort_array_copy_ctr) tty->print_cr("%5d short array copies", _jshort_array_copy_ctr);
   if (_jint_array_copy_ctr) tty->print_cr("%5d int array copies", _jint_array_copy_ctr);

@@ -45,6 +45,7 @@
 #include "opto/rootnode.hpp"
 #include "opto/runtime.hpp"
 #include "opto/subtypenode.hpp"
+#include "opto/vectornode.hpp"
 #include "runtime/deoptimization.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "utilities/bitMap.inline.hpp"
@@ -2758,9 +2759,9 @@ Node* Phase::gen_subtype_check(Node* subklass, Node* superklass, Node** ctrl, No
   }
 
   // Gather the various success & failures here
-  RegionNode *r_ok_subtype = new RegionNode(4);
+  RegionNode *r_ok_subtype = new RegionNode(5);
   gvn.record_for_igvn(r_ok_subtype);
-  RegionNode *r_not_subtype = new RegionNode(3);
+  RegionNode *r_not_subtype = new RegionNode(4);
   gvn.record_for_igvn(r_not_subtype);
 
   r_ok_subtype->init_req(1, iftrue1);
@@ -2781,6 +2782,42 @@ Node* Phase::gen_subtype_check(Node* subklass, Node* superklass, Node** ctrl, No
   IfNode *iff3 = gen_subtype_check_compare(*ctrl, subklass, superklass, BoolTest::eq, PROB_LIKELY(0.36f), gvn, T_ADDRESS);
   r_ok_subtype->init_req(2, gvn.transform(new IfTrueNode(iff3)));
   *ctrl = gvn.transform(new IfFalseNode(iff3));
+
+//#ifdef _LP64
+//  // Partial check
+//  if (Matcher::match_rule_supported_vector(Op_VectorMaskGen,    8, T_ADDRESS) &&
+//      Matcher::match_rule_supported_vector(Op_LoadVectorMasked, 8, T_ADDRESS) &&
+//      Matcher::match_rule_supported_vector(Op_VectorCmpMasked,  8, T_ADDRESS)) {
+//
+//
+//    const TypeVect* vt = TypeVect::make(T_ADDRESS, 8);
+//    Node* cmp_length = gvn.transform(new CmpINode(length, intcon(inline_limit)));
+//    Node* bol_gt     = gvn.transform(new BoolNode(cmp_length, BoolTest::gt));
+//
+//    call_stub_path = generate_guard(bol_gt, NULL, PROB_MIN);
+//
+//    Node* casted_length = gvn.transform(new CastIINode(control(), length, TypeInt::make(0, inline_limit, Type::WidenMin)));
+//
+//    const TypePtr* obja_adr_t = gvn.type(obja_adr)->isa_ptr();
+//    const TypePtr* objb_adr_t = gvn.type(objb_adr)->isa_ptr();
+//    Node* obja_adr_mem = memory(C->get_alias_index(obja_adr_t));
+//    Node* objb_adr_mem = memory(C->get_alias_index(objb_adr_t));
+//
+//    Node* vmask      = gvn.transform(VectorMaskGenNode::make(ConvI2X(casted_length), elem_bt));
+//    Node* vload_obja = gvn.transform(new LoadVectorMaskedNode(control(), obja_adr_mem, obja_adr, obja_adr_t, vt, vmask));
+//    Node* vload_objb = gvn.transform(new LoadVectorMaskedNode(control(), objb_adr_mem, objb_adr, objb_adr_t, vt, vmask));
+//    Node* result     = gvn.transform(new VectorCmpMaskedNode(vload_obja, vload_objb, vmask, TypeInt::INT));
+//
+//    exit_block->init_req(inline_path, control());
+//    memory_phi->init_req(inline_path, map()->memory());
+//    result_phi->init_req(inline_path, result);
+//
+//    //C->set_max_vector_size();
+//    clear_upper_avx();
+//  } else {
+//
+//  }
+//#endif // _LP64
 
   // -- Roads not taken here: --
   // We could also have chosen to perform the self-check at the beginning
@@ -2807,8 +2844,8 @@ Node* Phase::gen_subtype_check(Node* subklass, Node* superklass, Node** ctrl, No
     new PartialSubtypeCheckNode(*ctrl, subklass, superklass));
 
   IfNode *iff4 = gen_subtype_check_compare(*ctrl, psc, gvn.zerocon(T_OBJECT), BoolTest::ne, PROB_FAIR, gvn, T_ADDRESS);
-  r_not_subtype->init_req(2, gvn.transform(new IfTrueNode (iff4)));
-  r_ok_subtype ->init_req(3, gvn.transform(new IfFalseNode(iff4)));
+  r_not_subtype->init_req(3, gvn.transform(new IfTrueNode (iff4)));
+  r_ok_subtype ->init_req(4, gvn.transform(new IfFalseNode(iff4)));
 
   // Return false path; set default control to true path.
   *ctrl = gvn.transform(r_ok_subtype);

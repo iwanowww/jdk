@@ -717,6 +717,12 @@ protected:
 
   // for error reporting
   static bool is_valid(Klass* k);
+
+  static uint32_t _primaries_hist[];
+  static uint32_t _secondaries_hist[];
+  static uint32_t _secondary_supers_hist[];
+
+  static void print_statistics();
 };
 
 #endif // SHARE_OOPS_KLASS_HPP

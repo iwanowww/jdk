@@ -552,6 +552,11 @@ class SharedRuntime: AllStatic {
   static int _mon_enter_ctr;               // monitor enter slow
   static int _mon_exit_ctr;                // monitor exit slow
   static int _partial_subtype_ctr;         // SubRoutines::partial_subtype_check
+  static int _partial_subtype_success_ctr; // SubRoutines::partial_subtype_check
+  static int _partial_subtype_failure_ctr; // SubRoutines::partial_subtype_check
+  static int _partial_subtype_failure_fast_ctr; // SubRoutines::partial_subtype_check
+  static int _partial_subtype_success_slots_ctr; // SubRoutines::partial_subtype_check
+  static int _partial_subtype_failure_slots_ctr; // SubRoutines::partial_subtype_check
 
   // Statistics code
   // stats for "normal" compiled calls (non-interface)
