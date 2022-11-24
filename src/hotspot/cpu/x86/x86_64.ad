@@ -13118,6 +13118,7 @@ instruct partialSubtypeCheck(rdi_RegP result,
                              rsi_RegP sub, rax_RegP super, rcx_RegI rcx,
                              rFlagsReg cr)
 %{
+  predicate(!UseNewCode2 || (AVX3Threshold != 0) || !VM_Version::supports_avx512vldq());
   match(Set result (PartialSubtypeCheck sub super));
   effect(KILL rcx, KILL cr);
 
@@ -13141,6 +13142,7 @@ instruct partialSubtypeCheck_vs_Zero(rFlagsReg cr,
                                      immP0 zero,
                                      rdi_RegP result)
 %{
+  predicate(!UseNewCode2 || (AVX3Threshold != 0) || !VM_Version::supports_avx512vldq());
   match(Set cr (CmpP (PartialSubtypeCheck sub super) zero));
   effect(KILL rcx, KILL result);
 
@@ -13155,6 +13157,31 @@ instruct partialSubtypeCheck_vs_Zero(rFlagsReg cr,
 
   opcode(0x0); // No need to XOR RDI
   ins_encode(enc_PartialSubtypeCheck());
+  ins_pipe(pipe_slow);
+%}
+
+instruct partialSubtypeCheck(rRegP result, rRegP sub, rRegP super, rRegP tmp1, rRegP tmp2,
+                             kReg ktmp1, kReg ktmp2,
+                             rFlagsReg cr)
+%{
+  predicate(UseNewCode2 && AVX3Threshold == 0) && VM_Version::supports_avx512vldq());
+  match(Set result (PartialSubtypeCheck sub super));
+  effect(KILL sub, KILL super, KILL cr, TMP tmp1, TMP2, TMP ktmp1, ktmp2);
+
+  ins_cost(1100);  // slightly larger than the next version
+  format %{ "subtype_check" %}
+
+  ins_encode %{
+    Label L_failure;
+    __ check_klass_subtype_slow_path_avx512($sub$$Register, $super$$Register,
+                                            $tmp1$$Register, $result$$Register,
+                                            $ktmp1$$KRegister, $ktmp2$$KRegister,
+                                            NULL, &L_failure);
+
+    __ xorptr($result$$Register, $result$$Register);
+
+    __ bind(L_failure);
+  %}
   ins_pipe(pipe_slow);
 %}
 

@@ -619,6 +619,16 @@ public:
                                      Label* L_failure,
                                      bool set_cond_codes = false);
 
+#ifdef _LP64
+  void check_klass_subtype_slow_path_avx512(Register sub_klass,
+                                            Register super_klass,
+                                            Register temp_reg,
+                                            Register temp2_reg,
+                                            KRegister kreg1,
+                                            KRegister kreg2,
+                                            Label* L_success,
+                                            Label* L_failure);
+#endif // _LP64
   // Simplified, combined version, good for typical uses.
   // Falls through on failure.
   void check_klass_subtype(Register sub_klass,

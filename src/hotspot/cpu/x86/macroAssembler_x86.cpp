@@ -4376,6 +4376,74 @@ void MacroAssembler::check_klass_subtype_fast_path(Register sub_klass,
 #undef final_jmp
 }
 
+#ifdef _LP64
+void MacroAssembler::check_klass_subtype_slow_path_avx512(Register sub_klass,
+                                                          Register super_klass,
+                                                          Register temp_reg,
+                                                          Register temp2_reg,
+                                                          KRegister kreg1,
+                                                          KRegister kreg2,
+                                                          Label* L_success,
+                                                          Label* L_failure) {
+  assert(UseNewCode2 && AVX3Threshold == 0, "");
+  assert(VM_Version::supports_avx512vldq(), "required");
+  assert_different_registers(sub_klass, super_klass, temp_reg, temp2_reg);
+  assert(L_success != NULL || L_failure == NULL, "at most one NULL in the batch");
+
+  Label L_fallthrough;
+  if (L_success == NULL) { L_success = &L_fallthrough; }
+  if (L_failure == NULL) { L_failure = &L_fallthrough; }
+
+  evpbroadcastq(xmm0, super_klass, Assembler::AVX_512bit);
+
+  const Register length  = temp2_reg;
+  const Register cur_pos = temp_reg;
+
+  movptr(cur_pos, Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
+  movl  (length,  Address(cur_pos, Array<Klass*>::length_offset_in_bytes()));
+  addptr(cur_pos, Array<Klass*>::base_offset_in_bytes());
+
+  Label VECTOR64_LOOP, VECTOR64_TAIL;
+
+  const Register tmp1 = sub_klass;    sub_klass   = noreg;
+  const Register tmp2 = super_klass;  super_klass = noreg;
+
+  cmpq(length, 8);
+  jcc(Assembler::less, VECTOR64_TAIL);
+
+  movq(tmp1, length);
+  andq(tmp1, 0x7);      // tail count
+  andq(length, ~(0x7)); // vector count
+
+  bind(VECTOR64_LOOP);
+  evpcmpq(kreg1, k0, xmm0, Address(cur_pos, 0), Assembler::neq, false, Assembler::AVX_512bit);
+  kortestql(kreg1, kreg1);
+  jcc(Assembler::aboveEqual, *L_success); // match!
+  subq(length, 8);
+  addq(cur_pos, 8*8);
+  jccb(Assembler::notZero, VECTOR64_LOOP);
+
+  bind(VECTOR64_TAIL);
+  testq(tmp1, tmp1);
+  jcc(Assembler::zero, *L_failure); // not found
+
+  // AVX512 code to compare up to 7 word vectors.
+  mov64(tmp2, 0xFF);
+  shlxl(tmp2, tmp2, tmp1);
+  notl(tmp2);
+  kmovbl(kreg2, tmp2);
+
+  evpcmpq(kreg1, kreg2, xmm0, Address(current, 0), Assembler::neq, false, Assembler::AVX_512bit);
+  ktestbl(kreg1, kreg2);
+
+  jcc(Assembler::below, *L_failure); // not found
+
+  if (L_success != &L_fallthrough) {
+    jmp(*L_success);
+  }
+  bind(L_fallthrough);
+}
+#endif // _LP64
 
 void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
                                                    Register super_klass,
@@ -4435,7 +4503,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   // not change flags (only scas instruction which is repeated sets flags).
   // Set Z = 0 (not equal) before 'repne' to indicate that class was not found.
 
-  testptr(rax,rax); // Set Z = 0
+  testptr(rax, rax); // Set Z = 0
   repne_scan();
 
   if (set_cond_codes) {
