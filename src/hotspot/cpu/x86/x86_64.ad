@@ -13118,7 +13118,7 @@ instruct partialSubtypeCheck(rdi_RegP result,
                              rsi_RegP sub, rax_RegP super, rcx_RegI rcx,
                              rFlagsReg cr)
 %{
-  predicate(!UseNewCode2 || VM_Version::avx3_threshold() != 0 || !VM_Version::supports_avx512vldq());
+  predicate(!UseNewCode2 || VM_Version::avx3_threshold() != 0 || !VM_Version::supports_avx2());
   match(Set result (PartialSubtypeCheck sub super));
   effect(KILL rcx, KILL cr);
 
@@ -13142,7 +13142,7 @@ instruct partialSubtypeCheck_vs_Zero(rFlagsReg cr,
                                      immP0 zero,
                                      rdi_RegP result)
 %{
-  predicate(!UseNewCode2 || VM_Version::avx3_threshold() != 0 || !VM_Version::supports_avx512vldq());
+  predicate(!UseNewCode2 || VM_Version::avx3_threshold() != 0 || !VM_Version::supports_avx2());
   match(Set cr (CmpP (PartialSubtypeCheck sub super) zero));
   effect(KILL rcx, KILL result);
 
@@ -13166,10 +13166,13 @@ instruct partialSubtypeCheckAVX512(rRegP result, rRegP sub, rRegP super, rRegP t
 %{
   predicate(UseNewCode2 && VM_Version::avx3_threshold() == 0 && VM_Version::supports_avx512vldq());
   match(Set result (PartialSubtypeCheck sub super));
-  effect(TEMP_DEF result, TEMP tmp1, TEMP tmp2, TEMP xtmp, TEMP ktmp1, TEMP ktmp2, KILL cr);
+  effect(TEMP_DEF result,
+         TEMP tmp1, TEMP tmp2, TEMP xtmp, TEMP ktmp1, TEMP ktmp2,
+         USE_KILL sub, USE_KILL super,
+         KILL cr);
 
   ins_cost(1100);  // slightly larger than the next version
-  format %{ "subtype_check" %}
+  format %{ "subtype_check_avx512" %}
 
   ins_encode %{
     Label L_failure;
@@ -13183,6 +13186,33 @@ instruct partialSubtypeCheckAVX512(rRegP result, rRegP sub, rRegP super, rRegP t
     __ bind(L_failure);
   %}
   ins_pipe(pipe_slow);
+%}
+
+instruct partialSubtypeCheckAVX2(rRegP result, rRegP sub, rRegP super,
+                                 rRegP tmp1, rRegP tmp2, regF xtmp1, regF xtmp2, rFlagsReg cr)
+%{
+  predicate(UseNewCode2 && VM_Version::supports_avx2());
+  match(Set result (PartialSubtypeCheck sub super));
+  effect(TEMP_DEF result,
+         TEMP tmp1, TEMP tmp2, TEMP xtmp1, TEMP xtmp2,
+         USE_KILL sub, USE_KILL super,
+         KILL cr);
+
+  ins_cost(1100);  // slightly larger than the next version
+  format %{ "subtype_check_avx2" %}
+
+  ins_encode %{
+    Label L_failure;
+    __ check_klass_subtype_slow_path_avx2($sub$$Register, $super$$Register,
+                                          $tmp1$$Register, $result$$Register,
+                                          $xtmp1$$XMMRegister, $xtmp2$$XMMRegister,
+                                          NULL, &L_failure);
+
+    __ xorptr($result$$Register, $result$$Register);
+
+    __ bind(L_failure);
+%}
+ins_pipe(pipe_slow);
 %}
 
 // ============================================================================

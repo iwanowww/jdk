@@ -4445,6 +4445,71 @@ void MacroAssembler::check_klass_subtype_slow_path_avx512(Register    sub_klass,
   }
   bind(L_fallthrough);
 }
+
+void MacroAssembler::check_klass_subtype_slow_path_avx2(Register    sub_klass,
+                                                        Register    super_klass,
+                                                        Register    temp_reg,
+                                                        Register    temp2_reg,
+                                                        XMMRegister xtmp1,
+                                                        XMMRegister xtmp2,
+                                                        Label*      L_success,
+                                                        Label*      L_failure) {
+  assert(UseNewCode2, "");
+  assert(VM_Version::supports_avx2(), "required");
+  assert_different_registers(sub_klass, super_klass, temp_reg, temp2_reg);
+  assert(L_success != NULL || L_failure != NULL, "at most one NULL in the batch");
+
+  Label L_fallthrough;
+  if (L_success == NULL) { L_success = &L_fallthrough; }
+  if (L_failure == NULL) { L_failure = &L_fallthrough; }
+
+  const Register length  = temp_reg;
+  const Register cur_pos = temp2_reg;
+
+  movptr(cur_pos, Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
+  movl  (length,  Address(cur_pos, Array<Klass*>::length_offset_in_bytes()));
+  addptr(cur_pos, Array<Klass*>::base_offset_in_bytes());
+
+  Label VECTOR32_LOOP, VECTOR32_TAIL, SCALAR_LOOP;
+
+  const Register tmp1 = sub_klass; sub_klass = noreg;
+
+  cmpl(length, 4);
+  jcc(Assembler::less, VECTOR32_TAIL);
+
+  movl(tmp1, length);
+  andl(tmp1, 0x3);      // tail count
+  andl(length, ~(0x3)); // vector count
+
+  movdq(xtmp1, super_klass);
+  vpbroadcastq(xtmp1, xtmp1, Assembler::AVX_256bit);
+
+  bind(VECTOR32_LOOP);
+
+  vpcmpCCW(xtmp2, xtmp1, Address(cur_pos, 0), xnoreg, Assembler::eq, Assembler::Q, Assembler::AVX_256bit);
+  vptest(xtmp2, xtmp2, Assembler::AVX_256bit);
+  jcc(Assembler::notZero, *L_success); // match!
+  addl(cur_pos, 4 * BytesPerWord);
+  subl(length, 4);
+  jccb(Assembler::notZero, VECTOR32_LOOP);
+
+  bind(VECTOR32_TAIL);
+  testq(tmp1, tmp1);
+  jcc(Assembler::zero, *L_failure); // not found
+
+  bind(SCALAR_LOOP);
+  cmpptr(super_klass, Address(cur_pos, 0));
+  jccb(Assembler::equal, *L_success); // NZ
+
+  addl(cur_pos, 1 * BytesPerWord);
+  subl(tmp1, 1);
+  jccb(Assembler::notZero, SCALAR_LOOP);
+
+  if (L_failure != &L_fallthrough) {
+    jmp(*L_failure);
+  }
+  bind(L_fallthrough);
+}
 #endif // _LP64
 
 void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
