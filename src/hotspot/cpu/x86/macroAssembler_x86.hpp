@@ -620,15 +620,17 @@ public:
                                      bool set_cond_codes = false);
 
 #ifdef _LP64
-  void check_klass_subtype_slow_path_avx512(Register sub_klass,
-                                            Register super_klass,
-                                            Register temp_reg,
-                                            Register temp2_reg,
-                                            KRegister kreg1,
-                                            KRegister kreg2,
-                                            Label* L_success,
-                                            Label* L_failure);
+  void check_klass_subtype_slow_path_avx512(Register    sub_klass,
+                                            Register    super_klass,
+                                            Register    temp_reg,
+                                            Register    temp2_reg,
+					    XMMRegister xtmp,
+                                            KRegister   kreg1,
+                                            KRegister   kreg2,
+                                            Label*      L_success,
+                                            Label*      L_failure);
 #endif // _LP64
+
   // Simplified, combined version, good for typical uses.
   // Falls through on failure.
   void check_klass_subtype(Register sub_klass,
@@ -1331,6 +1333,9 @@ public:
   void evpcmpd(KRegister kdst, KRegister mask, XMMRegister nds, AddressLiteral src, int comparison, bool is_signed, int vector_len, Register rscratch = noreg);
 
   void evpcmpq(KRegister kdst, KRegister mask, XMMRegister nds, XMMRegister    src, int comparison, bool is_signed, int vector_len) {
+    Assembler::evpcmpq(kdst, mask, nds, src, comparison, is_signed, vector_len);
+  }
+  void evpcmpq(KRegister kdst, KRegister mask, XMMRegister nds, Address        src, int comparison, bool is_signed, int vector_len) {
     Assembler::evpcmpq(kdst, mask, nds, src, comparison, is_signed, vector_len);
   }
   void evpcmpq(KRegister kdst, KRegister mask, XMMRegister nds, AddressLiteral src, int comparison, bool is_signed, int vector_len, Register rscratch = noreg);

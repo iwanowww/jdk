@@ -381,17 +381,21 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
       assert(s2->at(j) != NULL, "correct bootstrapping order");
     }
   #endif
-    if (UseNewCode3) {
-      update_hist(_primaries_hist, primaries->length());
-      update_hist(_secondaries_hist, secondaries->length());
-      update_hist(_secondary_supers_hist, s2->length());
-    }
-
     set_secondary_supers(s2);
 //    if (UseNewCode) {
 //      set_secondary_super_cache(s2->at(0));
 //    }
   }
+}
+
+void Klass::set_secondary_supers(Array<Klass*>* k) {
+  if (UseNewCode3) {
+//    update_hist(_primaries_hist, primaries->length());
+//    update_hist(_secondaries_hist, secondaries->length());
+//    update_hist(_secondary_supers_hist, s2->length());
+    update_hist(_secondary_supers_hist, k->length());
+  }
+  _secondary_supers = k;
 }
 
 GrowableArray<Klass*>* Klass::compute_secondary_supers(int num_extra_slots,

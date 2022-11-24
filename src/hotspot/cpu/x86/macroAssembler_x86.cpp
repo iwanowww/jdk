@@ -4377,27 +4377,29 @@ void MacroAssembler::check_klass_subtype_fast_path(Register sub_klass,
 }
 
 #ifdef _LP64
-void MacroAssembler::check_klass_subtype_slow_path_avx512(Register sub_klass,
-                                                          Register super_klass,
-                                                          Register temp_reg,
-                                                          Register temp2_reg,
-                                                          KRegister kreg1,
-                                                          KRegister kreg2,
-                                                          Label* L_success,
-                                                          Label* L_failure) {
-  assert(UseNewCode2 && AVX3Threshold == 0, "");
+void MacroAssembler::check_klass_subtype_slow_path_avx512(Register    sub_klass,
+                                                          Register    super_klass,
+                                                          Register    temp_reg,
+                                                          Register    temp2_reg,
+                                                          XMMRegister xtmp,
+                                                          KRegister   kreg1,
+                                                          KRegister   kreg2,
+                                                          Label*      L_success,
+                                                          Label*      L_failure) {
+  assert(UseNewCode2, "");
+  assert(VM_Version::avx3_threshold() == 0, "required");
   assert(VM_Version::supports_avx512vldq(), "required");
   assert_different_registers(sub_klass, super_klass, temp_reg, temp2_reg);
-  assert(L_success != NULL || L_failure == NULL, "at most one NULL in the batch");
+  assert(L_success != NULL || L_failure != NULL, "at most one NULL in the batch");
 
   Label L_fallthrough;
   if (L_success == NULL) { L_success = &L_fallthrough; }
   if (L_failure == NULL) { L_failure = &L_fallthrough; }
 
-  evpbroadcastq(xmm0, super_klass, Assembler::AVX_512bit);
+  evpbroadcastq(xtmp, super_klass, Assembler::AVX_512bit);
 
-  const Register length  = temp2_reg;
-  const Register cur_pos = temp_reg;
+  const Register length  = temp_reg;
+  const Register cur_pos = temp2_reg;
 
   movptr(cur_pos, Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
   movl  (length,  Address(cur_pos, Array<Klass*>::length_offset_in_bytes()));
@@ -4416,11 +4418,11 @@ void MacroAssembler::check_klass_subtype_slow_path_avx512(Register sub_klass,
   andq(length, ~(0x7)); // vector count
 
   bind(VECTOR64_LOOP);
-  evpcmpq(kreg1, k0, xmm0, Address(cur_pos, 0), Assembler::neq, false, Assembler::AVX_512bit);
+  evpcmpq(kreg1, k0, xtmp, Address(cur_pos, 0), Assembler::eq, false, Assembler::AVX_512bit);
   kortestql(kreg1, kreg1);
-  jcc(Assembler::aboveEqual, *L_success); // match!
-  subq(length, 8);
+  jcc(Assembler::notZero, *L_success); // match!
   addq(cur_pos, 8*8);
+  subq(length, 8);
   jccb(Assembler::notZero, VECTOR64_LOOP);
 
   bind(VECTOR64_TAIL);
@@ -4433,10 +4435,10 @@ void MacroAssembler::check_klass_subtype_slow_path_avx512(Register sub_klass,
   notl(tmp2);
   kmovbl(kreg2, tmp2);
 
-  evpcmpq(kreg1, kreg2, xmm0, Address(current, 0), Assembler::neq, false, Assembler::AVX_512bit);
-  ktestbl(kreg1, kreg2);
+  evpcmpq(kreg1, kreg2, xmm0, Address(cur_pos, 0), Assembler::eq, false, Assembler::AVX_512bit);
+  kortestbl(kreg1, kreg1);
 
-  jcc(Assembler::below, *L_failure); // not found
+  jcc(Assembler::zero, *L_failure); // not found
 
   if (L_success != &L_fallthrough) {
     jmp(*L_success);
@@ -4487,7 +4489,11 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   if (!IS_A_TEMP(rdi)) { push(rdi); pushed_rdi = true; }
 
 #ifndef PRODUCT
-  incrementl(ExternalAddress(SharedRuntime::partial_subtype_ctr_addr()), rcx /*rscratch*/) );
+  int* pst_counter = &SharedRuntime::_partial_subtype_ctr;
+  ExternalAddress pst_counter_addr((address) pst_counter);
+  NOT_LP64(  incrementl(pst_counter_addr) );
+  LP64_ONLY( lea(rcx, pst_counter_addr) );
+  LP64_ONLY( incrementl(Address(rcx, 0)) );
 #endif //PRODUCT
 
   // We will consult the secondary-super array.
@@ -4506,70 +4512,28 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   testptr(rax, rax); // Set Z = 0
   repne_scan();
 
+  // Unspill the temp. registers:
+  if (pushed_rdi)  pop(rdi);
+  if (pushed_rcx)  pop(rcx);
+  if (pushed_rax)  pop(rax);
+
   if (set_cond_codes) {
     // Special hack for the AD files:  rdi is guaranteed non-zero.
     assert(!pushed_rdi, "rdi must be left non-NULL");
     // Also, the condition codes are properly set Z/NZ on succeed/failure.
   }
 
-  jccb(Assembler::notEqual, *L_failure_tmp);
+  if (L_failure == &L_fallthrough)
+        jccb(Assembler::notEqual, *L_failure);
+  else  jcc(Assembler::notEqual, *L_failure);
 
   if (!UseNewCode) {
     // Success.  Cache the super we found and proceed in triumph.
     movptr(super_cache_addr, super_klass);
   }
 
-#ifndef PRODUCT
-  if (PrintC1Statistics || PrintOptoStatistics) {
-    {
-      address pst_slots_counter = (address) &SharedRuntime::_partial_subtype_success_slots_ctr;
-
-      movptr(rdi, secondary_supers_addr);
-      movl(rdi, Address(rdi, Array<Klass*>::length_offset_in_bytes()));
-      addl(ExternalAddress(pst_slots_counter), rdi, rcx /*rscratch*/);
-    }
-    {
-      address pst_counter = (address) &SharedRuntime::_partial_subtype_success_ctr;
-      incrementl(ExternalAddress(pst_counter), rcx /*rscratch*/);
-    }
-  }
-#endif //PRODUCT
-
-  // Unspill the temp. registers:
-  if (pushed_rdi)  pop(rdi);
-  if (pushed_rcx)  pop(rcx);
-  if (pushed_rax)  pop(rax);
-
-  jmp(*L_success);
-
-  bind(L_failure_tmp);
-
-#ifndef PRODUCT
-  if (PrintC1Statistics || PrintOptoStatistics) {
-    {
-      movptr(rdi, secondary_supers_addr);
-      movl(rdi, Address(rdi, Array<Klass*>::length_offset_in_bytes()));
-      subl(rdi, rcx);
-
-      int* pst_counter = &SharedRuntime::_partial_subtype_failure_slots_ctr;
-      ExternalAddress pst_counter_addr((address) pst_counter);
-      addl(pst_counter_addr, rdi, rcx /*rscratch*/);
-    }
-    {
-      int* pst_counter = &SharedRuntime::_partial_subtype_failure_ctr;
-      ExternalAddress pst_counter_addr((address) pst_counter);
-      incrementl(pst_counter_addr, 1, rcx /*rscratch*/);
-    }
-  }
-#endif //PRODUCT
-
-  // Unspill the temp. registers:
-  if (pushed_rdi)  pop(rdi);
-  if (pushed_rcx)  pop(rcx);
-  if (pushed_rax)  pop(rax);
-
-  if (L_failure != &L_fallthrough) {
-    jmp(Assembler::notEqual, *L_failure);
+  if (L_success != &L_fallthrough) {
+    jmp(*L_success);
   }
 
 #undef IS_A_TEMP

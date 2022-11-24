@@ -13118,7 +13118,7 @@ instruct partialSubtypeCheck(rdi_RegP result,
                              rsi_RegP sub, rax_RegP super, rcx_RegI rcx,
                              rFlagsReg cr)
 %{
-  predicate(!UseNewCode2 || (AVX3Threshold != 0) || !VM_Version::supports_avx512vldq());
+  predicate(!UseNewCode2 || VM_Version::avx3_threshold() != 0 || !VM_Version::supports_avx512vldq());
   match(Set result (PartialSubtypeCheck sub super));
   effect(KILL rcx, KILL cr);
 
@@ -13142,7 +13142,7 @@ instruct partialSubtypeCheck_vs_Zero(rFlagsReg cr,
                                      immP0 zero,
                                      rdi_RegP result)
 %{
-  predicate(!UseNewCode2 || (AVX3Threshold != 0) || !VM_Version::supports_avx512vldq());
+  predicate(!UseNewCode2 || VM_Version::avx3_threshold() != 0 || !VM_Version::supports_avx512vldq());
   match(Set cr (CmpP (PartialSubtypeCheck sub super) zero));
   effect(KILL rcx, KILL result);
 
@@ -13160,13 +13160,13 @@ instruct partialSubtypeCheck_vs_Zero(rFlagsReg cr,
   ins_pipe(pipe_slow);
 %}
 
-instruct partialSubtypeCheck(rRegP result, rRegP sub, rRegP super, rRegP tmp1, rRegP tmp2,
-                             kReg ktmp1, kReg ktmp2,
-                             rFlagsReg cr)
+instruct partialSubtypeCheckAVX512(rRegP result, rRegP sub, rRegP super, rRegP tmp1, rRegP tmp2,
+                                   regF xtmp, kReg ktmp1, kReg ktmp2,
+                                   rFlagsReg cr)
 %{
-  predicate(UseNewCode2 && AVX3Threshold == 0) && VM_Version::supports_avx512vldq());
+  predicate(UseNewCode2 && VM_Version::avx3_threshold() == 0 && VM_Version::supports_avx512vldq());
   match(Set result (PartialSubtypeCheck sub super));
-  effect(KILL sub, KILL super, KILL cr, TMP tmp1, TMP2, TMP ktmp1, ktmp2);
+  effect(TEMP_DEF result, TEMP tmp1, TEMP tmp2, TEMP xtmp, TEMP ktmp1, TEMP ktmp2, KILL cr);
 
   ins_cost(1100);  // slightly larger than the next version
   format %{ "subtype_check" %}
@@ -13175,7 +13175,7 @@ instruct partialSubtypeCheck(rRegP result, rRegP sub, rRegP super, rRegP tmp1, r
     Label L_failure;
     __ check_klass_subtype_slow_path_avx512($sub$$Register, $super$$Register,
                                             $tmp1$$Register, $result$$Register,
-                                            $ktmp1$$KRegister, $ktmp2$$KRegister,
+                                            $xtmp$$XMMRegister, $ktmp1$$KRegister, $ktmp2$$KRegister,
                                             NULL, &L_failure);
 
     __ xorptr($result$$Register, $result$$Register);
