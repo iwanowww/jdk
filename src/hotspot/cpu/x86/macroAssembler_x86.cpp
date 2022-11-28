@@ -4470,9 +4470,10 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
         jccb(Assembler::notEqual, *L_failure);
   else  jcc(Assembler::notEqual, *L_failure);
 
-  // Success.  Cache the super we found and proceed in triumph.
-  movptr(super_cache_addr, super_klass);
-
+  if (UseSecondarySuperCache) {
+    // Success.  Cache the super we found and proceed in triumph.
+    movptr(super_cache_addr, super_klass);
+  }
   if (L_success != &L_fallthrough) {
     jmp(*L_success);
   }

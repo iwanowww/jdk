@@ -94,6 +94,16 @@ void Klass::set_name(Symbol* n) {
   }
 }
 
+void Klass::set_secondary_supers(Array<Klass*>* k) {
+  _secondary_supers = k;
+  if (k != NULL && !k->is_empty()) {
+    // Pre-populate the cache with the last element of the array.
+    _secondary_super_cache = k->at(k->length() - 1);
+  } else {
+    _secondary_super_cache = NULL;
+  }
+}
+
 bool Klass::is_subclass_of(const Klass* k) const {
   // Run up the super chain and check
   if (this == k) return true;
@@ -122,7 +132,6 @@ bool Klass::search_secondary_supers(Klass* k) const {
   int cnt = secondary_supers()->length();
   for (int i = 0; i < cnt; i++) {
     if (secondary_supers()->at(i) == k) {
-      ((Klass*)this)->set_secondary_super_cache(k);
       return true;
     }
   }

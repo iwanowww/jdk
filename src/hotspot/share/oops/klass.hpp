@@ -226,10 +226,9 @@ protected:
   void set_super_check_offset(juint o) { _super_check_offset = o; }
 
   Klass* secondary_super_cache() const     { return _secondary_super_cache; }
-  void set_secondary_super_cache(Klass* k) { _secondary_super_cache = k; }
 
   Array<Klass*>* secondary_supers() const { return _secondary_supers; }
-  void set_secondary_supers(Array<Klass*>* k) { _secondary_supers = k; }
+  void set_secondary_supers(Array<Klass*>* k);
 
   // Return the element of the _super chain of the given depth.
   // If there is no such element, return either NULL or this.
