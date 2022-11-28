@@ -118,7 +118,6 @@ bool Klass::search_secondary_supers(Klass* k) const {
   int cnt = secondary_supers()->length();
   for (int i = 0; i < cnt; i++) {
     if (secondary_supers()->at(i) == k) {
-      ((Klass*)this)->set_secondary_super_cache(k);
       return true;
     }
   }
@@ -773,7 +772,7 @@ void Klass::verify_on(outputStream* st) {
     guarantee(super()->is_klass(), "should be klass");
   }
   if (secondary_super_cache() != nullptr) {
-    Klass* ko = secondary_super_cache();
+    Klass* ko = _secondary_super_cache;
     guarantee(ko->is_klass(), "should be klass");
   }
   for ( uint i = 0; i < primary_super_limit(); i++ ) {

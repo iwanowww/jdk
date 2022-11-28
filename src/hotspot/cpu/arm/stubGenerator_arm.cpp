@@ -710,8 +710,6 @@ class StubGenerator: public StubCodeGenerator {
 
     Label L_loop, L_fail;
 
-    int sc_offset = in_bytes(Klass::secondary_super_cache_offset());
-
     // fast check should be redundant
 
     // slow check
@@ -761,8 +759,10 @@ class StubGenerator: public StubCodeGenerator {
 
       // Falling out the bottom means we found a hit; we ARE a subtype
 
-      // Success.  Cache the super we found and proceed in triumph.
-      __ str(super_klass, Address(sub_klass, sc_offset));
+      if (UseSecondarySuperCache) {
+        // Success.  Cache the super we found and proceed in triumph.
+        __ str(super_klass, Address(sub_klass, in_bytes(Klass::secondary_super_cache_offset())));
+      }
 
       // Return success
       // R0 is already 0 and flags are already set to eq
@@ -2423,8 +2423,10 @@ class StubGenerator: public StubCodeGenerator {
 
     // Falling out the bottom means we found a hit; we ARE a subtype
 
-    // Success.  Cache the super we found and proceed in triumph.
-    __ str(super_klass, Address(sub_klass, sc_offset));
+    if (UseSecondarySuperCache) {
+      // Success.  Cache the super we found and proceed in triumph.
+      __ str(super_klass, Address(sub_klass, sc_offset));
+    }
 
     // Jump to success
     __ b(L_success);
