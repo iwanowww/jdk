@@ -616,8 +616,7 @@ public:
                                      Register temp_reg,
                                      Register result,
                                      Label* L_success,
-                                     Label* L_failure,
-                                     bool set_cond_codes = false);
+                                     Label* L_failure);
 
   // Simplified, combined version, good for typical uses.
   // Falls through on failure.

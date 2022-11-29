@@ -4391,8 +4391,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
                                                    Register temp_reg,
                                                    Register temp2_reg,
                                                    Label* L_success,
-                                                   Label* L_failure,
-                                                   bool set_cond_codes) {
+                                                   Label* L_failure) {
   assert_different_registers(result, sub_klass, super_klass, temp_reg, temp2_reg);
   assert(L_success != NULL || L_failure != NULL, "at most one NULL in the batch");
 
