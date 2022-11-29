@@ -2117,25 +2117,6 @@ encode %{
     emit_cc(cbuf, $secondary, $cop$$cmpcode);
   %}
 
-  enc_class enc_PartialSubtypeCheck()
-  %{
-    Register Rrdi = as_Register(RDI_enc); // result register
-    Register Rrax = as_Register(RAX_enc); // super class
-    Register Rrcx = as_Register(RCX_enc); // killed
-    Register Rrsi = as_Register(RSI_enc); // sub class
-    Label miss;
-    const bool set_cond_codes = true;
-
-    MacroAssembler _masm(&cbuf);
-    __ check_klass_subtype_slow_path(Rrsi, Rrax, Rrcx, Rrdi,
-                                     NULL, &miss,
-                                     /*set_cond_codes:*/ true);
-    if ($primary) {
-      __ xorptr(Rrdi, Rrdi);
-    }
-    __ bind(miss);
-  %}
-
   enc_class clear_avx %{
     debug_only(int off0 = cbuf.insts_size());
     if (generate_vzeroupper(Compile::current())) {
@@ -13108,53 +13089,26 @@ instruct jmpConUCF2(cmpOpUCF2 cop, rFlagsRegUCF cmp, label labl) %{
 %}
 
 // ============================================================================
-// The 2nd slow-half of a subtype check.  Scan the subklass's 2ndary
-// superklass array for an instance of the superklass.  Set a hidden
-// internal cache on a hit (cache is checked with exposed code in
-// gen_subtype_check()).  Return NZ for a miss or zero for a hit.  The
-// encoding ALSO sets flags.
+// The slow part of a subtype check. Scans the subklass's secondary superklass array 
+// for an instance of the superklass. Return non-zero for a miss or zero for a hit.
 
-instruct partialSubtypeCheck(rdi_RegP result,
-                             rsi_RegP sub, rax_RegP super, rcx_RegI rcx,
+instruct partialSubtypeCheck(rRegP result, rRegP sub, rRegP super, rRegP tmp1,
                              rFlagsReg cr)
 %{
   match(Set result (PartialSubtypeCheck sub super));
-  effect(KILL rcx, KILL cr);
-
-  ins_cost(1100);  // slightly larger than the next version
-  format %{ "movq    rdi, [$sub + in_bytes(Klass::secondary_supers_offset())]\n\t"
-            "movl    rcx, [rdi + Array<Klass*>::length_offset_in_bytes()]\t# length to scan\n\t"
-            "addq    rdi, Array<Klass*>::base_offset_in_bytes()\t# Skip to start of data; set NZ in case count is zero\n\t"
-            "repne   scasq\t# Scan *rdi++ for a match with rax while rcx--\n\t"
-            "jne,s   miss\t\t# Missed: rdi not-zero\n\t"
-            "movq    [$sub + in_bytes(Klass::secondary_super_cache_offset())], $super\t# Hit: update cache\n\t"
-            "xorq    $result, $result\t\t Hit: rdi zero\n\t"
-    "miss:\t" %}
-
-  opcode(0x1); // Force a XOR of RDI
-  ins_encode(enc_PartialSubtypeCheck());
-  ins_pipe(pipe_slow);
-%}
-
-instruct partialSubtypeCheck_vs_Zero(rFlagsReg cr,
-                                     rsi_RegP sub, rax_RegP super, rcx_RegI rcx,
-                                     immP0 zero,
-                                     rdi_RegP result)
-%{
-  match(Set cr (CmpP (PartialSubtypeCheck sub super) zero));
-  effect(KILL rcx, KILL result);
+  effect(USE_DEF result, KILL tmp1, KILL cr);
 
   ins_cost(1000);
-  format %{ "movq    rdi, [$sub + in_bytes(Klass::secondary_supers_offset())]\n\t"
-            "movl    rcx, [rdi + Array<Klass*>::length_offset_in_bytes()]\t# length to scan\n\t"
-            "addq    rdi, Array<Klass*>::base_offset_in_bytes()\t# Skip to start of data; set NZ in case count is zero\n\t"
-            "repne   scasq\t# Scan *rdi++ for a match with rax while cx-- != 0\n\t"
-            "jne,s   miss\t\t# Missed: flags nz\n\t"
-            "movq    [$sub + in_bytes(Klass::secondary_super_cache_offset())], $super\t# Hit: update cache\n\t"
-    "miss:\t" %}
+  format %{ "partial_subtype_check # slow_path" %}
 
-  opcode(0x0); // No need to XOR RDI
-  ins_encode(enc_PartialSubtypeCheck());
+  ins_encode %{
+    Label miss;
+    __ check_klass_subtype_slow_path($sub$$Register, $super$$Register, 
+                                     $tmp1$$Register, $result$$Register, 
+                                     NULL, &miss);
+    __ xorptr($result$$Register, $result$$Register); // success
+    __ bind(miss);
+  %}
   ins_pipe(pipe_slow);
 %}
 

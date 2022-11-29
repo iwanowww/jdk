@@ -959,10 +959,6 @@ private:
   void rep_mov();
   void rep_stos();
   void rep_stosb();
-  void repne_scan();
-#ifdef _LP64
-  void repne_scanl();
-#endif
 
   // Vanilla instructions in lexical order
 

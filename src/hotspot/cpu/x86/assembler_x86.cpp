@@ -5575,23 +5575,6 @@ void Assembler::rep_stos() {
   NOT_LP64( emit_int16((unsigned char)0xF3,        (unsigned char)0xAB);)
 }
 
-// scans rcx pointer sized words at [edi] for occurrence of rax,
-// generic
-void Assembler::repne_scan() { // repne_scan
-  // SCASQ
-  LP64_ONLY(emit_int24((unsigned char)0xF2, REX_W, (unsigned char)0xAF);)
-  NOT_LP64( emit_int16((unsigned char)0xF2,        (unsigned char)0xAF);)
-}
-
-#ifdef _LP64
-// scans rcx 4 byte words at [edi] for occurrence of rax,
-// generic
-void Assembler::repne_scanl() { // repne_scan
-  // SCASL
-  emit_int16((unsigned char)0xF2, (unsigned char)0xAF);
-}
-#endif
-
 void Assembler::ret(int imm16) {
   if (imm16 == 0) {
     emit_int8((unsigned char)0xC3);

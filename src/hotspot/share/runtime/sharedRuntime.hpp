@@ -567,6 +567,8 @@ class SharedRuntime: AllStatic {
   static int64_t _nof_megamorphic_interface_calls;// total # of megamorphic interface calls
 
  public: // for compiler
+  static address partial_subtype_ctr_addr()             { return (address)&_partial_subtype_ctr; }
+
   static address nof_normal_calls_addr()                { return (address)&_nof_normal_calls; }
   static address nof_optimized_calls_addr()             { return (address)&_nof_optimized_calls; }
   static address nof_inlined_calls_addr()               { return (address)&_nof_inlined_calls; }

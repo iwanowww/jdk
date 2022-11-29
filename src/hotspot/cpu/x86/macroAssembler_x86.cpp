@@ -4286,6 +4286,17 @@ void MacroAssembler::check_klass_subtype(Register sub_klass,
   bind(L_failure);
 }
 
+// Hacked jcc, which "knows" that L_fallthrough, at least, is in
+// range of a jccb.  If this routine grows larger, reconsider at
+// least some of these.
+#define LOCAL_JCC(assembler_cond, label)                        \
+  if (label == &L_fallthrough)  jccb(assembler_cond, *label); \
+  else                          jcc( assembler_cond, *label) /*omit semi*/
+
+// Hacked jmp, which may only be used just before L_fallthrough.
+#define FINAL_JMP(label)                         \
+  if (label == &L_fallthrough) /*do nothing*/ \
+  else                         jmp(*label) /*omit semi*/
 
 void MacroAssembler::check_klass_subtype_fast_path(Register sub_klass,
                                                    Register super_klass,
@@ -4293,7 +4304,7 @@ void MacroAssembler::check_klass_subtype_fast_path(Register sub_klass,
                                                    Label* L_success,
                                                    Label* L_failure,
                                                    Label* L_slow_path,
-                                        RegisterOrConstant super_check_offset) {
+                                                   RegisterOrConstant super_check_offset) {
   assert_different_registers(sub_klass, super_klass, temp_reg);
   bool must_load_sco = (super_check_offset.constant_or_zero() == -1);
   if (super_check_offset.is_register()) {
@@ -4314,18 +4325,6 @@ void MacroAssembler::check_klass_subtype_fast_path(Register sub_klass,
   int sco_offset = in_bytes(Klass::super_check_offset_offset());
   Address super_check_offset_addr(super_klass, sco_offset);
 
-  // Hacked jcc, which "knows" that L_fallthrough, at least, is in
-  // range of a jccb.  If this routine grows larger, reconsider at
-  // least some of these.
-#define local_jcc(assembler_cond, label)                                \
-  if (&(label) == &L_fallthrough)  jccb(assembler_cond, label);         \
-  else                             jcc( assembler_cond, label) /*omit semi*/
-
-  // Hacked jmp, which may only be used just before L_fallthrough.
-#define final_jmp(label)                                                \
-  if (&(label) == &L_fallthrough) { /*do nothing*/ }                    \
-  else                            jmp(label)                /*omit semi*/
-
   // If the pointers are equal, we are done (e.g., String[] elements).
   // This self-check enables sharing of secondary supertype arrays among
   // non-primary types such as array-of-interface.  Otherwise, each such
@@ -4334,7 +4333,7 @@ void MacroAssembler::check_klass_subtype_fast_path(Register sub_klass,
   // type checks are in fact trivially successful in this manner,
   // so we get a nicely predicted branch right at the start of the check.
   cmpptr(sub_klass, super_klass);
-  local_jcc(Assembler::equal, *L_success);
+  LOCAL_JCC(Assembler::equal, L_success);
 
   // Check the supertype display:
   if (must_load_sco) {
@@ -4357,36 +4356,33 @@ void MacroAssembler::check_klass_subtype_fast_path(Register sub_klass,
   // Otherwise, it's the slow path for us (no success at this point).
 
   if (super_check_offset.is_register()) {
-    local_jcc(Assembler::equal, *L_success);
+    LOCAL_JCC(Assembler::equal, L_success);
     cmpl(super_check_offset.as_register(), sc_offset);
     if (L_failure == &L_fallthrough) {
-      local_jcc(Assembler::equal, *L_slow_path);
+      LOCAL_JCC(Assembler::equal, L_slow_path);
     } else {
-      local_jcc(Assembler::notEqual, *L_failure);
-      final_jmp(*L_slow_path);
+      LOCAL_JCC(Assembler::notEqual, L_failure);
+      FINAL_JMP(L_slow_path);
     }
   } else if (super_check_offset.as_constant() == sc_offset) {
     // Need a slow path; fast failure is impossible.
     if (L_slow_path == &L_fallthrough) {
-      local_jcc(Assembler::equal, *L_success);
+      LOCAL_JCC(Assembler::equal, L_success);
     } else {
-      local_jcc(Assembler::notEqual, *L_slow_path);
-      final_jmp(*L_success);
+      LOCAL_JCC(Assembler::notEqual, L_slow_path);
+      FINAL_JMP(L_success);
     }
   } else {
     // No slow path; it's a fast decision.
     if (L_failure == &L_fallthrough) {
-      local_jcc(Assembler::equal, *L_success);
+      LOCAL_JCC(Assembler::equal, L_success);
     } else {
-      local_jcc(Assembler::notEqual, *L_failure);
-      final_jmp(*L_success);
+      LOCAL_JCC(Assembler::notEqual, L_failure);
+      FINAL_JMP(L_success);
     }
   }
 
   bind(L_fallthrough);
-
-#undef local_jcc
-#undef final_jmp
 }
 
 
@@ -4397,91 +4393,56 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
                                                    Label* L_success,
                                                    Label* L_failure,
                                                    bool set_cond_codes) {
-  assert_different_registers(sub_klass, super_klass, temp_reg);
-  if (temp2_reg != noreg)
-    assert_different_registers(sub_klass, super_klass, temp_reg, temp2_reg);
-#define IS_A_TEMP(reg) ((reg) == temp_reg || (reg) == temp2_reg)
+  assert_different_registers(result, sub_klass, super_klass, temp_reg, temp2_reg);
+  assert(L_success != NULL || L_failure != NULL, "at most one NULL in the batch");
 
   Label L_fallthrough;
-  int label_nulls = 0;
-  if (L_success == NULL)   { L_success   = &L_fallthrough; label_nulls++; }
-  if (L_failure == NULL)   { L_failure   = &L_fallthrough; label_nulls++; }
-  assert(label_nulls <= 1, "at most one NULL in the batch");
-
-  // a couple of useful fields in sub_klass:
-  int ss_offset = in_bytes(Klass::secondary_supers_offset());
-  int sc_offset = in_bytes(Klass::secondary_super_cache_offset());
-  Address secondary_supers_addr(sub_klass, ss_offset);
-  Address super_cache_addr(     sub_klass, sc_offset);
-
-  // Do a linear scan of the secondary super-klass chain.
-  // This code is rarely used, so simplicity is a virtue here.
-  // The repne_scan instruction uses fixed registers, which we must spill.
-  // Don't worry too much about pre-existing connections with the input regs.
-
-  assert(sub_klass != rax, "killed reg"); // killed by mov(rax, super)
-  assert(sub_klass != rcx, "killed reg"); // killed by lea(rcx, &pst_counter)
-
-  // Get super_klass value into rax (even if it was in rdi or rcx).
-  bool pushed_rax = false, pushed_rcx = false, pushed_rdi = false;
-  if (super_klass != rax) {
-    if (!IS_A_TEMP(rax)) { push(rax); pushed_rax = true; }
-    mov(rax, super_klass);
-  }
-  if (!IS_A_TEMP(rcx)) { push(rcx); pushed_rcx = true; }
-  if (!IS_A_TEMP(rdi)) { push(rdi); pushed_rdi = true; }
+  if (L_success == NULL) { L_success = &L_fallthrough; }
+  if (L_failure == NULL) { L_failure = &L_fallthrough; }
 
 #ifndef PRODUCT
-  int* pst_counter = &SharedRuntime::_partial_subtype_ctr;
-  ExternalAddress pst_counter_addr((address) pst_counter);
-  NOT_LP64(  incrementl(pst_counter_addr) );
-  LP64_ONLY( lea(rcx, pst_counter_addr) );
-  LP64_ONLY( incrementl(Address(rcx, 0)) );
-#endif //PRODUCT
+  incrementl(ExternalAddress(SharedRuntime::partial_subtype_ctr_addr()), temp_reg /*rscratch*/);
+#endif // !PRODUCT
 
-  // We will consult the secondary-super array.
-  movptr(rdi, secondary_supers_addr);
-  // Load the array length.  (Positive movl does right thing on LP64.)
-  movl(rcx, Address(rdi, Array<Klass*>::length_offset_in_bytes()));
-  // Skip to start of data.
-  addptr(rdi, Array<Klass*>::base_offset_in_bytes());
+  const Register counter = temp_reg;
+  const Register cur_pos = temp2_reg;
 
-  // Scan RCX words at [RDI] for an occurrence of RAX.
-  // Set NZ/Z based on last compare.
-  // Z flag value will not be set by 'repne' if RCX == 0 since 'repne' does
-  // not change flags (only scas instruction which is repeated sets flags).
-  // Set Z = 0 (not equal) before 'repne' to indicate that class was not found.
+  movptr(cur_pos, Address(sub_klass, in_bytes(Klass::secondary_supers_offset()));
+  movl(counter, Address(cur_pos, Array<Klass*>::length_offset_in_bytes()));
+  lea (cur_pos, Address(cur_pos, Array<Klass*>::base_offset_in_bytes()));
 
-    testptr(rax,rax); // Set Z = 0
-    repne_scan();
+  Label L_ss_loop, L_success_update_ssc;
 
-  // Unspill the temp. registers:
-  if (pushed_rdi)  pop(rdi);
-  if (pushed_rcx)  pop(rcx);
-  if (pushed_rax)  pop(rax);
+  testl(counter, counter); // == 0?
+  LOCAL_JCC(Assembler::zero, L_failure);
 
-  if (set_cond_codes) {
-    // Special hack for the AD files:  rdi is guaranteed non-zero.
-    assert(!pushed_rdi, "rdi must be left non-NULL");
-    // Also, the condition codes are properly set Z/NZ on succeed/failure.
+  // Do a linear scan of the secondary super-klass array.
+  BIND(L_ss_loop);
+
+  cmpptr(super_klass, Address(cur_pos, 0));
+  if (UseSecondarySuperCache) {
+    jccb(Assembler::equal, L_success_update_ssc);
+  } else {
+    LOCAL_JCC(Assembler::equal, L_success);
   }
-
-  if (L_failure == &L_fallthrough)
-        jccb(Assembler::notEqual, *L_failure);
-  else  jcc(Assembler::notEqual, *L_failure);
+  increment(cur_pos, BytesPerWord);
+  decrementl(counter);
+  LOCAL_JCC(Assembler::notZero, L_ss_loop);
 
   if (UseSecondarySuperCache) {
+    BIND(L_success_update_ssc);
+
     // Success.  Cache the super we found and proceed in triumph.
+    Address super_cache_addr(sub_klass, in_bytes(Klass::secondary_super_cache_offset()));
     movptr(super_cache_addr, super_klass);
-  }
-  if (L_success != &L_fallthrough) {
-    jmp(*L_success);
-  }
 
-#undef IS_A_TEMP
-
-  bind(L_fallthrough);
+    LOCAL_JMP(L_success);
+  }
+  BIND(L_fallthrough);
 }
+
+#undef LOCAL_JCC
+#undef FINAL_JMP
 
 void MacroAssembler::clinit_barrier(Register klass, Register thread, Label* L_fast_path, Label* L_slow_path) {
   assert(L_fast_path != NULL || L_slow_path != NULL, "at least one is required");

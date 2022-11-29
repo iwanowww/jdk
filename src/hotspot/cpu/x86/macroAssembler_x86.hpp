@@ -614,7 +614,7 @@ public:
   void check_klass_subtype_slow_path(Register sub_klass,
                                      Register super_klass,
                                      Register temp_reg,
-                                     Register temp2_reg,
+                                     Register result,
                                      Label* L_success,
                                      Label* L_failure,
                                      bool set_cond_codes = false);
