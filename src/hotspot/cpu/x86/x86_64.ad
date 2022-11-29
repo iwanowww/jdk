@@ -13092,11 +13092,10 @@ instruct jmpConUCF2(cmpOpUCF2 cop, rFlagsRegUCF cmp, label labl) %{
 // The slow part of a subtype check. Scans the subklass's secondary superklass array 
 // for an instance of the superklass. Return non-zero for a miss or zero for a hit.
 
-instruct partialSubtypeCheck(rRegP result, rRegP sub, rRegP super, rRegP tmp1,
-                             rFlagsReg cr)
+instruct partialSubtypeCheck(rRegP result, rRegP sub, rRegP super, rRegP tmp1, rFlagsReg cr)
 %{
   match(Set result (PartialSubtypeCheck sub super));
-  effect(USE_DEF result, KILL tmp1, KILL cr);
+  effect(USE_DEF result, TEMP tmp1, KILL cr);
 
   ins_cost(1000);
   format %{ "partial_subtype_check # slow_path" %}

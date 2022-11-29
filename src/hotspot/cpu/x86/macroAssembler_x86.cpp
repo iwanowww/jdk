@@ -4295,7 +4295,7 @@ void MacroAssembler::check_klass_subtype(Register sub_klass,
 
 // Hacked jmp, which may only be used just before L_fallthrough.
 #define FINAL_JMP(label)                         \
-  if (label == &L_fallthrough) /*do nothing*/ \
+  if (label == &L_fallthrough) { /*do nothing*/ } \
   else                         jmp(*label) /*omit semi*/
 
 void MacroAssembler::check_klass_subtype_fast_path(Register sub_klass,
@@ -4392,7 +4392,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
                                                    Register temp2_reg,
                                                    Label* L_success,
                                                    Label* L_failure) {
-  assert_different_registers(result, sub_klass, super_klass, temp_reg, temp2_reg);
+  assert_different_registers(sub_klass, super_klass, temp_reg, temp2_reg);
   assert(L_success != NULL || L_failure != NULL, "at most one NULL in the batch");
 
   Label L_fallthrough;
