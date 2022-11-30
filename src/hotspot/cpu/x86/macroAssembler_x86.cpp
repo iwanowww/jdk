@@ -4283,16 +4283,16 @@ void MacroAssembler::check_klass_subtype(Register sub_klass,
   Label L_hit, L_failure;
   check_klass_subtype_fast_path(sub_klass, super_klass, temp_reg,        &L_success, &L_failure, NULL);
 
-  __ push(rdi);
+  push(rdi);
 
   check_klass_subtype_slow_path(sub_klass, super_klass, temp_reg, rdi, &L_hit, &L_failure);
 
   bind(L_hit);
-  __ pop(rdi);
-  __ jmp(L_success);
+  pop(rdi);
+  jmp(L_success);
   
   bind(L_failure);
-  __ pop(rdi);
+  pop(rdi);
 }
 
 // Hacked jcc, which "knows" that L_fallthrough, at least, is in
@@ -4415,7 +4415,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   const Register counter = temp_reg;
   const Register cur_pos = temp2_reg;
 
-  movptr(cur_pos, Address(sub_klass, in_bytes(Klass::secondary_supers_offset()));
+  movptr(cur_pos, Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
   movl(counter, Address(cur_pos, Array<Klass*>::length_offset_in_bytes()));
   lea (cur_pos, Address(cur_pos, Array<Klass*>::base_offset_in_bytes()));
 
@@ -4435,7 +4435,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   }
   increment(cur_pos, BytesPerWord);
   decrementl(counter);
-  LOCAL_JCC(Assembler::notZero, L_ss_loop);
+  jccb(Assembler::notZero, L_ss_loop);
 
   if (UseSecondarySuperCache) {
     BIND(L_success_update_ssc);
@@ -4444,7 +4444,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     Address super_cache_addr(sub_klass, in_bytes(Klass::secondary_super_cache_offset()));
     movptr(super_cache_addr, super_klass);
 
-    LOCAL_JMP(L_success);
+    FINAL_JMP(L_success);
   }
   BIND(L_fallthrough);
 }

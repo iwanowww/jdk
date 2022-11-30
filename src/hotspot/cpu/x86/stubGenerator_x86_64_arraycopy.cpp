@@ -1921,11 +1921,11 @@ void StubGenerator::generate_type_check(Register sub_klass,
                                    super_check_offset);
 
   __ push(rcx); __ push(rdi);
-  __ check_klass_subtype_slow_path(sub_klass, super_klass, rcx, rdi, L_hit, L_miss);
+  __ check_klass_subtype_slow_path(sub_klass, super_klass, rcx, rdi, &L_hit, &L_miss);
 
   __ BIND(L_hit);
   __ pop(rdi); __ pop(rcx);
-  __ jmp(&L_success);
+  __ jmp(L_success);
 
   // Fall through on failure!
   __ BIND(L_miss);
