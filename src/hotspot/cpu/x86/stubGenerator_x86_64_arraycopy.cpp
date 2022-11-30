@@ -1915,14 +1915,22 @@ void StubGenerator::generate_type_check(Register sub_klass,
 
   BLOCK_COMMENT("type_check:");
 
-  Label L_miss;
+  Label L_hit, L_miss;
 
-  __ check_klass_subtype_fast_path(sub_klass, super_klass, noreg,        &L_success, &L_miss, NULL,
+  __ check_klass_subtype_fast_path(sub_klass, super_klass, noreg, &L_success, &L_miss, NULL,
                                    super_check_offset);
-  __ check_klass_subtype_slow_path(sub_klass, super_klass, noreg, noreg, &L_success, NULL);
+
+  __ push(rcx); __ push(rdi);
+  __ check_klass_subtype_slow_path(sub_klass, super_klass, rcx, rdi, L_hit, L_miss);
+
+  __ BIND(L_hit);
+  __ pop(rdi); __ pop(rcx);
+  __ jmp(&L_success);
 
   // Fall through on failure!
   __ BIND(L_miss);
+  __ pop(rdi); __ pop(rcx);
+
 }
 
 //

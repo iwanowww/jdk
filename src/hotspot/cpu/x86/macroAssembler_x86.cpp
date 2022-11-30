@@ -4280,10 +4280,19 @@ void MacroAssembler::check_klass_subtype(Register sub_klass,
                            Register super_klass,
                            Register temp_reg,
                            Label& L_success) {
-  Label L_failure;
+  Label L_hit, L_failure;
   check_klass_subtype_fast_path(sub_klass, super_klass, temp_reg,        &L_success, &L_failure, NULL);
-  check_klass_subtype_slow_path(sub_klass, super_klass, temp_reg, noreg, &L_success, NULL);
+
+  __ push(rdi);
+
+  check_klass_subtype_slow_path(sub_klass, super_klass, temp_reg, rdi, &L_hit, &L_failure);
+
+  bind(L_hit);
+  __ pop(rdi);
+  __ jmp(L_success);
+  
   bind(L_failure);
+  __ pop(rdi);
 }
 
 // Hacked jcc, which "knows" that L_fallthrough, at least, is in
