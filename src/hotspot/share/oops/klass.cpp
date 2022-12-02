@@ -94,7 +94,7 @@ void Klass::set_secondary_supers(Array<Klass*>* k) {
   _secondary_supers = k;
   if (k != NULL && !k->is_empty()) {
     // Pre-populate the cache with the last element of the array.
-    _secondary_super_cache = k->at(k->length() - 1);
+    //_secondary_super_cache = k->at(k->length() - 1);
   } else {
     _secondary_super_cache = NULL;
   }

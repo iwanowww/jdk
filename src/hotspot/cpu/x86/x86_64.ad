@@ -13099,11 +13099,12 @@ instruct partialSubtypeCheck(rRegP result,
                              rRegP sub, rRegP super, rRegI tmp,
                              rFlagsReg cr)
 %{
+  predicate(UseAVX < 2);
   match(Set result (PartialSubtypeCheck sub super));
-  effect(TEMP result, TEMP tmp, KILL cr);
+  effect(TEMP_DEF result, TEMP tmp, KILL cr);
 
   ins_cost(1000);
-  format %{ "partial" %}
+  format %{ "subtype_check_slow_path" %}
 
   ins_encode %{
     Label miss;
@@ -13112,6 +13113,56 @@ instruct partialSubtypeCheck(rRegP result,
                                      NULL, &miss);
     __ xorptr($result$$Register, $result$$Register);
     __ bind(miss);
+  %}
+  ins_pipe(pipe_slow);
+%}
+
+instruct partialSubtypeCheckAVX512(rRegP result, rsi_RegP sub, rdi_RegP super,
+                                   rRegP rtmp, regF xtmp, kReg ktmp,
+                                   rFlagsReg cr)
+%{
+  predicate(UseAVX > 2 && (VM_Version::avx3_threshold() == 0) && VM_Version::supports_avx512vldq());
+  match(Set result (PartialSubtypeCheck sub super));
+  effect(TEMP_DEF result, USE_KILL sub, USE_KILL super,
+         TEMP rtmp, TEMP xtmp, TEMP ktmp,
+         KILL cr);
+
+  ins_cost(250);
+  format %{ "subtype_check_slow_path_avx512" %}
+
+  ins_encode %{
+    Label L_failure;
+    __ check_klass_subtype_slow_path_avx512($sub$$Register, $super$$Register,
+                                            $rtmp$$Register, $result$$Register,
+                                            $xtmp$$XMMRegister, $ktmp$$KRegister,
+                                            NULL, &L_failure);
+    __ xorptr($result$$Register, $result$$Register);
+    __ bind(L_failure);
+  %}
+  ins_pipe(pipe_slow);
+%}
+
+instruct partialSubtypeCheckAVX2(rRegP result, rsi_RegP sub, rdi_RegP super,
+                                 rRegP rtmp, regF xtmp1, regF xtmp2,
+                                 rFlagsReg cr)
+%{
+  predicate(UseAVX > 1);
+  match(Set result (PartialSubtypeCheck sub super));
+  effect(TEMP_DEF result, USE_KILL sub, USE_KILL super,
+         TEMP rtmp, TEMP xtmp1, TEMP xtmp2,
+         KILL cr);
+
+  ins_cost(500);
+  format %{ "subtype_check_slow_path_avx2" %}
+
+  ins_encode %{
+    Label L_failure;
+    __ check_klass_subtype_slow_path_avx2($sub$$Register, $super$$Register,
+                                          $rtmp$$Register, $result$$Register,
+                                          $xtmp1$$XMMRegister, $xtmp2$$XMMRegister,
+                                          NULL, &L_failure);
+    __ xorptr($result$$Register, $result$$Register);
+    __ bind(L_failure);
   %}
   ins_pipe(pipe_slow);
 %}
