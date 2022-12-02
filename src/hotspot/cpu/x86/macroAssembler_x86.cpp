@@ -4523,10 +4523,10 @@ void MacroAssembler::check_klass_subtype_slow_path_avx512(Register    sub_klass,
 
   Label VECTOR64_LOOP, VECTOR64_TAIL;
 
-  const Register tmp1 = sub_klass;    sub_klass   = noreg;
+  const Register tail_counter = sub_klass; sub_klass   = noreg;
   const Register tmp2 = super_klass;  super_klass = noreg;
 
-  movl(tmp1, counter);
+  movl(tail_counter, counter);
   andl(counter, ~(0x7)); // vector count
   jccb(Assembler::zero, VECTOR64_TAIL);
 
@@ -4541,12 +4541,12 @@ void MacroAssembler::check_klass_subtype_slow_path_avx512(Register    sub_klass,
   jccb(Assembler::notZero, VECTOR64_LOOP);
 
   bind(VECTOR64_TAIL);
-  andl(tmp1, 0x7);      // tail count
+  andl(tail_counter, 0x7);
   LOCAL_JCC(Assembler::zero, *L_failure); // not found
 
   // AVX512 code to compare up to 7 word vectors.
   movl(tmp2, 0xFF);
-  shlxl(tmp2, tmp2, tmp1);
+  shlxl(tmp2, tmp2, tail_counter);
   notl(tmp2);
   kmovbl(ktmp, tmp2);
 
@@ -4595,31 +4595,35 @@ void MacroAssembler::check_klass_subtype_slow_path_avx2(Register    sub_klass,
 
   Label VECTOR32_LOOP, VECTOR32_TAIL, SCALAR_LOOP;
 
-  const Register tmp1 = sub_klass; sub_klass = noreg;
+  const Register tail_counter = sub_klass; sub_klass = noreg;
 
-  movq(tmp1, counter);
-  andq(tmp1, 0x3);      // tail count
-  andq(counter, ~(0x3)); // vector count
+  movq(tail_counter, counter);
+  andq(tail_counter, 0x7);
+  andq(counter,  ~(0x7)); // vector count
   jccb(Assembler::zero, VECTOR32_TAIL);
-
-  // TODO: manual unroll?
 
   movdq(xtmp1, super_klass);
   vpbroadcastq(xtmp1, xtmp1, Assembler::AVX_256bit);
 
   bind(VECTOR32_LOOP);
   //align32();
-  vmovdqu(xtmp2, Address(cur_pos, 0));
+  vmovdqu(xtmp2, Address(cur_pos, 0 * BytesPerWord));
   vpcmpCCW(xtmp2, xtmp1, xtmp2, xnoreg, Assembler::eq, Assembler::Q, Assembler::AVX_256bit);
   vptest(xtmp2, xtmp2, Assembler::AVX_256bit);
   LOCAL_JCC(Assembler::notZero, *L_success); // match!
-  addq(cur_pos, 4 * BytesPerWord);
-  subq(counter, 4);
+
+  vmovdqu(xtmp2, Address(cur_pos, 4 * BytesPerWord));
+  vpcmpCCW(xtmp2, xtmp1, xtmp2, xnoreg, Assembler::eq, Assembler::Q, Assembler::AVX_256bit);
+  vptest(xtmp2, xtmp2, Assembler::AVX_256bit);
+  LOCAL_JCC(Assembler::notZero, *L_success); // match!
+
+  addq(cur_pos, 8 * BytesPerWord);
+  subq(counter, 8);
   jccb(Assembler::notZero, VECTOR32_LOOP);
 
   bind(VECTOR32_TAIL);
 
-  scan(super_klass, cur_pos, tmp1, *L_success, *L_failure, L_fallthrough, false /*do_unroll*/);
+  scan(super_klass, cur_pos, tail_counter, *L_success, *L_failure, L_fallthrough, UseNewCode /*do_unroll*/);
 
   bind(L_fallthrough);
 }
