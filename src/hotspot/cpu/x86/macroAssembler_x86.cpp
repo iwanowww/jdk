@@ -4568,7 +4568,6 @@ void MacroAssembler::check_klass_subtype_slow_path_avx2(Register    sub_klass,
                                                         XMMRegister xtmp2,
                                                         Label*      L_success,
                                                         Label*      L_failure) {
-  assert(UseNewCode2, "");
   assert(VM_Version::supports_avx2(), "required");
   assert_different_registers(sub_klass, super_klass, rtmp1, rtmp2);
   assert(L_success != NULL || L_failure != NULL, "at most one NULL in the batch");
