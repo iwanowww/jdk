@@ -4596,28 +4596,36 @@ void MacroAssembler::check_klass_subtype_slow_path_avx2(Register    sub_klass,
 
   const Register tail_counter = sub_klass; sub_klass = noreg;
 
+  int32_t stride = (UseNewCode ? 8 : 4);
   movq(tail_counter, counter);
-  andq(tail_counter, 0x7);
-  andq(counter,  ~(0x7)); // vector count
+  andq(tail_counter, stride - 1);
+  andq(counter, ~(stride - 1)); // vector count
   jccb(Assembler::zero, VECTOR32_TAIL);
 
   movdq(xtmp1, super_klass);
   vpbroadcastq(xtmp1, xtmp1, Assembler::AVX_256bit);
 
-  bind(VECTOR32_LOOP);
-  //align32();
-  vmovdqu(xtmp2, Address(cur_pos, 0 * BytesPerWord));
-  vpcmpCCW(xtmp2, xtmp1, xtmp2, xnoreg, Assembler::eq, Assembler::Q, Assembler::AVX_256bit);
-  vptest(xtmp2, xtmp2, Assembler::AVX_256bit);
-  LOCAL_JCC(Assembler::notZero, *L_success); // match!
+  if (UseNewCode) {
+    bind(VECTOR32_LOOP);
+    vmovdqu(xtmp2, Address(cur_pos, 0 * BytesPerWord));
+    vpcmpCCW(xtmp2, xtmp1, xtmp2, xnoreg, Assembler::eq, Assembler::Q, Assembler::AVX_256bit);
+    vptest(xtmp2, xtmp2, Assembler::AVX_256bit);
+    LOCAL_JCC(Assembler::notZero, *L_success); // match!
 
-  vmovdqu(xtmp2, Address(cur_pos, 4 * BytesPerWord));
-  vpcmpCCW(xtmp2, xtmp1, xtmp2, xnoreg, Assembler::eq, Assembler::Q, Assembler::AVX_256bit);
-  vptest(xtmp2, xtmp2, Assembler::AVX_256bit);
-  LOCAL_JCC(Assembler::notZero, *L_success); // match!
+    vmovdqu(xtmp2, Address(cur_pos, 4 * BytesPerWord));
+    vpcmpCCW(xtmp2, xtmp1, xtmp2, xnoreg, Assembler::eq, Assembler::Q, Assembler::AVX_256bit);
+    vptest(xtmp2, xtmp2, Assembler::AVX_256bit);
+    LOCAL_JCC(Assembler::notZero, *L_success); // match!
 
-  addq(cur_pos, 8 * BytesPerWord);
-  subq(counter, 8);
+  } else {
+    bind(VECTOR32_LOOP);
+    vmovdqu(xtmp2, Address(cur_pos, 0 * BytesPerWord));
+    vpcmpCCW(xtmp2, xtmp1, xtmp2, xnoreg, Assembler::eq, Assembler::Q, Assembler::AVX_256bit);
+    vptest(xtmp2, xtmp2, Assembler::AVX_256bit);
+    LOCAL_JCC(Assembler::notZero, *L_success); // match!
+  }
+  addq(cur_pos, stride * BytesPerWord);
+  subq(counter, stride);
   jccb(Assembler::notZero, VECTOR32_LOOP);
 
   bind(VECTOR32_TAIL);
