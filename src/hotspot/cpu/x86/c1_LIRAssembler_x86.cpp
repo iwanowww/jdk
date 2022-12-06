@@ -1773,7 +1773,6 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
         __ cmpklass(Address(klass_RInfo, k->super_check_offset()), k->constant_encoding());
 #endif // _LP64
         if (k->can_be_primary_super()) {
-          needs_slow_path = false;
           __ jcc(Assembler::notEqual, *failure_target);
           // successful cast, fall through to profile or jump
         } else {
