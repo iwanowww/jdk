@@ -37,4 +37,13 @@ inline void* Array<T>::operator new(size_t size, ClassLoaderData* loader_data, i
                                      MetaspaceObj::array_type(sizeof(T)), THREAD);
 }
 
+#ifndef PRODUCT
+template <typename T>
+void Array<T>::print(outputStream* st) {
+  for (int i = 0; i< _length; i++) {
+    st->print_cr("%3d: " INTPTR_FORMAT, i, (intptr_t)at(i));
+  }
+}
+#endif // !PRODUCT
+
 #endif // SHARE_OOPS_ARRAY_INLINE_HPP

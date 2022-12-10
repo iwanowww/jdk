@@ -131,6 +131,8 @@ class Klass : public Metadata {
   // secondary supers, else is &_primary_supers[depth()].
   juint       _super_check_offset;
 
+  juint       _hash_code;
+
   // Class name.  Instance classes: java/lang/String, etc.  Array classes: [I,
   // [Ljava/lang/String;, etc.  Set to zero for all other kinds of classes.
   Symbol*     _name;
@@ -139,6 +141,8 @@ class Klass : public Metadata {
   Klass*      _secondary_super_cache;
   // Array of all secondary supertypes
   Array<Klass*>* _secondary_supers;
+
+  Array<Klass*>* _secondary_supers_table;
   // Ordered list of all primary supertypes
   Klass*      _primary_supers[_primary_super_limit];
   // java/lang/Class instance mirroring this class
@@ -225,8 +229,14 @@ protected:
   juint    super_check_offset() const  { return _super_check_offset; }
   void set_super_check_offset(juint o) { _super_check_offset = o; }
 
+  juint    hash_code() const  { return _hash_code; }
+  void set_hash_code(juint h) { _hash_code = h; }
+
   Array<Klass*>* secondary_supers() const { return _secondary_supers; }
   void set_secondary_supers(Array<Klass*>* k) { _secondary_supers = k; }
+
+  Array<Klass*>* secondary_supers_table() const { return _secondary_supers_table; }
+  void set_secondary_supers_table(Array<Klass*>* k) {_secondary_supers_table = k; }
 
   // Return the element of the _super chain of the given depth.
   // If there is no such element, return either null or this.
@@ -373,9 +383,11 @@ protected:
   // Compiler support
   static ByteSize super_offset()                 { return in_ByteSize(offset_of(Klass, _super)); }
   static ByteSize super_check_offset_offset()    { return in_ByteSize(offset_of(Klass, _super_check_offset)); }
+  static ByteSize hash_code_offset()             { return in_ByteSize(offset_of(Klass, _hash_code)); }
   static ByteSize primary_supers_offset()        { return in_ByteSize(offset_of(Klass, _primary_supers)); }
   static ByteSize secondary_super_cache_offset() { return in_ByteSize(offset_of(Klass, _secondary_super_cache)); }
   static ByteSize secondary_supers_offset()      { return in_ByteSize(offset_of(Klass, _secondary_supers)); }
+  static ByteSize secondary_supers_table_offset(){ return in_ByteSize(offset_of(Klass, _secondary_supers_table)); }
   static ByteSize java_mirror_offset()           { return in_ByteSize(offset_of(Klass, _java_mirror)); }
   static ByteSize class_loader_data_offset()     { return in_ByteSize(offset_of(Klass, _class_loader_data)); }
   static ByteSize modifier_flags_offset()        { return in_ByteSize(offset_of(Klass, _modifier_flags)); }

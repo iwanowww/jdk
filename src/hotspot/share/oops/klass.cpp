@@ -51,6 +51,7 @@
 #include "runtime/arguments.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/handles.inline.hpp"
+#include "runtime/synchronizer.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/powerOfTwo.hpp"
 #include "utilities/stack.inline.hpp"
@@ -112,8 +113,34 @@ bool Klass::search_secondary_supers(Klass* k) const {
   // This cuts down the size of the inline method.
 
   // This is necessary, since I am never in my own secondary_super list.
-  if (this == k)
+  if (this == k) {
     return true;
+  }
+  Array<Klass*>* ss_table = secondary_supers_table();
+  if (UseNewCode && ss_table != NULL && ss_table->length() > 0) {
+    int table_size = ss_table->length();
+    assert(is_power_of_2(table_size), "");
+    juint mask = table_size - 1;
+    juint idx1 = (k->hash_code() & mask);
+    Klass* probe1 = ss_table->at(idx1);
+    if (probe1 == NULL) {
+      return false;
+    } else if (probe1 == k) {
+      return true;
+    } else {
+      juint idx2 = ((k->hash_code() >> 16) & mask);
+      Klass* probe2 = ss_table->at(idx2);
+      if (probe2 == NULL) {
+        return false;
+      } else if (probe2 == k) {
+        return true;
+      } else if (probe2 != vmClasses::Object_klass()){
+        return false;
+      } else {
+        // Object klass is used as a sentinel value to mark evicted element.
+      }
+    }
+  }
   // Scan the array-of-objects for a match
   int cnt = secondary_supers()->length();
   for (int i = 0; i < cnt; i++) {
@@ -235,6 +262,100 @@ bool Klass::can_be_primary_super_slow() const {
     return true;
 }
 
+// hashCode() generation :
+//
+// Possibilities:
+// * MD5Digest of {obj,stw_random}
+// * CRC32 of {obj,stw_random} or any linear-feedback shift register function.
+// * A DES- or AES-style SBox[] mechanism
+// * One of the Phi-based schemes, such as:
+//   2654435761 = 2^32 * Phi (golden ratio)
+//   HashCodeValue = ((uintptr_t(obj) >> 3) * 2654435761) ^ GVars.stw_random ;
+// * A variation of Marsaglia's shift-xor RNG scheme.
+// * (obj ^ stw_random) is appealing, but can result
+//   in undesirable regularity in the hashCode values of adjacent objects
+//   (objects allocated back-to-back, in particular).  This could potentially
+//   result in hashtable collisions and reduced hashtable efficiency.
+//   There are simple ways to "diffuse" the middle address bits over the
+//   generated hashCode values:
+static inline intptr_t get_next_hash(Thread* current, oop obj) {
+  intptr_t value = 0;
+  if (hashCode == 0) {
+    // This form uses global Park-Miller RNG.
+    // On MP system we'll have lots of RW access to a global, so the
+    // mechanism induces lots of coherency traffic.
+    value = os::random();
+  } else if (hashCode == 1) {
+    // This variation has the property of being stable (idempotent)
+    // between STW operations.  This can be useful in some of the 1-0
+    // synchronization schemes.
+    intptr_t addr_bits = cast_from_oop<intptr_t>(obj) >> 3;
+    int stw_random = *((int*)ObjectSynchronizer::get_gvars_stw_random_addr());
+    value = addr_bits ^ (addr_bits >> 5) ^ stw_random;
+  } else if (hashCode == 2) {
+    value = 1; // for sensitivity testing
+  } else if (hashCode == 3) {
+    int* hc_sequence_ptr = ((int*)ObjectSynchronizer::get_gvars_hc_sequence_addr());
+    int hc_sequence = ++(*hc_sequence_ptr);
+    value = hc_sequence;
+  } else if (hashCode == 4) {
+    value = cast_from_oop<intptr_t>(obj);
+  } else {
+    // Marsaglia's xor-shift scheme with thread-specific state
+    // This is probably the best overall implementation -- we'll
+    // likely make this the default in future releases.
+    unsigned t = current->_hashStateX;
+    t ^= (t << 11);
+    current->_hashStateX = current->_hashStateY;
+    current->_hashStateY = current->_hashStateZ;
+    current->_hashStateZ = current->_hashStateW;
+    unsigned v = current->_hashStateW;
+    v = (v ^ (v >> 19)) ^ (t ^ (t >> 8));
+    current->_hashStateW = v;
+    value = v;
+  }
+  return value;
+}
+
+
+static void init_helper(Klass* elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, int table_size) {
+  assert(is_power_of_2(table_size), "");
+  int table_mask = table_size - 1;
+  juint idx1 = (elem->hash_code() & table_mask);
+  Klass* probe1 = table->at(idx1);
+  assert(probe1 != elem, "duplicated");
+  if (probe1 == NULL) {
+    table->at_put(idx1, elem);
+  } else {
+    juint idx2 = ((elem->hash_code() >> 16) & table_mask);
+    do {
+      Klass* probe2 = table->at(idx2);
+      assert(probe2 != elem, "duplicated");
+      if (probe2 == NULL) {
+        table->at_put(idx2, elem);
+        break;
+      } else if (probe2 == vmClasses::Object_klass()) {
+        secondary_list->push(elem);
+        break;
+      } else {
+        juint probe2_idx = ((probe2->hash_code() >> 16) & table_mask);
+        if (probe2_idx != idx2) {
+          table->at_put(idx2, elem);
+          elem = probe2;
+          idx2 = probe2_idx;
+          continue;
+        } else {
+          // Object klass is used as a sentinel value to mark evicted element.
+          secondary_list->push(probe2);
+          secondary_list->push(elem);
+          table->at_put(idx2, vmClasses::Object_klass());
+          break;
+        }
+      }
+    } while (true);
+  }
+}
+
 void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interfaces, TRAPS) {
   if (k == nullptr) {
     set_super(nullptr);
@@ -284,6 +405,8 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
 #endif
   }
 
+  set_hash_code(get_next_hash(THREAD, java_mirror()));
+
   if (secondary_supers() == nullptr) {
 
     // Now compute the list of secondary supertypes.
@@ -324,6 +447,27 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
         continue;               // It's a dup, don't put it in
       primaries->push(p);
     }
+    Array<Klass*>* secondary_table = nullptr /*Universe::the_empty_klass_array()*/;
+    if (UseNewCode) {
+      int num_of_secondaries = primaries->length() + secondaries->length();
+      int table_size = 1 << (log2i(num_of_secondaries) + 1);
+
+      if (table_size >= 4) {
+        GrowableArray<Klass*>* table          = new GrowableArray<Klass*>(table_size, table_size, NULL);
+        GrowableArray<Klass*>* secondary_list = new GrowableArray<Klass*>(num_of_secondaries);
+        for (int j = 0; j < primaries->length(); j++) {
+          init_helper(primaries->at(j), table, secondary_list, table_size);
+        }
+        for (int j = 0; j < secondaries->length(); j++) {
+          init_helper(secondaries->at(j), table, secondary_list, table_size);
+        }
+        secondary_table = MetadataFactory::new_array<Klass *>(class_loader_data(), table_size, CHECK);
+        for (int j = 0; j < table->length(); j++) {
+          secondary_table->at_put(j, table->at(j));
+        }
+      }
+    }
+    set_secondary_supers_table(secondary_table);
     // Combine the two arrays into a metadata object to pack the array.
     // The primaries are added in the reverse order, then the secondaries.
     int new_length = primaries->length() + secondaries->length();
@@ -336,14 +480,13 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
     for( int j = 0; j < secondaries->length(); j++ ) {
       s2->at_put(j+fill_p, secondaries->at(j));  // add secondaries on the end.
     }
-
-  #ifdef ASSERT
-      // We must not copy any null placeholders left over from bootstrap.
+#ifdef ASSERT
+    // We must not copy any NULL placeholders left over from bootstrap.
+    // We must not copy any null placeholders left over from bootstrap.
     for (int j = 0; j < s2->length(); j++) {
       assert(s2->at(j) != nullptr, "correct bootstrapping order");
     }
-  #endif
-
+#endif
     set_secondary_supers(s2);
   }
 }
@@ -353,6 +496,7 @@ GrowableArray<Klass*>* Klass::compute_secondary_supers(int num_extra_slots,
   assert(num_extra_slots == 0, "override for complex klasses");
   assert(transitive_interfaces == nullptr, "sanity");
   set_secondary_supers(Universe::the_empty_klass_array());
+  set_secondary_supers_table(nullptr /*Universe::the_empty_klass_array()*/);
   return nullptr;
 }
 
@@ -515,6 +659,7 @@ void Klass::metaspace_pointers_do(MetaspaceClosure* it) {
   it->push(&_name);
   it->push(&_secondary_super_cache);
   it->push(&_secondary_supers);
+  it->push(&_secondary_supers_table);
   for (int i = 0; i < _primary_super_limit; i++) {
     it->push(&_primary_supers[i]);
   }
@@ -784,6 +929,24 @@ void Klass::verify_on(outputStream* st) {
 
   if (java_mirror_no_keepalive() != nullptr) {
     guarantee(java_lang_Class::is_instance(java_mirror_no_keepalive()), "should be instance");
+  }
+
+  if (_secondary_supers_table != NULL) {
+    uint cnt = _secondary_supers_table->length();
+    if (cnt > 0) {
+      guarantee(is_power_of_2(cnt), "");
+      uint mask = cnt - 1;
+      for (uint idx = 0; idx < cnt; idx++) {
+        Klass* k = _secondary_supers_table->at(idx);
+        if (k != NULL && k != vmClasses::Object_klass()) {
+          uint idx1 = (k->hash_code() >>  0) & mask;
+          uint idx2 = (k->hash_code() >> 16) & mask;
+          guarantee(idx == idx1 || idx == idx2, "misplaced");
+        }
+      }
+    } else {
+//      guarantee(_secondary_supers_table == Universe::the_empty_klass_array(), "");
+    }
   }
 }
 

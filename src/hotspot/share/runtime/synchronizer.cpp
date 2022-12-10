@@ -1625,20 +1625,20 @@ const char* ObjectSynchronizer::inflate_cause_name(const InflateCause cause) {
 //------------------------------------------------------------------------------
 // Debugging code
 
-u_char* ObjectSynchronizer::get_gvars_addr() {
-  return (u_char*)&GVars;
+address ObjectSynchronizer::get_gvars_addr() {
+  return (address)&GVars;
 }
 
-u_char* ObjectSynchronizer::get_gvars_hc_sequence_addr() {
-  return (u_char*)&GVars.hc_sequence;
+address ObjectSynchronizer::get_gvars_hc_sequence_addr() {
+  return (address)&GVars.hc_sequence;
 }
 
 size_t ObjectSynchronizer::get_gvars_size() {
   return sizeof(SharedGlobals);
 }
 
-u_char* ObjectSynchronizer::get_gvars_stw_random_addr() {
-  return (u_char*)&GVars.stw_random;
+address ObjectSynchronizer::get_gvars_stw_random_addr() {
+  return (address)&GVars.stw_random;
 }
 
 // Do the final audit and print of ObjectMonitor stats; must be done

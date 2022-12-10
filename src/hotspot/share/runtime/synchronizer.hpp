@@ -230,11 +230,12 @@ class ObjectSynchronizer : AllStatic {
   static volatile bool _is_final_audit;
   static jlong         _last_async_deflation_time_ns;
 
+ public:
   // Support for SynchronizerTest access to GVars fields:
-  static u_char* get_gvars_addr();
-  static u_char* get_gvars_hc_sequence_addr();
+  static address get_gvars_addr();
+  static address get_gvars_hc_sequence_addr();
   static size_t get_gvars_size();
-  static u_char* get_gvars_stw_random_addr();
+  static address get_gvars_stw_random_addr();
 
   static void handle_sync_on_value_based_class(Handle obj, JavaThread* current);
 };

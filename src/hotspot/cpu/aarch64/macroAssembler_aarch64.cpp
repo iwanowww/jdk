@@ -1384,7 +1384,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   Address secondary_supers_addr(sub_klass, ss_offset);
   Address super_cache_addr(     sub_klass, sc_offset);
 
-  BLOCK_COMMENT("check_klass_subtype_slow_path");
+  BLOCK_COMMENT("check_klass_subtype_slow_path {");
 
   // Do a linear scan of the secondary super-klass chain.
   // This code is rarely used, so simplicity is a virtue here.
@@ -1417,6 +1417,56 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   str(rscratch1, pst_counter_addr);
 #endif //PRODUCT
 
+  if (UseNewCode) {
+    BLOCK_COMMENT("secondary_supers_table {");
+
+    Label L_linear_scan;
+    const Register count      = r2;
+    const Register table_base = r5;
+    ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
+    cbz(rscratch1, L_linear_scan);
+
+    ldrw(count, Address(rscratch1, Array<Klass*>::length_offset_in_bytes()));
+    cbzw(count, L_linear_scan);
+
+    subw(count, count, 1); // mask = count - 1;
+    add(table_base, rscratch1, Array<Klass*>::base_offset_in_bytes());
+    ldrw(rscratch1, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
+    andw(rscratch2, rscratch1, count); // idx1 = (hash_code & mask)
+    ldr(rscratch2, Address(table_base, rscratch2, Address::lsl(LogBytesPerWord)));
+
+    cmp(rscratch2, super_klass);  // if (probe1 == k)
+    br(EQ, *L_success);
+
+    // if (probe1 == NULL)
+    cmp(rscratch2, zr);
+    br(EQ, *L_failure);
+
+    // idx2 = (hash_code >> 16 & mask);
+    lsrw(rscratch2, rscratch1, 16);
+    andw(rscratch2, rscratch2, count);
+    // probe2 = sstable->at(idx2);
+    ldr(rscratch2, Address(table_base, rscratch2, Address::lsl(LogBytesPerWord)));
+
+    // if (probe2 == k)  return true;
+    cmp(rscratch2, super_klass);
+    br(EQ, *L_success);
+
+    // if (probe2 == NULL)  return false;
+    cmp(rscratch2, zr);
+    br(EQ, *L_failure);
+
+    // if (probe2 != vmClasses::Object_klass())  return false;
+    assert(vmClasses::Object_klass() != NULL, "");
+    movptr(rscratch1, (uintptr_t)(address)vmClasses::Object_klass());
+    cmp(rscratch2, rscratch1);
+    br(NE, *L_failure);
+
+    bind(L_linear_scan);
+
+    BLOCK_COMMENT("} secondary_supers_table");
+  }
+
   // We will consult the secondary-super array.
   ldr(r5, secondary_supers_addr);
   // Load the array length.
@@ -1445,6 +1495,8 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 #undef IS_A_TEMP
 
   bind(L_fallthrough);
+
+  BLOCK_COMMENT("} check_klass_subtype_slow_path");
 }
 
 void MacroAssembler::clinit_barrier(Register klass, Register scratch, Label* L_fast_path, Label* L_slow_path) {

@@ -121,6 +121,7 @@ GrowableArray<Klass*>* ArrayKlass::compute_secondary_supers(int num_extra_slots,
   assert(transitive_interfaces == nullptr, "sanity");
   // Must share this for correct bootstrapping!
   set_secondary_supers(Universe::the_array_interfaces_array());
+  set_secondary_supers_table(Universe::the_empty_klass_array());
   return nullptr;
 }
 

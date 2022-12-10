@@ -152,11 +152,7 @@ protected:
   }
 
 #ifndef PRODUCT
-  void print(outputStream* st) {
-     for (int i = 0; i< _length; i++) {
-       st->print_cr("%d: " INTPTR_FORMAT, i, (intptr_t)at(i));
-     }
-  }
+  void print(outputStream* st);
   void print() { print(tty); }
 #endif // PRODUCT
 };

@@ -642,6 +642,13 @@ void InstanceKlass::deallocate_contents(ClassLoaderData* loader_data) {
   }
   set_secondary_supers(nullptr);
 
+  if (secondary_supers_table() != NULL &&
+      secondary_supers_table() != Universe::the_empty_klass_array() &&
+      !secondary_supers_table()->is_shared()) {
+    MetadataFactory::free_array<Klass*>(loader_data, secondary_supers_table());
+  }
+  set_secondary_supers_table(nullptr);
+
   deallocate_interfaces(loader_data, super(), local_interfaces(), transitive_interfaces());
   set_transitive_interfaces(nullptr);
   set_local_interfaces(nullptr);
@@ -1301,26 +1308,27 @@ bool InstanceKlass::can_be_primary_super_slow() const {
 GrowableArray<Klass*>* InstanceKlass::compute_secondary_supers(int num_extra_slots,
                                                                Array<InstanceKlass*>* transitive_interfaces) {
   // The secondaries are the implemented interfaces.
-  Array<InstanceKlass*>* interfaces = transitive_interfaces;
-  int num_secondaries = num_extra_slots + interfaces->length();
+  int num_secondaries = num_extra_slots + transitive_interfaces->length();
   if (num_secondaries == 0) {
     // Must share this for correct bootstrapping!
     set_secondary_supers(Universe::the_empty_klass_array());
+    set_secondary_supers_table(nullptr /*Universe::the_empty_klass_array()*/);
     return nullptr;
-  } else if (num_extra_slots == 0) {
+  } else if (!UseNewCode && num_extra_slots == 0) {
     // The secondary super list is exactly the same as the transitive interfaces, so
     // let's use it instead of making a copy.
     // Redefine classes has to be careful not to delete this!
     // We need the cast because Array<Klass*> is NOT a supertype of Array<InstanceKlass*>,
     // (but it's safe to do here because we won't write into _secondary_supers from this point on).
-    set_secondary_supers((Array<Klass*>*)(address)interfaces);
+    set_secondary_supers((Array<Klass*>*)(address)transitive_interfaces);
+    set_secondary_supers_table(nullptr /*Universe::the_empty_klass_array()*/);
     return nullptr;
   } else {
     // Copy transitive interfaces to a temporary growable array to be constructed
     // into the secondary super list with extra slots.
-    GrowableArray<Klass*>* secondaries = new GrowableArray<Klass*>(interfaces->length());
-    for (int i = 0; i < interfaces->length(); i++) {
-      secondaries->push(interfaces->at(i));
+    GrowableArray<Klass*>* secondaries = new GrowableArray<Klass*>(transitive_interfaces->length());
+    for (int i = 0; i < transitive_interfaces->length(); i++) {
+      secondaries->push(transitive_interfaces->at(i));
     }
     return secondaries;
   }
