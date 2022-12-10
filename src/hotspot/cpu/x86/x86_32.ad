@@ -1706,7 +1706,7 @@ encode %{
     Label miss;
 
     MacroAssembler _masm(&cbuf);
-    __ check_klass_subtype_slow_path(Resi, Reax, Recx, Redi,
+    __ check_klass_subtype_slow_path(Resi, Reax, Recx, Redi, noreg,
                                      NULL, &miss,
                                      /*set_cond_codes:*/ true);
     if ($primary) {

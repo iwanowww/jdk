@@ -1917,9 +1917,9 @@ void StubGenerator::generate_type_check(Register sub_klass,
 
   Label L_miss;
 
-  __ check_klass_subtype_fast_path(sub_klass, super_klass, noreg,        &L_success, &L_miss, NULL,
+  __ check_klass_subtype_fast_path(sub_klass, super_klass, noreg,               &L_success, &L_miss, NULL,
                                    super_check_offset);
-  __ check_klass_subtype_slow_path(sub_klass, super_klass, noreg, noreg, &L_success, NULL);
+  __ check_klass_subtype_slow_path(sub_klass, super_klass, noreg, noreg, noreg, &L_success, NULL);
 
   // Fall through on failure!
   __ BIND(L_miss);

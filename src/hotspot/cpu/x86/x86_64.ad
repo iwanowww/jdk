@@ -13132,11 +13132,11 @@ instruct jmpConUCF2(cmpOpUCF2 cop, rFlagsRegUCF cmp, label labl) %{
 // encoding ALSO sets flags.
 
 instruct partialSubtypeCheck(rdi_RegP result,
-                             rsi_RegP sub, rax_RegP super, rcx_RegI tmp,
+                             rsi_RegP sub, rax_RegP super, rcx_RegI tmp, rRegP tmp2,
                              rFlagsReg cr)
 %{
   match(Set result (PartialSubtypeCheck sub super));
-  effect(TEMP tmp, KILL cr);
+  effect(TEMP tmp, TEMP tmp2, KILL cr);
 
   ins_cost(1000);
   format %{ "check_klass_subtype_slow_path" %}
@@ -13144,7 +13144,7 @@ instruct partialSubtypeCheck(rdi_RegP result,
   ins_encode %{
     Label miss;
     __ check_klass_subtype_slow_path($sub$$Register, $super$$Register,
-                                     $tmp$$Register, $result$$Register,
+                                     $tmp$$Register, $result$$Register, $tmp2$$Register,
                                      NULL, &miss);
     __ xorptr($result$$Register, $result$$Register);
     __ bind(miss);

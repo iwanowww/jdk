@@ -1574,7 +1574,7 @@ class StubGenerator: public StubCodeGenerator {
     // We happen to know this works best when super_klass is in rax.
     Register super_klass = temp;
     __ movptr(super_klass, super_klass_addr);
-    __ check_klass_subtype_slow_path(sub_klass, super_klass, noreg, noreg,
+    __ check_klass_subtype_slow_path(sub_klass, super_klass, noreg, noreg, noreg,
                                      L_success, L_failure);
 
     __ bind(L_fallthrough);

@@ -4320,8 +4320,8 @@ void MacroAssembler::check_klass_subtype(Register sub_klass,
                            Register temp_reg,
                            Label& L_success) {
   Label L_failure;
-  check_klass_subtype_fast_path(sub_klass, super_klass, temp_reg,        &L_success, &L_failure, NULL);
-  check_klass_subtype_slow_path(sub_klass, super_klass, temp_reg, noreg, &L_success, NULL);
+  check_klass_subtype_fast_path(sub_klass, super_klass, temp_reg,               &L_success, &L_failure, NULL);
+  check_klass_subtype_slow_path(sub_klass, super_klass, temp_reg, noreg, noreg, &L_success, NULL);
   bind(L_failure);
 }
 
@@ -4430,6 +4430,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
                                                    Register super_klass,
                                                    Register rtmp1,
                                                    Register rtmp2,
+                                                   Register rtmp3,
                                                    Label* L_success,
                                                    Label* L_failure) {
   assert(L_success != NULL || L_failure != NULL, "one NULL at most");
@@ -4438,69 +4439,88 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   if (L_success == NULL) { L_success = &L_fallthrough; }
   if (L_failure == NULL) { L_failure = &L_fallthrough; }
 
-  bool pushed_rcx = false, pushed_rdi = false;
-  if (rtmp1 == noreg) { rtmp1 = rcx; push(rcx); pushed_rcx = true; }
-  if (rtmp2 == noreg) { rtmp2 = rdi; push(rdi); pushed_rdi = true; }
+  bool pushed_rcx = false, pushed_rdi = false, pushed_rbx = false;
+  if (rtmp1 == noreg)               { rtmp1 = rcx; push(rcx); pushed_rcx = true; }
+  if (rtmp2 == noreg)               { rtmp2 = rdi; push(rdi); pushed_rdi = true; }
+  if (rtmp3 == noreg && UseNewCode) { rtmp3 = rbx; push(rbx); pushed_rbx = true; }
 
-  assert_different_registers(sub_klass, super_klass, rtmp1, rtmp2);
+  assert_different_registers(sub_klass, super_klass, rtmp1, rtmp2, rtmp3);
 
 #ifndef PRODUCT
   incrementl(ExternalAddress(SharedRuntime::partial_subtype_ctr_addr()), rtmp1 /*rscratch*/);
 #endif // !PRODUCT
 
-//  if (UseNewCode) {
-//    BLOCK_COMMENT("secondary_supers_table {");
-//
-//    Label L_linear_scan;
-//
-//    movptr(rtmp1, Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
-//    testptr(rtmp1, rtmp1);
-//    jcc(Assembler::zero, L_linear_scan);
-//
-//    const Register mask = rtmp1;
-//    const Register table_base = rtmp2;
-//
-//    movl(mask, Address(rtmp2, Array<Klass*>::length_offset_in_bytes()));
-//    decrementl(mask, mask, 1); // mask = length - 1;
-//
-////    lea(table_base, Address(rtmp2, Array<Klass*>::base_offset_in_bytes()));
-//
-//    movl(rtmp3, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
-//    andl(rscratch2, rscratch1, mask); // idx1 = (hash_code & mask)
-//
-//    movptr(rscratch2);
-//
-//    cmpptr(super_klass, Address(table_base, idx, Address::times_ptr, Array<Klass*>::base_offset_in_bytes()));  // if (probe1 == k)
-//    br(EQ, *L_success);
-//
-//    // if (probe1 == NULL)
-//    cmp(rscratch2, zr);
-//    br(EQ, *L_failure);
-//
-//    // idx2 = (hash_code >> 16 & mask);
-//    lsrw(rscratch2, rscratch1, 16);
-//    andw(rscratch2, rscratch2, count);
-//    // probe2 = sstable->at(idx2);
-//    ldr(rscratch2, Address(table_base, rscratch2, Address::lsl(LogBytesPerWord)));
-//
-//    // if (probe2 == k)  return true;
-//    cmp(rscratch2, super_klass);
-//    br(EQ, *L_success);
-//
-//    // if (probe2 == NULL)  return false;
-//    cmp(rscratch2, zr);
-//    br(EQ, *L_failure);
-//
-//    // if (probe2 != vmClasses::Object_klass())  return false;
-//    assert(vmClasses::Object_klass() != NULL, "");
-//    movptr(rscratch1, (uintptr_t)(address)vmClasses::Object_klass());
-//    cmp(rscratch2, rscratch1);
-//    br(NE, *L_failure);
-//
-//    bind(L_linear_scan);
-//
-//    BLOCK_COMMENT("} secondary_supers_table");
-//  }
+  if (UseNewCode) {
+    BLOCK_COMMENT("secondary_supers_table {");
+
+    Label L_linear_scan, L_success_local, L_failure_local;
+
+    bool needs_post_handling = pushed_rdi || pushed_rcx || pushed_rbx;
+    Label& L_success1 = (needs_post_handling ? L_success_local : *L_success);
+    Label& L_failure1 = (needs_post_handling ? L_failure_local : *L_failure);
+
+    const Register table = rtmp1;
+
+    movptr(table, Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
+    testptr(table, table);
+    jcc(Assembler::zero, L_linear_scan);
+
+    const Register mask = rtmp2;
+    movl(mask, Address(table, Array<Klass*>::length_offset_in_bytes()));
+    decrementl(mask, 1); // mask = length - 1;
+
+//    lea(table_base, Address(rtmp2, Array<Klass*>::base_offset_in_bytes()));
+
+    movl(rtmp3, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
+    andl(rtmp3, mask); // idx1 = (hash_code & mask)
+
+    movptr(rtmp3, Address(table, rtmp3, Address::times_ptr, Array<Klass*>::base_offset_in_bytes()));
+    cmpptr(super_klass, rtmp3);  // if (probe1 == k)
+    jcc(Assembler::equal, L_success1);
+
+    // if (probe1 == NULL)
+    testptr(rtmp3, rtmp3);
+    jcc(Assembler::zero, L_failure1);
+
+    // idx2 = (hash_code >> 16 & mask);
+    movl(rtmp3, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
+    shrl(rtmp3, 16);
+    andl(rtmp3, mask);
+
+    movptr(rtmp3, Address(table, rtmp3, Address::times_ptr, Array<Klass*>::base_offset_in_bytes()));
+    cmpptr(super_klass, rtmp3);  // if (probe1 == k)
+    jcc(Assembler::equal, L_success1);
+
+    // if (probe1 == NULL)
+    testptr(rtmp3, rtmp3);
+    jcc(Assembler::zero, L_failure1);
+
+    // if (probe2 != vmClasses::Object_klass())  return false;
+    assert(vmClasses::Object_klass() != NULL, "");
+    movptr(rtmp2, (uintptr_t)(address)vmClasses::Object_klass());
+    cmpptr(rtmp3, rtmp3);
+
+    if (needs_post_handling) {
+      jcc(Assembler::equal, L_linear_scan);
+      bind(L_success_local);
+      if (pushed_rbx) { pop(rbx); }
+      if (pushed_rdi) { pop(rdi); }
+      if (pushed_rcx) { pop(rcx); }
+      jmp(*L_success);
+
+      bind(L_failure_local);
+      if (pushed_rbx) { pop(rbx); }
+      if (pushed_rdi) { pop(rdi); }
+      if (pushed_rcx) { pop(rcx); }
+      jmp(*L_failure);
+    } else {
+      jcc(Assembler::notEqual, *L_failure);
+    }
+
+    bind(L_linear_scan);
+
+    BLOCK_COMMENT("} secondary_supers_table");
+  }
 
   // Do a linear scan of the secondary super-klass chain.
 
@@ -4514,7 +4534,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 
   // Do a linear scan of the secondary super-klass array.
 
-  bool needs_post_handling = pushed_rdi || pushed_rcx || UseSecondarySuperCache;
+  bool needs_post_handling = pushed_rdi || pushed_rcx || pushed_rbx || UseSecondarySuperCache;
 
   if (needs_post_handling) {
     Label L_scan_end;
@@ -4522,6 +4542,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     bind(L_scan_end);
 
     // Unspill the temp. registers:
+    if (pushed_rbx) { pop(rbx); }
     if (pushed_rdi) { pop(rdi); }
     if (pushed_rcx) { pop(rcx); }
 

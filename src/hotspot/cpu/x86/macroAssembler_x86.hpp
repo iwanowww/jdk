@@ -616,6 +616,7 @@ public:
                                      Register super_klass,
                                      Register temp_reg,
                                      Register temp2_reg,
+                                     Register temp3_reg,
                                      Label* L_success,
                                      Label* L_failure);
 
