@@ -1367,9 +1367,10 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
                                                    Label* L_success,
                                                    Label* L_failure,
                                                    bool set_cond_codes) {
-  assert_different_registers(sub_klass, super_klass, temp_reg);
-  if (temp2_reg != noreg)
-    assert_different_registers(sub_klass, super_klass, temp_reg, temp2_reg, rscratch1);
+  assert_different_registers(sub_klass, super_klass, temp_reg, rscratch1, rscratch2);
+  if (temp2_reg != noreg) {
+    assert_different_registers(sub_klass, super_klass, temp_reg, temp2_reg, rscratch1, rscratch2);
+  }
 #define IS_A_TEMP(reg) ((reg) == temp_reg || (reg) == temp2_reg)
 
   Label L_fallthrough;
@@ -1420,7 +1421,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   if (UseNewCode) {
     BLOCK_COMMENT("secondary_supers_table {");
 
-    Label L_linear_scan;
+    Label L_linear_scan, L_success_local, L_failure_local;
     const Register count      = r2;
     const Register table_base = r5;
     ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
@@ -1433,34 +1434,42 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     add(table_base, rscratch1, Array<Klass*>::base_offset_in_bytes());
     ldrw(rscratch1, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
     andw(rscratch2, rscratch1, count); // idx1 = (hash_code & mask)
-    ldr(rscratch2, Address(table_base, rscratch2, Address::lsl(LogBytesPerWord)));
+    ldr(rscratch2, Address(table_base, rscratch2, Address::lsl(LogBytesPerWord))); // probe1
 
     cmp(rscratch2, super_klass);  // if (probe1 == k)
-    br(EQ, *L_success);
+    br(EQ, L_success_local);
 
     // if (probe1 == NULL)
     cmp(rscratch2, zr);
-    br(EQ, *L_failure);
+    br(EQ, L_failure_local);
 
     // idx2 = (hash_code >> 16 & mask);
     lsrw(rscratch2, rscratch1, 16);
     andw(rscratch2, rscratch2, count);
     // probe2 = sstable->at(idx2);
-    ldr(rscratch2, Address(table_base, rscratch2, Address::lsl(LogBytesPerWord)));
+    ldr(rscratch2, Address(table_base, rscratch2, Address::lsl(LogBytesPerWord))); // probe2
 
     // if (probe2 == k)  return true;
     cmp(rscratch2, super_klass);
-    br(EQ, *L_success);
+    br(EQ, L_success_local);
 
     // if (probe2 == NULL)  return false;
     cmp(rscratch2, zr);
-    br(EQ, *L_failure);
+    br(EQ, L_failure_local);
 
     // if (probe2 != vmClasses::Object_klass())  return false;
     assert(vmClasses::Object_klass() != NULL, "");
     movptr(rscratch1, (uintptr_t)(address)vmClasses::Object_klass());
     cmp(rscratch2, rscratch1);
-    br(NE, *L_failure);
+    br(NE, L_failure_local);
+
+    bind(L_success_local);
+    pop(pushed_registers, sp);
+    b(*L_success);
+
+    bind(L_failure_local);
+    pop(pushed_registers, sp);
+    b(*L_failure);
 
     bind(L_linear_scan);
 
