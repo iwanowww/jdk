@@ -942,6 +942,24 @@ void Klass::verify_on(outputStream* st) {
           uint idx1 = (k->hash_code() >>  0) & mask;
           uint idx2 = (k->hash_code() >> 16) & mask;
           guarantee(idx == idx1 || idx == idx2, "misplaced");
+          guarantee(_secondary_supers->contains(k), "absent");
+        }
+      }
+      uint ss_length = _secondary_supers->length();
+      for (uint idx = 0; idx < ss_length; idx++) {
+        Klass* k = _secondary_supers->at(idx);
+        guarantee(k != NULL && k->is_klass(), "");
+
+        guarantee(search_secondary_supers(k), "missing");
+
+        uint idx1 = (k->hash_code() >>  0) & mask;
+        Klass* probe1 = _secondary_supers_table->at(idx1);
+        uint idx2 = (k->hash_code() >> 16) & mask;
+        Klass* probe2 = _secondary_supers_table->at(idx2);
+
+        guarantee(probe1 != NULL || !_secondary_supers->contains(k), "");
+        if (probe1 != k) {
+          guarantee(probe2 != NULL || !_secondary_supers->contains(k), "");
         }
       }
     } else {

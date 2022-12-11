@@ -1462,14 +1462,64 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     movptr(rscratch1, (uintptr_t)(address)vmClasses::Object_klass());
     cmp(rscratch2, rscratch1);
     br(NE, L_failure_local);
+    b(L_linear_scan);
 
-    bind(L_success_local);
-    pop(pushed_registers, sp);
-    b(*L_success);
+    if (!UseNewCode2) {
+      bind(L_success_local);
+      pop(pushed_registers, sp);
+      b(*L_success);
 
-    bind(L_failure_local);
-    pop(pushed_registers, sp);
-    b(*L_failure);
+      bind(L_failure_local);
+      pop(pushed_registers, sp);
+      b(*L_failure);
+    } else {
+      // Verify definitive answer.
+      Label L_verify;
+
+      bind(L_success_local);
+      mov(rscratch2, zr);  // success: Z
+      b(L_verify);
+
+      bind(L_failure_local);
+      mov(rscratch2, super_klass); // failure: NZ
+      // b(L_verify);
+
+      BLOCK_COMMENT("verify {");
+      Label L_f1, L_verify_failure;
+
+      bind(L_verify);
+
+      // We will consult the secondary-super array.
+      ldr(r5, secondary_supers_addr);
+      // Load the array length.
+      ldrw(r2, Address(r5, Array<Klass*>::length_offset_in_bytes()));
+      // Skip to start of data.
+      add(r5, r5, Array<Klass*>::base_offset_in_bytes());
+
+      cmp(sp, zr); // Clear Z flag; SP is never zero
+      // Scan R2 words at [R5] for an occurrence of R0.
+      // Set NZ/Z based on last compare.
+      repne_scan(r5, r0, r2, rscratch1);
+
+      br(Assembler::NE, L_f1);
+
+      // success
+      cmp(rscratch2, zr);
+      br(Assembler::NE, L_verify_failure);
+      pop(pushed_registers, sp);
+      b(*L_success);
+
+      bind(L_f1);
+      cmp(rscratch2, zr);
+      br(Assembler::EQ, L_verify_failure);
+      pop(pushed_registers, sp);
+      b(*L_failure);
+
+      bind(L_verify_failure);
+      stop("mismatch");
+
+      BLOCK_COMMENT("} verify");
+    }
 
     bind(L_linear_scan);
 

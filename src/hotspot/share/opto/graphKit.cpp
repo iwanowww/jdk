@@ -2784,7 +2784,7 @@ Node* Phase::gen_subtype_check(Node* subklass, Node* superklass, Node** ctrl, No
   r_ok_subtype->init_req(2, gvn.transform(new IfTrueNode(iff3)));
   *ctrl = gvn.transform(new IfFalseNode(iff3));
 
-  if (UseNewCode2) {
+  if (false /*UseNewCode2*/) {
 /*
   if (ss_table != NULL && ss_table->length() > 0) {
     int table_size = ss_table->length();
