@@ -405,8 +405,6 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
 #endif
   }
 
-  set_hash_code(get_next_hash(THREAD, java_mirror()));
-
   if (secondary_supers() == nullptr) {
 
     // Now compute the list of secondary supertypes.
@@ -488,6 +486,21 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
     }
 #endif
     set_secondary_supers(s2);
+  }
+
+  if (true /*UseNewCode*/) {
+    int min_size = 4;
+    int min_mask = min_size - 1;
+
+    do {
+      int h = get_next_hash(THREAD, java_mirror());
+      int idx1 = (h >>  0) & min_mask;
+      int idx2 = (h >> 16) & min_mask;
+      if (idx1 != idx2) {
+        set_hash_code(h);
+        break;
+      }
+    } while (true);
   }
 }
 
