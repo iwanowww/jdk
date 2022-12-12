@@ -13136,7 +13136,7 @@ instruct partialSubtypeCheck(rdi_RegP result,
                              rFlagsReg cr)
 %{
   match(Set result (PartialSubtypeCheck sub super));
-  effect(TEMP tmp, TEMP tmp2, KILL cr);
+  effect(TEMP_DEF result, TEMP tmp, TEMP tmp2, KILL cr);
 
   ins_cost(1000);
   format %{ "check_klass_subtype_slow_path" %}
