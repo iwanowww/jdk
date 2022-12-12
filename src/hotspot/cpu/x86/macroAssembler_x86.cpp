@@ -4426,11 +4426,23 @@ void MacroAssembler::check_klass_subtype_fast_path(Register sub_klass,
   bind(L_fallthrough);
 }
 
-void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
-                                                   Register super_klass,
-                                                   Register rtmp1,
-                                                   Register rtmp2,
-                                                   Register rtmp3,
+// rsi, rax, rcx, rdi,
+// rbx, rax, rcx, [rdi]
+// rdx, rax, rcx, [rdi]
+// r14, rax, r13, [rdi]
+// r11, r8,  [rcx], [rdi]
+// r10, r11, [rcx], [rdi]
+
+// rsi, rax, rcx, rdi, rbx, rdx // rsp, rbp
+
+// edi, eax, esi, [edi]
+
+// rlocals (r14/edi), rax, rbcp (r13/esi)
+void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,   // rsi, rscratch1 (r10), rbx, rdx
+                                                   Register super_klass, // rax, rbx (x86-32), rscratch2 (r11)
+                                                   Register rtmp1,       // rcx, noreg, rax
+                                                   Register rtmp2,       // rdi, noreg
+                                                   Register rtmp3,       // noreg, *
                                                    Label* L_success,
                                                    Label* L_failure) {
   assert(L_success != NULL || L_failure != NULL, "one NULL at most");
@@ -4439,10 +4451,16 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   if (L_success == NULL) { L_success = &L_fallthrough; }
   if (L_failure == NULL) { L_failure = &L_fallthrough; }
 
-  bool pushed_rcx = false, pushed_rdi = false, pushed_rbx = false;
-  if (rtmp1 == noreg)               { rtmp1 = rcx; push(rcx); pushed_rcx = true; }
-  if (rtmp2 == noreg)               { rtmp2 = rdi; push(rdi); pushed_rdi = true; }
-  if (rtmp3 == noreg && UseNewCode) { rtmp3 = rbx; push(rbx); pushed_rbx = true; }
+  bool pushed_rcx = false, pushed_rdi = false, pushed_rbx = false, pushed_rdx;
+  if (rtmp1 == noreg) { rtmp1 = rcx; push(rcx); pushed_rcx = true; }
+  if (rtmp2 == noreg) { rtmp2 = rdi; push(rdi); pushed_rdi = true; }
+  if (rtmp3 == noreg && UseNewCode) {
+    if (sub_klass != rbx) {
+      rtmp3 = rbx; push(rbx); pushed_rbx = true;
+    } else {
+      rtmp3 = rdx; push(rdx); pushed_rdx = true;
+    }
+  }
 
   assert_different_registers(sub_klass, super_klass, rtmp1, rtmp2, rtmp3);
 
@@ -4455,7 +4473,8 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 
     Label L_linear_scan, L_success_local, L_failure_local;
 
-    bool needs_post_handling = pushed_rdi || pushed_rcx || pushed_rbx;
+    bool needs_post_handling = pushed_rdi || pushed_rcx || pushed_rbx || pushed_rdx;
+
     Label& L_success1 = (needs_post_handling ? L_success_local : *L_success);
     Label& L_failure1 = (needs_post_handling ? L_failure_local : *L_failure);
 
@@ -4503,12 +4522,14 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     if (needs_post_handling) {
       jcc(Assembler::equal, L_linear_scan);
       bind(L_success_local);
+      if (pushed_rdx) { pop(rdx); }
       if (pushed_rbx) { pop(rbx); }
       if (pushed_rdi) { pop(rdi); }
       if (pushed_rcx) { pop(rcx); }
       jmp(*L_success);
 
       bind(L_failure_local);
+      if (pushed_rdx) { pop(rdx); }
       if (pushed_rbx) { pop(rbx); }
       if (pushed_rdi) { pop(rdi); }
       if (pushed_rcx) { pop(rcx); }
@@ -4534,7 +4555,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 
   // Do a linear scan of the secondary super-klass array.
 
-  bool needs_post_handling = pushed_rdi || pushed_rcx || pushed_rbx || UseSecondarySuperCache;
+  bool needs_post_handling = pushed_rdi || pushed_rcx || pushed_rbx || pushed_rdx || UseSecondarySuperCache;
 
   if (needs_post_handling) {
     Label L_scan_end;
@@ -4542,6 +4563,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     bind(L_scan_end);
 
     // Unspill the temp. registers:
+    if (pushed_rdx) { pop(rdx); }
     if (pushed_rbx) { pop(rbx); }
     if (pushed_rdi) { pop(rdi); }
     if (pushed_rcx) { pop(rcx); }
