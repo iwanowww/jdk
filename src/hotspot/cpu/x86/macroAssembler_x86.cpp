@@ -4451,6 +4451,8 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,   // rsi,
   if (L_success == NULL) { L_success = &L_fallthrough; }
   if (L_failure == NULL) { L_failure = &L_fallthrough; }
 
+  BLOCK_COMMENT("check_klass_subtype_slow_path {");
+
   bool pushed_rcx = false, pushed_rdi = false, pushed_rbx = false, pushed_rdx = false;
   if (rtmp1 == noreg) { rtmp1 = rcx; push(rcx); pushed_rcx = true; }
   if (rtmp2 == noreg) { rtmp2 = rdi; push(rdi); pushed_rdi = true; }
@@ -4583,6 +4585,8 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,   // rsi,
     scan(super_klass, cur_pos, counter, *L_success, *L_failure, L_fallthrough);
     bind(L_fallthrough);
   }
+
+  BLOCK_COMMENT("} check_klass_subtype_slow_path");
 }
 
 void MacroAssembler::scan(Register value, Register position, Register counter,
