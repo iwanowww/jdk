@@ -116,39 +116,50 @@ bool Klass::search_secondary_supers(Klass* k) const {
   if (this == k) {
     return true;
   }
-  Array<Klass*>* ss_table = secondary_supers_table();
-  if (UseNewCode && ss_table != NULL && ss_table->length() > 0) {
-    int table_size = ss_table->length();
-    assert(is_power_of_2(table_size), "");
-    juint mask = table_size - 1;
-    juint idx1 = (k->hash_code() & mask);
-    Klass* probe1 = ss_table->at(idx1);
-    if (probe1 == NULL) {
-      return false;
-    } else if (probe1 == k) {
-      return true;
-    } else {
-      juint idx2 = ((k->hash_code() >> 16) & mask);
-      Klass* probe2 = ss_table->at(idx2);
-      if (probe2 == NULL) {
+  if (true /*UseNewCode*/) {
+    Array<Klass*>* ss_table = secondary_supers_table();
+    int table_size = secondary_supers_table_size();
+    if (table_size > 0) {
+      assert(is_power_of_2(table_size), "");
+      juint mask = table_size - 1;
+      juint idx1 = (k->hash_code() & mask);
+      Klass* probe1 = ss_table->at(idx1);
+      if (probe1 == NULL) {
         return false;
-      } else if (probe2 == k) {
+      } else if (probe1 == k) {
         return true;
-      } else if (probe2 != vmClasses::Object_klass()){
-        return false;
       } else {
-        // Object klass is used as a sentinel value to mark evicted element.
+        juint idx2 = ((k->hash_code() >> 16) & mask);
+        Klass* probe2 = ss_table->at(idx2);
+        if (probe2 == NULL) {
+          return false;
+        } else if (probe2 == k) {
+          return true;
+        } else if (probe2 != vmClasses::Object_klass()) {
+          return false;
+        } else {
+          // Object klass is used as a sentinel value to mark evicted element.
+          // Need to check the tail.
+        }
       }
     }
-  }
-  // Scan the array-of-objects for a match
-  int cnt = secondary_supers()->length();
-  for (int i = 0; i < cnt; i++) {
-    if (secondary_supers()->at(i) == k) {
-      return true;
+    // Scan the tail for a match.
+    for (int i = table_size; i < ss_table->length(); i++) {
+      if (ss_table->at(i) == k) {
+        return true;
+      }
     }
+    return false;
+  } else {
+    // Scan the array-of-objects for a match
+    int cnt = secondary_supers()->length();
+    for (int i = 0; i < cnt; i++) {
+      if (secondary_supers()->at(i) == k) {
+        return true;
+      }
+    }
+    return false;
   }
-  return false;
 }
 
 // Return self, except for abstract classes with exactly 1
@@ -319,40 +330,44 @@ static inline intptr_t get_next_hash(Thread* current, oop obj) {
 
 
 static void init_helper(Klass* elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, int table_size) {
-  assert(is_power_of_2(table_size), "");
-  int table_mask = table_size - 1;
-  juint idx1 = (elem->hash_code() & table_mask);
-  Klass* probe1 = table->at(idx1);
-  assert(probe1 != elem, "duplicated");
-  if (probe1 == NULL) {
-    table->at_put(idx1, elem);
+  if (table_size == 0) {
+    secondary_list->push(elem);
   } else {
-    juint idx2 = ((elem->hash_code() >> 16) & table_mask);
-    do {
-      Klass* probe2 = table->at(idx2);
-      assert(probe2 != elem, "duplicated");
-      if (probe2 == NULL) {
-        table->at_put(idx2, elem);
-        break;
-      } else if (probe2 == vmClasses::Object_klass()) {
-        secondary_list->push(elem);
-        break;
-      } else {
-        juint probe2_idx = ((probe2->hash_code() >> 16) & table_mask);
-        if (probe2_idx != idx2) {
+    assert(is_power_of_2(table_size), "");
+    int table_mask = table_size - 1;
+    juint idx1 = (elem->hash_code() & table_mask);
+    Klass *probe1 = table->at(idx1);
+    assert(probe1 != elem, "duplicated");
+    if (probe1 == NULL) {
+      table->at_put(idx1, elem);
+    } else {
+      juint idx2 = ((elem->hash_code() >> 16) & table_mask);
+      do {
+        Klass *probe2 = table->at(idx2);
+        assert(probe2 != elem, "duplicated");
+        if (probe2 == NULL) {
           table->at_put(idx2, elem);
-          elem = probe2;
-          idx2 = probe2_idx;
-          continue;
-        } else {
-          // Object klass is used as a sentinel value to mark evicted element.
-          secondary_list->push(probe2);
-          secondary_list->push(elem);
-          table->at_put(idx2, vmClasses::Object_klass());
           break;
+        } else if (probe2 == vmClasses::Object_klass()) {
+          secondary_list->push(elem);
+          break;
+        } else {
+          juint probe2_idx = ((probe2->hash_code() >> 16) & table_mask);
+          if (probe2_idx != idx2) {
+            table->at_put(idx2, elem);
+            elem = probe2;
+            idx2 = probe2_idx;
+            continue;
+          } else {
+            // Object klass is used as a sentinel value to mark evicted element.
+            secondary_list->push(probe2);
+            secondary_list->push(elem);
+            table->at_put(idx2, vmClasses::Object_klass());
+            break;
+          }
         }
-      }
-    } while (true);
+      } while (true);
+    }
   }
 }
 
@@ -466,28 +481,37 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
     }
   }
 
-  if (UseNewCode &&
-      secondary_supers_table() == NULL &&
-      secondary_supers() != NULL && secondary_supers()->length() > 0) {
-    ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
+  if (secondary_supers_table() == NULL) {
+    if (secondary_supers() != NULL && secondary_supers()->length() > 0) {
+      ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
 
-    Array<Klass*>* secondary_table = nullptr /*Universe::the_empty_klass_array()*/;
+      int num_of_secondaries = secondary_supers()->length();
+      int table_size = 1 << (log2i(num_of_secondaries) + 1);
+      if (table_size < 4) {
+        table_size = 0;
+      }
 
-    int num_of_secondaries = secondary_supers()->length();
-    int table_size = 1 << (log2i(num_of_secondaries) + 1);
-
-    if (table_size >= 4) {
       GrowableArray<Klass*>* table          = new GrowableArray<Klass*>(table_size, table_size, NULL);
       GrowableArray<Klass*>* secondary_list = new GrowableArray<Klass*>(num_of_secondaries);
       for (int j = 0; j < secondary_supers()->length(); j++) {
         init_helper(secondary_supers()->at(j), table, secondary_list, table_size);
       }
-      secondary_table = MetadataFactory::new_array<Klass *>(class_loader_data(), table_size, CHECK);
+      assert(table->length() == table_size, "");
+      Array<Klass*>* secondary_table = secondary_table = MetadataFactory::new_array<Klass *>(class_loader_data(), table_size + secondary_list->length(), CHECK);
       for (int j = 0; j < table->length(); j++) {
         secondary_table->at_put(j, table->at(j));
       }
+      for (int j = 0; j < secondary_list->length(); j++) {
+        secondary_table->at_put(table_size + j, secondary_list->at(j));
+      }
+      set_secondary_supers_table(secondary_table, table_size);
+      if (UseNewCode3) {
+        tty->print_cr("secondary_supers_table: %s: total=%d size=%d secondary=%d",
+                      name()->as_C_string(), num_of_secondaries, table_size, secondary_list->length());
+      }
+    } else {
+      set_secondary_supers_table(Universe::the_empty_klass_array(), 0);
     }
-    set_secondary_supers_table(secondary_table);
   }
 
   if (true /*UseNewCode*/) {
@@ -500,7 +524,8 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
       int idx2 = (h >> 16) & min_mask;
       if (idx1 != idx2) {
         if (UseNewCode3) {
-          tty->print_cr("set_hash_code: %s => %d (idx1=%d; idx2=%d)", name()->as_C_string(), h, idx1, idx2);
+          tty->print_cr("set_hash_code: %s => " UINT32_FORMAT_X " (idx1=%d; idx2=%d)",
+                        name()->as_C_string(), h, idx1, idx2);
         }
         set_hash_code(h);
         break;
@@ -514,7 +539,7 @@ GrowableArray<Klass*>* Klass::compute_secondary_supers(int num_extra_slots,
   assert(num_extra_slots == 0, "override for complex klasses");
   assert(transitive_interfaces == nullptr, "sanity");
   set_secondary_supers(Universe::the_empty_klass_array());
-  set_secondary_supers_table(nullptr /*Universe::the_empty_klass_array()*/);
+  set_secondary_supers_table(Universe::the_empty_klass_array(), 0);
   return nullptr;
 }
 
@@ -950,7 +975,7 @@ void Klass::verify_on(outputStream* st) {
   }
 
   if (_secondary_supers_table != NULL) {
-    uint cnt = _secondary_supers_table->length();
+    uint cnt = _secondary_supers_table_size;
     if (cnt > 0) {
       guarantee(is_power_of_2(cnt), "");
       uint mask = cnt - 1;
@@ -980,8 +1005,6 @@ void Klass::verify_on(outputStream* st) {
           guarantee(probe2 != NULL || !_secondary_supers->contains(k), "");
         }
       }
-    } else {
-//      guarantee(_secondary_supers_table == Universe::the_empty_klass_array(), "");
     }
   }
 }

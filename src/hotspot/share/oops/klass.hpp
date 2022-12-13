@@ -142,6 +142,7 @@ class Klass : public Metadata {
   // Array of all secondary supertypes
   Array<Klass*>* _secondary_supers;
 
+  juint          _secondary_supers_table_size;
   Array<Klass*>* _secondary_supers_table;
   // Ordered list of all primary supertypes
   Klass*      _primary_supers[_primary_super_limit];
@@ -235,8 +236,12 @@ protected:
   Array<Klass*>* secondary_supers() const { return _secondary_supers; }
   void set_secondary_supers(Array<Klass*>* k) { _secondary_supers = k; }
 
-  Array<Klass*>* secondary_supers_table() const { return _secondary_supers_table; }
-  void set_secondary_supers_table(Array<Klass*>* k) {_secondary_supers_table = k; }
+  Array<Klass*>* secondary_supers_table()      const { return _secondary_supers_table;      }
+  juint          secondary_supers_table_size() const { return _secondary_supers_table_size; }
+  void set_secondary_supers_table(Array<Klass*>* k, juint size) {
+    _secondary_supers_table = k;
+    _secondary_supers_table_size = size;
+  }
 
   // Return the element of the _super chain of the given depth.
   // If there is no such element, return either null or this.
@@ -388,6 +393,7 @@ protected:
   static ByteSize secondary_super_cache_offset() { return in_ByteSize(offset_of(Klass, _secondary_super_cache)); }
   static ByteSize secondary_supers_offset()      { return in_ByteSize(offset_of(Klass, _secondary_supers)); }
   static ByteSize secondary_supers_table_offset(){ return in_ByteSize(offset_of(Klass, _secondary_supers_table)); }
+  static ByteSize secondary_supers_table_size_offset(){ return in_ByteSize(offset_of(Klass, _secondary_supers_table_size)); }
   static ByteSize java_mirror_offset()           { return in_ByteSize(offset_of(Klass, _java_mirror)); }
   static ByteSize class_loader_data_offset()     { return in_ByteSize(offset_of(Klass, _class_loader_data)); }
   static ByteSize modifier_flags_offset()        { return in_ByteSize(offset_of(Klass, _modifier_flags)); }

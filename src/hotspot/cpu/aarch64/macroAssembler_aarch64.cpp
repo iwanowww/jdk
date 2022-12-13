@@ -1424,14 +1424,15 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     Label L_linear_scan, L_success_local, L_failure_local;
     const Register count      = r2;
     const Register table_base = r5;
-    ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
-    cbz(rscratch1, L_linear_scan);
 
-    ldrw(count, Address(rscratch1, Array<Klass*>::length_offset_in_bytes()));
+    ldrw(count, Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
     cbzw(count, L_linear_scan);
 
     subw(count, count, 1); // mask = count - 1;
-    add(table_base, rscratch1, Array<Klass*>::base_offset_in_bytes());
+
+    ldr(rscratch1,  Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
+    lea(table_base, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
+
     ldrw(rscratch1, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
     andw(rscratch2, rscratch1, count); // idx1 = (hash_code & mask)
     ldr(rscratch2, Address(table_base, rscratch2, Address::lsl(LogBytesPerWord))); // probe1
@@ -1462,8 +1463,23 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     movptr(rscratch1, (uintptr_t)(address)vmClasses::Object_klass());
     cmp(rscratch2, rscratch1);
     br(NE, L_failure_local);
-    b(L_linear_scan);
 
+    bind(L_linear_scan);
+
+    ldr (rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
+    ldrw(count,     Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
+
+    ldrw(rscratch2, Address(rscratch1, Array<Klass*>::length_offset_in_bytes()));
+    subw(rscratch2, rscratch2, count); // length - count
+    cbzw(rscratch2, L_failure_local); // left == 0?
+
+    lea(table_base, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
+    lea(table_base, Address(table_base, count, Address::lsl(LogBytesPerWord)));
+
+    repne_scan(table_base, r0, rscratch2, rscratch1);
+
+    br(Assembler::NE, L_failure_local);
+    //b(L_success_local);
     if (!UseNewCode2) {
       bind(L_success_local);
       pop(pushed_registers, sp);
@@ -1520,8 +1536,6 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 
       BLOCK_COMMENT("} verify");
     }
-
-    bind(L_linear_scan);
 
     BLOCK_COMMENT("} secondary_supers_table");
   }
