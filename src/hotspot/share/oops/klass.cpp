@@ -466,7 +466,7 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
     }
   }
 
-  if (UseNewCode && secondary_supers_table() == NULL) {
+  if (UseNewCode && secondary_supers_table() == NULL && secondary_supers()->length() > 0) {
     ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
 
     Array<Klass*>* secondary_table = nullptr /*Universe::the_empty_klass_array()*/;
