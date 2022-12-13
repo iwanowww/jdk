@@ -4483,11 +4483,14 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,   // rsi,
     const Register table = rtmp1;
 
     movptr(table, Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
-    testptr(table, table);
-    jcc(Assembler::zero, L_linear_scan);
+    testptr(table, table); // == NULL?
+    jcc(Assembler::zero, L_linear_scan); // FIXME: L_failure1
 
     const Register mask = rtmp2;
     movl(mask, Address(table, Array<Klass*>::length_offset_in_bytes()));
+    testl(mask, mask); // == 0?
+    jcc(Assembler::zero, L_linear_scan); // FIXME: L_failure1
+
     decrementl(mask, 1); // mask = length - 1;
 
 //    lea(table_base, Address(rtmp2, Array<Klass*>::base_offset_in_bytes()));
@@ -4496,11 +4499,10 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,   // rsi,
     andl(rtmp3, mask); // idx1 = (hash_code & mask)
 
     movptr(rtmp3, Address(table, rtmp3, Address::times_ptr, Array<Klass*>::base_offset_in_bytes()));
-    cmpptr(super_klass, rtmp3);  // if (probe1 == k)
+    cmpptr(super_klass, rtmp3);  // if (probe1 == k)  success!
     jcc(Assembler::equal, L_success1);
 
-    // if (probe1 == NULL)
-    testptr(rtmp3, rtmp3);
+    testptr(rtmp3, rtmp3); // if (probe1 == NULL)  failure
     jcc(Assembler::zero, L_failure1);
 
     // idx2 = (hash_code >> 16 & mask);
@@ -4509,14 +4511,13 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,   // rsi,
     andl(rtmp3, mask);
 
     movptr(rtmp3, Address(table, rtmp3, Address::times_ptr, Array<Klass*>::base_offset_in_bytes()));
-    cmpptr(super_klass, rtmp3);  // if (probe1 == k)
+    cmpptr(super_klass, rtmp3);  // if (probe1 == k)  success!
     jcc(Assembler::equal, L_success1);
 
-    // if (probe1 == NULL)
-    testptr(rtmp3, rtmp3);
+    testptr(rtmp3, rtmp3); // if (probe1 == NULL) failure
     jcc(Assembler::zero, L_failure1);
 
-    // if (probe2 != vmClasses::Object_klass())  return false;
+    // if (probe2 != vmClasses::Object_klass())  failure
     assert(vmClasses::Object_klass() != NULL, "");
     movptr(rtmp2, (uintptr_t)(address)vmClasses::Object_klass());
     cmpptr(rtmp3, rtmp3);
