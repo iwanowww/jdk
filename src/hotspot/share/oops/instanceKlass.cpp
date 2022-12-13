@@ -1312,16 +1312,14 @@ GrowableArray<Klass*>* InstanceKlass::compute_secondary_supers(int num_extra_slo
   if (num_secondaries == 0) {
     // Must share this for correct bootstrapping!
     set_secondary_supers(Universe::the_empty_klass_array());
-    set_secondary_supers_table(nullptr /*Universe::the_empty_klass_array()*/);
     return nullptr;
-  } else if (!UseNewCode && num_extra_slots == 0) {
+  } else if (num_extra_slots == 0) {
     // The secondary super list is exactly the same as the transitive interfaces, so
     // let's use it instead of making a copy.
     // Redefine classes has to be careful not to delete this!
     // We need the cast because Array<Klass*> is NOT a supertype of Array<InstanceKlass*>,
     // (but it's safe to do here because we won't write into _secondary_supers from this point on).
     set_secondary_supers((Array<Klass*>*)(address)transitive_interfaces);
-    set_secondary_supers_table(nullptr /*Universe::the_empty_klass_array()*/);
     return nullptr;
   } else {
     // Copy transitive interfaces to a temporary growable array to be constructed

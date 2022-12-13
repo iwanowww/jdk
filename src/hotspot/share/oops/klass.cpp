@@ -422,70 +422,70 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
     GrowableArray<Klass*>* secondaries = compute_secondary_supers(extras, transitive_interfaces);
     if (secondaries == nullptr) {
       // secondary_supers set by compute_secondary_supers
-      return;
-    }
+//      return;
+    } else {
+      GrowableArray<Klass*>* primaries = new GrowableArray<Klass*>(extras);
 
-    GrowableArray<Klass*>* primaries = new GrowableArray<Klass*>(extras);
+      for (p = super(); !(p == nullptr || p->can_be_primary_super()); p = p->super()) {
+        int i;                    // Scan for overflow primaries being duplicates of 2nd'arys
 
-    for (p = super(); !(p == nullptr || p->can_be_primary_super()); p = p->super()) {
-      int i;                    // Scan for overflow primaries being duplicates of 2nd'arys
-
-      // This happens frequently for very deeply nested arrays: the
-      // primary superclass chain overflows into the secondary.  The
-      // secondary list contains the element_klass's secondaries with
-      // an extra array dimension added.  If the element_klass's
-      // secondary list already contains some primary overflows, they
-      // (with the extra level of array-ness) will collide with the
-      // normal primary superclass overflows.
-      for( i = 0; i < secondaries->length(); i++ ) {
-        if( secondaries->at(i) == p )
-          break;
+        // This happens frequently for very deeply nested arrays: the
+        // primary superclass chain overflows into the secondary.  The
+        // secondary list contains the element_klass's secondaries with
+        // an extra array dimension added.  If the element_klass's
+        // secondary list already contains some primary overflows, they
+        // (with the extra level of array-ness) will collide with the
+        // normal primary superclass overflows.
+        for( i = 0; i < secondaries->length(); i++ ) {
+          if( secondaries->at(i) == p )
+            break;
+        }
+        if( i < secondaries->length() )
+          continue;               // It's a dup, don't put it in
+        primaries->push(p);
       }
-      if( i < secondaries->length() )
-        continue;               // It's a dup, don't put it in
-      primaries->push(p);
+      // Combine the two arrays into a metadata object to pack the array.
+      // The primaries are added in the reverse order, then the secondaries.
+      int new_length = primaries->length() + secondaries->length();
+      Array<Klass*>* s2 = MetadataFactory::new_array<Klass*>(
+                                         class_loader_data(), new_length, CHECK);
+      int fill_p = primaries->length();
+      for (int j = 0; j < fill_p; j++) {
+        s2->at_put(j, primaries->pop());  // add primaries in reverse order.
+      }
+      for( int j = 0; j < secondaries->length(); j++ ) {
+        s2->at_put(j+fill_p, secondaries->at(j));  // add secondaries on the end.
+      }
+#ifdef ASSERT
+      // We must not copy any NULL placeholders left over from bootstrap.
+      for (int j = 0; j < s2->length(); j++) {
+        assert(s2->at(j) != nullptr, "correct bootstrapping order");
+      }
+#endif
+      set_secondary_supers(s2);
     }
-    Array<Klass*>* secondary_table = nullptr /*Universe::the_empty_klass_array()*/;
-    if (UseNewCode) {
-      int num_of_secondaries = primaries->length() + secondaries->length();
-      int table_size = 1 << (log2i(num_of_secondaries) + 1);
+  }
 
-      if (table_size >= 4) {
-        GrowableArray<Klass*>* table          = new GrowableArray<Klass*>(table_size, table_size, NULL);
-        GrowableArray<Klass*>* secondary_list = new GrowableArray<Klass*>(num_of_secondaries);
-        for (int j = 0; j < primaries->length(); j++) {
-          init_helper(primaries->at(j), table, secondary_list, table_size);
-        }
-        for (int j = 0; j < secondaries->length(); j++) {
-          init_helper(secondaries->at(j), table, secondary_list, table_size);
-        }
-        secondary_table = MetadataFactory::new_array<Klass *>(class_loader_data(), table_size, CHECK);
-        for (int j = 0; j < table->length(); j++) {
-          secondary_table->at_put(j, table->at(j));
-        }
+  if (UseNewCode && secondary_supers_table() == NULL) {
+    ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
+
+    Array<Klass*>* secondary_table = nullptr /*Universe::the_empty_klass_array()*/;
+
+    int num_of_secondaries = secondary_supers()->length();
+    int table_size = 1 << (log2i(num_of_secondaries) + 1);
+
+    if (table_size >= 4) {
+      GrowableArray<Klass*>* table          = new GrowableArray<Klass*>(table_size, table_size, NULL);
+      GrowableArray<Klass*>* secondary_list = new GrowableArray<Klass*>(num_of_secondaries);
+      for (int j = 0; j < secondary_supers()->length(); j++) {
+        init_helper(secondary_supers()->at(j), table, secondary_list, table_size);
+      }
+      secondary_table = MetadataFactory::new_array<Klass *>(class_loader_data(), table_size, CHECK);
+      for (int j = 0; j < table->length(); j++) {
+        secondary_table->at_put(j, table->at(j));
       }
     }
     set_secondary_supers_table(secondary_table);
-    // Combine the two arrays into a metadata object to pack the array.
-    // The primaries are added in the reverse order, then the secondaries.
-    int new_length = primaries->length() + secondaries->length();
-    Array<Klass*>* s2 = MetadataFactory::new_array<Klass*>(
-                                       class_loader_data(), new_length, CHECK);
-    int fill_p = primaries->length();
-    for (int j = 0; j < fill_p; j++) {
-      s2->at_put(j, primaries->pop());  // add primaries in reverse order.
-    }
-    for( int j = 0; j < secondaries->length(); j++ ) {
-      s2->at_put(j+fill_p, secondaries->at(j));  // add secondaries on the end.
-    }
-#ifdef ASSERT
-    // We must not copy any NULL placeholders left over from bootstrap.
-    // We must not copy any null placeholders left over from bootstrap.
-    for (int j = 0; j < s2->length(); j++) {
-      assert(s2->at(j) != nullptr, "correct bootstrapping order");
-    }
-#endif
-    set_secondary_supers(s2);
   }
 
   if (true /*UseNewCode*/) {
@@ -497,6 +497,9 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
       int idx1 = (h >>  0) & min_mask;
       int idx2 = (h >> 16) & min_mask;
       if (idx1 != idx2) {
+        if (UseNewCode3) {
+          tty->print_cr("set_hash_code: %s => %d (idx1=%d; idx2=%d)", name()->as_C_string(), h, idx1, idx2);
+        }
         set_hash_code(h);
         break;
       }
