@@ -135,8 +135,8 @@ bool Klass::search_secondary_supers(Klass* k) const {
           return false;
         } else if (probe2 == k) {
           return true;
-        } else if (probe2 != vmClasses::Object_klass()) {
-          return false;
+//        } else if (probe2 != vmClasses::Object_klass()) {
+//          return false;
         } else {
           // Object klass is used as a sentinel value to mark evicted element.
           // Need to check the tail.
@@ -328,7 +328,62 @@ static inline intptr_t get_next_hash(Thread* current, oop obj) {
   return value;
 }
 
+/**/
+static juint next_index(juint h, juint prev_idx, juint table_mask) {
+  juint alt_idx = ((h >> 0) & table_mask);
+  if (alt_idx == prev_idx) {
+    alt_idx = ((h >> 16) & table_mask);
+  }
+  return alt_idx;
+}
 
+static void init_helper(Klass* elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, int table_size) {
+  if (table_size == 0) {
+    secondary_list->push(elem);
+  } else {
+    assert(is_power_of_2(table_size), "");
+    int table_mask = table_size - 1;
+    juint idx1 = (elem->hash_code() & table_mask);
+    Klass* probe1 = table->at(idx1);
+    assert(probe1 != elem, "duplicated");
+    if (probe1 == NULL) {
+      table->at_put(idx1, elem);
+    } else {
+//      if (probe1 != vmClasses::Object_klass()) {
+        table->at_put(idx1, elem);
+        elem = probe1;
+//      }
+
+      int attempts = 0;
+      do {
+        juint idx2 = next_index(elem->hash_code(), idx1, table_mask);
+        Klass* probe2 = table->at(idx2);
+        assert(probe2 != elem, "duplicated");
+        if (probe2 == NULL) {
+          table->at_put(idx2, elem);
+          break;
+//        } else if (probe2 == vmClasses::Object_klass()) {
+//          secondary_list->push(elem); // evict
+//          break;
+        } else if (attempts < table_size) {
+          table->at_put(idx2, elem);
+          elem = probe2;
+          idx1 = idx2;
+          attempts++;
+        } else {
+          // Object klass is used as a sentinel value to mark evicted element.
+//          secondary_list->push(probe2);
+          secondary_list->push(elem); // give up
+//          table->at_put(idx2, vmClasses::Object_klass());
+          break;
+        }
+      } while (true);
+    }
+  }
+}
+/**/
+
+/*
 static void init_helper(Klass* elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, int table_size) {
   if (table_size == 0) {
     secondary_list->push(elem);
@@ -348,9 +403,9 @@ static void init_helper(Klass* elem, GrowableArray<Klass*>* table, GrowableArray
         if (probe2 == NULL) {
           table->at_put(idx2, elem);
           break;
-        } else if (probe2 == vmClasses::Object_klass()) {
-          secondary_list->push(elem);
-          break;
+//        } else if (probe2 == vmClasses::Object_klass()) {
+//          secondary_list->push(elem);
+//          break;
         } else {
           juint probe2_idx = ((probe2->hash_code() >> 16) & table_mask);
           if (probe2_idx != idx2) {
@@ -360,9 +415,9 @@ static void init_helper(Klass* elem, GrowableArray<Klass*>* table, GrowableArray
             continue;
           } else {
             // Object klass is used as a sentinel value to mark evicted element.
-            secondary_list->push(probe2);
+//            secondary_list->push(probe2);
             secondary_list->push(elem);
-            table->at_put(idx2, vmClasses::Object_klass());
+//            table->at_put(idx2, vmClasses::Object_klass());
             break;
           }
         }
@@ -370,6 +425,7 @@ static void init_helper(Klass* elem, GrowableArray<Klass*>* table, GrowableArray
     }
   }
 }
+*/
 
 void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interfaces, TRAPS) {
   if (k == nullptr) {

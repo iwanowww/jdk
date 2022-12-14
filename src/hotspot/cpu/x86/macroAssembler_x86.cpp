@@ -4518,9 +4518,9 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,   // rsi,
     jcc(Assembler::zero, L_failure1);
 
     // if (probe2 != vmClasses::Object_klass())  failure
-    assert(vmClasses::Object_klass() != NULL, "");
-    movptr(rtmp2, (uintptr_t)(address)vmClasses::Object_klass());
-    cmpptr(rtmp3, rtmp3);
+//    assert(vmClasses::Object_klass() != NULL, "");
+//    movptr(rtmp2, (uintptr_t)(address)vmClasses::Object_klass());
+//    cmpptr(rtmp3, rtmp3);
 
     if (needs_post_handling) {
       jcc(Assembler::equal, L_linear_scan);

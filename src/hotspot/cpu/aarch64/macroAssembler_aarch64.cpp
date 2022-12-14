@@ -1459,10 +1459,10 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     br(EQ, L_failure_local);
 
     // if (probe2 != vmClasses::Object_klass())  return false;
-    assert(vmClasses::Object_klass() != NULL, "");
-    movptr(rscratch1, (uintptr_t)(address)vmClasses::Object_klass());
-    cmp(rscratch2, rscratch1);
-    br(NE, L_failure_local);
+//    assert(vmClasses::Object_klass() != NULL, "");
+//    movptr(rscratch1, (uintptr_t)(address)vmClasses::Object_klass());
+//    cmp(rscratch2, rscratch1);
+//    br(NE, L_failure_local);
 
     bind(L_linear_scan);
 
@@ -1471,7 +1471,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 
     ldrw(rscratch2, Address(rscratch1, Array<Klass*>::length_offset_in_bytes()));
     subw(rscratch2, rscratch2, count); // length - count
-    cbzw(rscratch2, L_failure_local); // left == 0?
+    cbzw(rscratch2, L_failure_local);  // left == 0?
 
     lea(table_base, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
     lea(table_base, Address(table_base, count, Address::lsl(LogBytesPerWord)));
