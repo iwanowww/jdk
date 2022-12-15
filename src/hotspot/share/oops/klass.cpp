@@ -108,6 +108,17 @@ void Klass::release_C_heap_structures(bool release_constant_pool) {
   if (_name != nullptr) _name->decrement_refcount();
 }
 
+/*
+static juint next_index(juint seed, juint h, juint prev_idx, juint table_size) {
+  assert(is_power_of_2(table_size), "");
+  uint table_mask = (table_size >> 1) - 1;
+  uint shift = (prev_idx & 1) ? 0 : 16;
+  uint delta = (prev_idx & 1) ? 0 :  1;
+  juint h1 = (seed ^ (h >> shift)) & table_mask; // FIXME: improve mixer function
+  return (h1 << 1) + delta;
+}
+*/
+
 bool Klass::search_secondary_supers(Klass* k) const {
   // Put some extra logic here out-of-line, before the search proper.
   // This cuts down the size of the inline method.
@@ -121,15 +132,17 @@ bool Klass::search_secondary_supers(Klass* k) const {
     int table_size = secondary_supers_table_size();
     if (table_size > 0) {
       assert(is_power_of_2(table_size), "");
-      juint mask = table_size - 1;
-      juint idx1 = (k->hash_code() & mask);
+
+      uint idx1 = next_index(hash_code(), k->hash_code(), 1, table_size);
+//      juint mask = table_size - 1;
+//      juint idx1 = (k->hash_code() & mask);
       Klass* probe1 = ss_table->at(idx1);
       if (probe1 == NULL) {
         return false;
       } else if (probe1 == k) {
         return true;
       } else {
-        juint idx2 = ((k->hash_code() >> 16) & mask);
+        uint idx2 = next_index(hash_code(), k->hash_code(), 0, table_size);
         Klass* probe2 = ss_table->at(idx2);
         if (probe2 == NULL) {
           return false;
@@ -328,7 +341,45 @@ static inline intptr_t get_next_hash(Thread* current, oop obj) {
   return value;
 }
 
-/**/
+juint Klass::next_index(juint seed, juint h, juint prev_idx, juint table_size) {
+  if (table_size >= 4) {
+    assert(is_power_of_2(table_size), "");
+    uint table_mask = (table_size >> 1) - 1;
+    uint shift = (prev_idx & 1) ? 0 : 16;
+    uint delta = (prev_idx & 1) ? 0 : 1;
+    juint h0 = (seed ^ h);
+    juint h1 = h0 >> (h0 % 32);
+    juint h2 = ((h1 ^ seed) >> shift) & table_mask; // FIXME: improve mixer function
+    return (h2 << 1) + delta;
+  } else {
+    return -1;
+  }
+}
+
+void Klass::init_helper(int seed, Klass* elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, int table_size) {
+  juint prev_idx = 1; // = 0;
+  Klass* cur_elem = elem;
+  for (int attempts = 0; attempts < table_size; attempts++) {
+    juint idx = Klass::next_index(seed, cur_elem->hash_code(), prev_idx, table_size);
+    Klass* probe = table->at(idx);
+    assert(probe != cur_elem, "duplicated");
+    if (probe == NULL) {
+      table->at_put(idx, cur_elem);
+      cur_elem = NULL;
+      break; // done
+    } else {
+      table->at_put(idx, cur_elem);
+      cur_elem = probe;
+      prev_idx = idx;
+      continue; // one more try
+    }
+  }
+  if (cur_elem != NULL) {
+    secondary_list->push(cur_elem); // give up
+  }
+}
+
+/*
 static juint next_index(juint h, juint prev_idx, juint table_mask) {
   juint alt_idx = ((h >> 0) & table_mask);
   if (alt_idx == prev_idx) {
@@ -381,7 +432,7 @@ static void init_helper(Klass* elem, GrowableArray<Klass*>* table, GrowableArray
     }
   }
 }
-/**/
+*/
 
 /*
 static void init_helper(Klass* elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, int table_size) {
@@ -539,38 +590,62 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
 
   if (secondary_supers_table() == NULL) {
     if (secondary_supers() != NULL && secondary_supers()->length() > 0) {
-      ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
-
       int num_of_secondaries = secondary_supers()->length();
-      int table_size = 1 << (log2i(num_of_secondaries) + 1);
+      int delta = (is_power_of_2(num_of_secondaries) ? 0 : 1);
+      int table_size = 1 << (log2i(num_of_secondaries) + delta);
       if (table_size < 4) {
         table_size = 0;
       }
 
-      GrowableArray<Klass*>* table          = new GrowableArray<Klass*>(table_size, table_size, NULL);
-      GrowableArray<Klass*>* secondary_list = new GrowableArray<Klass*>(num_of_secondaries);
-      for (int j = 0; j < secondary_supers()->length(); j++) {
-        init_helper(secondary_supers()->at(j), table, secondary_list, table_size);
-      }
-      assert(table->length() == table_size, "");
-      Array<Klass*>* secondary_table = secondary_table = MetadataFactory::new_array<Klass *>(class_loader_data(), table_size + secondary_list->length(), CHECK);
-      for (int j = 0; j < table->length(); j++) {
-        secondary_table->at_put(j, table->at(j));
-      }
-      for (int j = 0; j < secondary_list->length(); j++) {
-        secondary_table->at_put(table_size + j, secondary_list->at(j));
-      }
-      set_secondary_supers_table(secondary_table, table_size);
-      if (UseNewCode3) {
-        tty->print_cr("secondary_supers_table: %s: total=%d size=%d secondary=%d",
-                      name()->as_C_string(), num_of_secondaries, table_size, secondary_list->length());
+      int best_score = num_of_secondaries + 1;
+      for (int attempt = 0; attempt < 1000 && best_score > 0; attempt++) {
+        ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
+
+        int seed = get_next_hash(THREAD, java_mirror());
+
+        GrowableArray<Klass*>* table          = new GrowableArray<Klass*>(table_size, table_size, NULL);
+        GrowableArray<Klass*>* secondary_list = new GrowableArray<Klass*>(num_of_secondaries);
+        for (int j = 0; j < secondary_supers()->length(); j++) {
+          init_helper(seed, secondary_supers()->at(j), table, secondary_list, table_size);
+          if (secondary_list->length() >= best_score) {
+            continue; // no luck this time; fail-fast
+          }
+        }
+        assert(table->length() == table_size, "");
+
+        if (secondary_list->length() < best_score) {
+          best_score = secondary_list->length();
+          Array<Klass*>* secondary_table = MetadataFactory::new_array<Klass*>(class_loader_data(),
+                                                                              table_size + secondary_list->length(), CHECK);
+          for (int j = 0; j < table->length(); j++) {
+            secondary_table->at_put(j, table->at(j));
+          }
+          for (int j = 0; j < secondary_list->length(); j++) {
+            secondary_table->at_put(table_size + j, secondary_list->at(j));
+          }
+          set_secondary_supers_table(secondary_table, table_size);
+          set_hash_code(seed);
+
+          if (UseNewCode3) {
+            ttyLocker ttyl;
+            tty->print_cr("#%d: secondary_supers_table: %s: total=%d size=%d secondary=%d",
+                          attempt, name()->as_C_string(), num_of_secondaries, table_size, secondary_list->length());
+            dump_on(tty);
+          }
+
+          if (table_size == 0) {
+            assert(best_score == num_of_secondaries, "");
+            break;
+          }
+        }
       }
     } else {
       set_secondary_supers_table(Universe::the_empty_klass_array(), 0);
     }
   }
 
-  if (true /*UseNewCode*/) {
+  /*
+  if (true) { // UseNewCode
     int min_size = 4;
     int min_mask = min_size - 1;
 
@@ -588,7 +663,38 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
       }
     } while (true);
   }
+  */
 }
+
+void Klass::dump_on(outputStream* st) {
+  st->print_cr("----------------- TABLE ------------------");
+  st->print_cr("--- %s table_size=%d h=" UINT32_FORMAT_X_0 " ---",
+               external_name(), secondary_supers_table_size(), hash_code());
+  st->print_cr("------------------------------------------");
+
+  for (int i = 0; i < secondary_supers_table()->length(); i++) {
+    if (i == (int)secondary_supers_table_size()) {
+      st->print_cr("---------------------------");
+    }
+    st->print("%3d: ", i);
+    if (i < (int)secondary_supers_table_size()) {
+      st->print("%s ", (i % 2 == 0 ? " " : "*"));
+    } else {
+      st->print_raw("= ");
+
+    }
+    Klass* k = secondary_supers_table()->at(i);
+    if (k != NULL) {
+      st->print_cr("%s h=" UINT32_FORMAT_X_0 " idx1=%2d idx2=%2d", k->external_name(), k->hash_code(),
+                   next_index(hash_code(), k->hash_code(), 1, secondary_supers_table_size()),
+                   next_index(hash_code(), k->hash_code(), 0, secondary_supers_table_size()));
+    } else {
+      st->print_cr("NULL");
+    }
+  }
+  st->print_cr("---------------------------");
+}
+
 
 GrowableArray<Klass*>* Klass::compute_secondary_supers(int num_extra_slots,
                                                        Array<InstanceKlass*>* transitive_interfaces) {
@@ -1038,8 +1144,8 @@ void Klass::verify_on(outputStream* st) {
       for (uint idx = 0; idx < cnt; idx++) {
         Klass* k = _secondary_supers_table->at(idx);
         if (k != NULL && k != vmClasses::Object_klass()) {
-          uint idx1 = (k->hash_code() >>  0) & mask;
-          uint idx2 = (k->hash_code() >> 16) & mask;
+          uint idx1 = next_index(hash_code(), k->hash_code(), 1, cnt);
+          uint idx2 = next_index(hash_code(), k->hash_code(), 0, cnt);
           guarantee(idx == idx1 || idx == idx2, "misplaced");
           guarantee(_secondary_supers->contains(k), "absent");
         }
@@ -1051,9 +1157,9 @@ void Klass::verify_on(outputStream* st) {
 
         guarantee(search_secondary_supers(k), "missing");
 
-        uint idx1 = (k->hash_code() >>  0) & mask;
+        uint idx1 = next_index(hash_code(), k->hash_code(), 1, cnt);
         Klass* probe1 = _secondary_supers_table->at(idx1);
-        uint idx2 = (k->hash_code() >> 16) & mask;
+        uint idx2 = next_index(hash_code(), k->hash_code(), 0, cnt);
         Klass* probe2 = _secondary_supers_table->at(idx2);
 
         guarantee(probe1 != NULL || !_secondary_supers->contains(k), "");
