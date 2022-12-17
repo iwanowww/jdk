@@ -726,7 +726,7 @@ protected:
   void verify() { verify_on(tty); }
   void dump_on(outputStream* st);
 
-  static juint next_index(juint seed, juint h, juint prev_idx, juint table_size);
+  static juint next_index(juint seed, Klass* k, juint prev_idx, juint table_size);
   void init_helper(int seed, Klass* elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, int table_size);
 
 #ifndef PRODUCT

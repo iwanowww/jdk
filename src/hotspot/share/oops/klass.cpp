@@ -133,7 +133,7 @@ bool Klass::search_secondary_supers(Klass* k) const {
     if (table_size > 0) {
       assert(is_power_of_2(table_size), "");
 
-      uint idx1 = next_index(hash_code(), k->hash_code(), 1, table_size);
+      uint idx1 = next_index(hash_code(), k, 1, table_size);
 //      juint mask = table_size - 1;
 //      juint idx1 = (k->hash_code() & mask);
       Klass* probe1 = ss_table->at(idx1);
@@ -142,7 +142,7 @@ bool Klass::search_secondary_supers(Klass* k) const {
       } else if (probe1 == k) {
         return true;
       } else {
-        uint idx2 = next_index(hash_code(), k->hash_code(), 0, table_size);
+        uint idx2 = next_index(hash_code(), k, 0, table_size);
         Klass* probe2 = ss_table->at(idx2);
         if (probe2 == NULL) {
           return false;
@@ -341,16 +341,17 @@ static inline intptr_t get_next_hash(Thread* current, oop obj) {
   return value;
 }
 
-juint Klass::next_index(juint seed, juint h, juint prev_idx, juint table_size) {
+juint Klass::next_index(juint seed, Klass* k, juint prev_idx, juint table_size) {
   if (table_size >= 4) {
     assert(is_power_of_2(table_size), "");
-    uint table_mask = (table_size >> 1) - 1;
+    uintptr_t h = k->hash_code();
+    uint table_mask = table_size - 2; // (table_size >> 1) - 1;
     uint shift = (prev_idx & 1) ? 0 : 16;
     uint delta = (prev_idx & 1) ? 0 : 1;
     juint h0 = (seed ^ h);
     juint h1 = h0 >> (h0 % 32);
     juint h2 = ((h1 ^ seed) >> shift) & table_mask; // FIXME: improve mixer function
-    return (h2 << 1) + delta;
+    return h2 + delta; // (h2 << 1) + delta;
   } else {
     return -1;
   }
@@ -360,7 +361,7 @@ void Klass::init_helper(int seed, Klass* elem, GrowableArray<Klass*>* table, Gro
   juint prev_idx = 1; // = 0;
   Klass* cur_elem = elem;
   for (int attempts = 0; attempts < table_size; attempts++) {
-    juint idx = Klass::next_index(seed, cur_elem->hash_code(), prev_idx, table_size);
+   juint idx = Klass::next_index(seed, cur_elem, prev_idx, table_size);
     Klass* probe = table->at(idx);
     assert(probe != cur_elem, "duplicated");
     if (probe == NULL) {
@@ -667,6 +668,7 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
 }
 
 void Klass::dump_on(outputStream* st) {
+  ResourceMark rm;
   st->print_cr("----------------- TABLE ------------------");
   st->print_cr("--- %s table_size=%d h=" UINT32_FORMAT_X_0 " ---",
                external_name(), secondary_supers_table_size(), hash_code());
@@ -685,9 +687,10 @@ void Klass::dump_on(outputStream* st) {
     }
     Klass* k = secondary_supers_table()->at(i);
     if (k != NULL) {
-      st->print_cr("%s h=" UINT32_FORMAT_X_0 " idx1=%2d idx2=%2d", k->external_name(), k->hash_code(),
-                   next_index(hash_code(), k->hash_code(), 1, secondary_supers_table_size()),
-                   next_index(hash_code(), k->hash_code(), 0, secondary_supers_table_size()));
+      st->print_cr(UINTX_FORMAT_X_0 " %s h=" UINT32_FORMAT_X_0 " idx1=%2d idx2=%2d",
+                   (uintptr_t)k, k->external_name(), k->hash_code(),
+                   next_index(hash_code(), k, 1, secondary_supers_table_size()),
+                   next_index(hash_code(), k, 0, secondary_supers_table_size()));
     } else {
       st->print_cr("NULL");
     }
@@ -1144,8 +1147,8 @@ void Klass::verify_on(outputStream* st) {
       for (uint idx = 0; idx < cnt; idx++) {
         Klass* k = _secondary_supers_table->at(idx);
         if (k != NULL && k != vmClasses::Object_klass()) {
-          uint idx1 = next_index(hash_code(), k->hash_code(), 1, cnt);
-          uint idx2 = next_index(hash_code(), k->hash_code(), 0, cnt);
+          uint idx1 = next_index(hash_code(), k, 1, cnt);
+          uint idx2 = next_index(hash_code(), k, 0, cnt);
           guarantee(idx == idx1 || idx == idx2, "misplaced");
           guarantee(_secondary_supers->contains(k), "absent");
         }
@@ -1157,9 +1160,9 @@ void Klass::verify_on(outputStream* st) {
 
         guarantee(search_secondary_supers(k), "missing");
 
-        uint idx1 = next_index(hash_code(), k->hash_code(), 1, cnt);
+        uint idx1 = next_index(hash_code(), k, 1, cnt);
         Klass* probe1 = _secondary_supers_table->at(idx1);
-        uint idx2 = next_index(hash_code(), k->hash_code(), 0, cnt);
+        uint idx2 = next_index(hash_code(), k, 0, cnt);
         Klass* probe2 = _secondary_supers_table->at(idx2);
 
         guarantee(probe1 != NULL || !_secondary_supers->contains(k), "");

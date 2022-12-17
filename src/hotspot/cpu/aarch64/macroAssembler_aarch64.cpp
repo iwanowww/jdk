@@ -1418,7 +1418,19 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   str(rscratch1, pst_counter_addr);
 #endif //PRODUCT
 
-  if (UseNewCode) {
+  /*
+    uintptr_t h = k->hash_code();
+    uint table_mask = table_size - 2; // (table_size >> 1) - 1;
+    juint h0 = (seed ^ h);
+    juint h1 = h0 >> (h0 % 32);
+
+    // primary vs secondary index
+    uint shift = (prev_idx & 1) ? 0 : 16;
+    uint delta = (prev_idx & 1) ? 0 : 1;
+    juint h2 = ((h1 ^ seed) >> shift) & table_mask; // FIXME: improve mixer function
+    return h2 + delta; // (h2 << 1) + delta;
+   */
+  if (UseNewCode /*&& Thread::current()->is_Compiler_thread()*/) {
     BLOCK_COMMENT("secondary_supers_table {");
 
     Label L_linear_scan, L_success_local, L_failure_local;
@@ -1428,35 +1440,53 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     ldrw(count, Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
     cbzw(count, L_linear_scan);
 
-    subw(count, count, 1); // mask = count - 1;
+    // table_mask = table_size - 2
+    subw(count, count, 2);
+
+    ldrw(rscratch1, Address(  sub_klass, in_bytes(Klass::hash_code_offset()))); // seed
+    ldrw(rscratch2, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
+
+    eorw(rscratch2, rscratch1, rscratch2); // h0 = seed ^ h
+
+    // h1 = h0 >> (h0 % 32)
+    andw(r5, rscratch2, 31);         // (h0 % 32)
+    lsrvw(rscratch2, rscratch2, r5); // (h0 >> (h0 % 32))
+
+    eorw(rscratch2, rscratch1, rscratch2); // h2 = seed ^ h1
+
+    // drop seed in rscratch1
 
     ldr(rscratch1,  Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
     lea(table_base, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
 
-    ldrw(rscratch1, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
-    andw(rscratch2, rscratch1, count); // idx1 = (hash_code & mask)
-    ldr(rscratch2, Address(table_base, rscratch2, Address::lsl(LogBytesPerWord))); // probe1
+    andw(rscratch1, rscratch2, count); // idx1 = (h2 & mask)
+    ldr(rscratch1, Address(table_base, rscratch1, Address::lsl(LogBytesPerWord))); // probe1
 
-    cmp(rscratch2, super_klass);  // if (probe1 == k)
+    cmp(rscratch1, super_klass);  // if (probe1 == k)
     br(EQ, L_success_local);
 
     // if (probe1 == NULL)
-    cmp(rscratch2, zr);
+    cmp(rscratch1, zr);
     br(EQ, L_failure_local);
 
     // idx2 = (hash_code >> 16 & mask);
-    lsrw(rscratch2, rscratch1, 16);
-    andw(rscratch2, rscratch2, count);
+    lsrw(rscratch1, rscratch2, 16);
+    andw(rscratch1, rscratch1, count);
+    addw(rscratch1, rscratch1, 1);
+
     // probe2 = sstable->at(idx2);
-    ldr(rscratch2, Address(table_base, rscratch2, Address::lsl(LogBytesPerWord))); // probe2
+    ldr(rscratch1, Address(table_base, rscratch1, Address::lsl(LogBytesPerWord))); // probe2
 
     // if (probe2 == k)  return true;
-    cmp(rscratch2, super_klass);
+    cmp(rscratch1, super_klass);
     br(EQ, L_success_local);
 
     // if (probe2 == NULL)  return false;
-    cmp(rscratch2, zr);
+    cmp(rscratch1, zr);
     br(EQ, L_failure_local);
+
+    // TODO: signal about conflicts?
+    // may help to avoid iterating over the tail, but the tail is intended to be small anyway
 
     // if (probe2 != vmClasses::Object_klass())  return false;
 //    assert(vmClasses::Object_klass() != NULL, "");
@@ -1538,31 +1568,31 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     }
 
     BLOCK_COMMENT("} secondary_supers_table");
-  }
+  } else {
+    // We will consult the secondary-super array.
+    ldr(r5, secondary_supers_addr);
+    // Load the array length.
+    ldrw(r2, Address(r5, Array<Klass *>::length_offset_in_bytes()));
+    // Skip to start of data.
+    add(r5, r5, Array<Klass *>::base_offset_in_bytes());
 
-  // We will consult the secondary-super array.
-  ldr(r5, secondary_supers_addr);
-  // Load the array length.
-  ldrw(r2, Address(r5, Array<Klass*>::length_offset_in_bytes()));
-  // Skip to start of data.
-  add(r5, r5, Array<Klass*>::base_offset_in_bytes());
+    cmp(sp, zr); // Clear Z flag; SP is never zero
+    // Scan R2 words at [R5] for an occurrence of R0.
+    // Set NZ/Z based on last compare.
+    repne_scan(r5, r0, r2, rscratch1);
 
-  cmp(sp, zr); // Clear Z flag; SP is never zero
-  // Scan R2 words at [R5] for an occurrence of R0.
-  // Set NZ/Z based on last compare.
-  repne_scan(r5, r0, r2, rscratch1);
+    // Unspill the temp. registers:
+    pop(pushed_registers, sp);
 
-  // Unspill the temp. registers:
-  pop(pushed_registers, sp);
+    br(Assembler::NE, *L_failure);
 
-  br(Assembler::NE, *L_failure);
-
-  if (UseSecondarySuperCache) {
-    // Success.  Cache the super we found and proceed in triumph.
-    str(super_klass, super_cache_addr);
-  }
-  if (L_success != &L_fallthrough) {
-    b(*L_success);
+    if (UseSecondarySuperCache) {
+      // Success.  Cache the super we found and proceed in triumph.
+      str(super_klass, super_cache_addr);
+    }
+    if (L_success != &L_fallthrough) {
+      b(*L_success);
+    }
   }
 
 #undef IS_A_TEMP
