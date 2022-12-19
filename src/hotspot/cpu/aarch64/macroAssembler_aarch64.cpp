@@ -1496,14 +1496,17 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 
     bind(L_linear_scan);
 
-    ldr (rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
-    ldrw(count,     Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
+    // NB! r5/table_base should hold non-zero value when exiting on failure.
+    ldr (table_base, Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
+    ldrw(count,      Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
 
-    ldrw(rscratch2, Address(rscratch1, Array<Klass*>::length_offset_in_bytes()));
+    ldrw(rscratch2, Address(table_base, Array<Klass*>::length_offset_in_bytes()));
+    cbzw(rscratch2, L_failure_local);  // left == 0?  r5 != 0!
+
     subw(rscratch2, rscratch2, count); // length - count
-    cbzw(rscratch2, L_failure_local);  // left == 0?
+    cbzw(rscratch2, L_failure_local);  // left == 0?  r5 != 0!
 
-    lea(table_base, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
+    lea(table_base, Address(table_base, Array<Klass*>::base_offset_in_bytes()));
     lea(table_base, Address(table_base, count, Address::lsl(LogBytesPerWord)));
 
     repne_scan(table_base, r0, rscratch2, rscratch1);
