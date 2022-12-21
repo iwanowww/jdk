@@ -1485,6 +1485,8 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     cmp(rscratch1, zr);
     br(EQ, L_failure_local);
 
+    addw(count, count, 2); // table_size = table_mask + 2
+
     // TODO: signal about conflicts?
     // may help to avoid iterating over the tail, but the tail is intended to be small anyway
 
@@ -1498,7 +1500,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 
     // NB! r5/table_base should hold non-zero value when exiting on failure.
     ldr (table_base, Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
-    ldrw(count,      Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
+//    ldrw(count,      Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
 
     ldrw(rscratch2, Address(table_base, Array<Klass*>::length_offset_in_bytes()));
     cbzw(rscratch2, L_failure_local);  // left == 0?  r5 != 0!
