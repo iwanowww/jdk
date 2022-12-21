@@ -545,6 +545,8 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
     GrowableArray<Klass*>* secondaries = compute_secondary_supers(extras, transitive_interfaces);
     if (secondaries == nullptr) {
       // secondary_supers set by compute_secondary_supers
+      int seed = get_next_hash(THREAD, java_mirror());
+      set_hash_code(seed);
 //      return;
     } else {
       GrowableArray<Klass*>* primaries = new GrowableArray<Klass*>(extras);
@@ -598,6 +600,9 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
         table_size = 0;
       }
 
+      elapsedTimer et;
+      et.start();
+
       int best_score = num_of_secondaries + 1;
       for (int attempt = 0; attempt < 1000 && best_score > 0; attempt++) {
         ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
@@ -636,12 +641,21 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
 
           if (table_size == 0) {
             assert(best_score == num_of_secondaries, "");
-            break;
+            break; // empty table: nothing more to do
           }
         }
       }
+
+      et.stop();
+      if (UseNewCode3) {
+        tty->print_cr("secondary_supers_table: END: %s: elapsed_time=%ld ms (ticks=%ld)",
+                      name()->as_C_string(), et.milliseconds(), et.ticks());
+      }
     } else {
       set_secondary_supers_table(Universe::the_empty_klass_array(), 0);
+
+      int seed = get_next_hash(THREAD, java_mirror());
+      set_hash_code(seed);
     }
   }
 
@@ -667,35 +681,42 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
   */
 }
 
+static void print_entry(outputStream* st, int idx, Klass* k, Klass* owner) {
+  st->print("| %3d: ", idx);
+  if (k != NULL) {
+    juint seed = owner->hash_code();
+    juint table_size = owner->secondary_supers_table_size();
+    juint primary_idx   = Klass::next_index(seed, k, 1, table_size);
+    juint secondary_idx = Klass::next_index(seed, k, 0, table_size);
+
+    st->print_cr(UINTX_FORMAT_X_0 " %s h=" UINT32_FORMAT_X_0 " 1st=%02d 2nd=%02d",
+                 (uintptr_t)k, k->external_name(), k->hash_code(),
+                 primary_idx, secondary_idx);
+  } else {
+    st->print_cr("NULL");
+  }
+}
+
 void Klass::dump_on(outputStream* st) {
   ResourceMark rm;
-  st->print_cr("----------------- TABLE ------------------");
-  st->print_cr("--- %s table_size=%d h=" UINT32_FORMAT_X_0 " ---",
+  st->print_cr("================= TABLE ==================");
+  st->print_cr("--- %s table_size=%d seed=" UINT32_FORMAT_X_0 " ---",
                external_name(), secondary_supers_table_size(), hash_code());
   st->print_cr("------------------------------------------");
 
-  for (int i = 0; i < secondary_supers_table()->length(); i++) {
-    if (i == (int)secondary_supers_table_size()) {
-      st->print_cr("---------------------------");
-    }
-    st->print("%3d: ", i);
-    if (i < (int)secondary_supers_table_size()) {
-      st->print("%s ", (i % 2 == 0 ? " " : "*"));
-    } else {
-      st->print_raw("= ");
-
-    }
-    Klass* k = secondary_supers_table()->at(i);
-    if (k != NULL) {
-      st->print_cr(UINTX_FORMAT_X_0 " %s h=" UINT32_FORMAT_X_0 " idx1=%2d idx2=%2d",
-                   (uintptr_t)k, k->external_name(), k->hash_code(),
-                   next_index(hash_code(), k, 1, secondary_supers_table_size()),
-                   next_index(hash_code(), k, 0, secondary_supers_table_size()));
-    } else {
-      st->print_cr("NULL");
-    }
+  st->print_cr("-------------- PRIMARY -------------------");
+  for (int i = 0; i < (int)secondary_supers_table_size(); i += 2) {
+    print_entry(st, i, secondary_supers_table()->at(i), this);
   }
-  st->print_cr("---------------------------");
+  st->print_cr("------------- SECONDARY ------------------");
+  for (int i = 1; i < (int)secondary_supers_table_size(); i += 2) {
+    print_entry(st, i, secondary_supers_table()->at(i), this);
+  }
+  st->print_cr("-------------- LINEAR --------------------");
+  for (int i = (int)secondary_supers_table_size(); i < secondary_supers_table()->length(); i++) {
+    print_entry(st, i, secondary_supers_table()->at(i), this);
+  }
+  st->print_cr("==========================================");
 }
 
 
