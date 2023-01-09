@@ -13135,6 +13135,7 @@ instruct partialSubtypeCheck(rdi_RegP result,
                              rsi_RegP sub, rax_RegP super, rcx_RegI tmp, rRegP tmp2,
                              rFlagsReg cr)
 %{
+  predicate(!UseNewCode);
   match(Set result (PartialSubtypeCheck sub super));
   effect(TEMP_DEF result, TEMP tmp, TEMP tmp2, KILL cr);
 
@@ -13146,6 +13147,27 @@ instruct partialSubtypeCheck(rdi_RegP result,
     __ check_klass_subtype_slow_path($sub$$Register, $super$$Register,
                                      $tmp$$Register, $result$$Register, $tmp2$$Register,
                                      NULL, &miss);
+    __ xorptr($result$$Register, $result$$Register);
+    __ bind(miss);
+  %}
+  ins_pipe(pipe_slow);
+%}
+
+instruct partialSubtypeCheck(RegP result, RegP sub, RegP super,
+                             rRegP tmp, rRegP tmp2, rcx_rRegP tmp3, rFlagsReg cr)
+%{
+  predicate(UseNewCode);
+  match(Set result (PartialSubtypeCheck sub super));
+  effect(TEMP_DEF result, TEMP tmp, TEMP tmp2, TEMP tmp3, KILL cr);
+
+  ins_cost(1000);
+  format %{ "check_klass_subtype_slow_path1" %}
+
+  ins_encode %{
+    Label miss;
+    __ check_klass_subtype_slow_path1($sub$$Register, $super$$Register,
+                                      $tmp$$Register, $result$$Register, $tmp2$$Register, $tmp3$$Register,
+                                      NULL, &miss);
     __ xorptr($result$$Register, $result$$Register);
     __ bind(miss);
   %}

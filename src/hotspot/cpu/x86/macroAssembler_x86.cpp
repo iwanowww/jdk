@@ -4470,7 +4470,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,   // rsi,
   incrementl(ExternalAddress(SharedRuntime::partial_subtype_ctr_addr()), rtmp1 /*rscratch*/);
 #endif // !PRODUCT
 
-  if (UseNewCode) {
+  if (UseNewCode /*&& Thread::current()->is_Compiler_thread()*/ && rtmp1 == rcx) {
     BLOCK_COMMENT("secondary_supers_table {");
 
     Label L_linear_scan, L_success_local, L_failure_local;
@@ -4480,50 +4480,61 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,   // rsi,
     Label& L_success1 = (needs_post_handling ? L_success_local : *L_success);
     Label& L_failure1 = (needs_post_handling ? L_failure_local : *L_failure);
 
-    const Register table = rtmp1;
+    const Register mask = rtmp3;
+
+    movl(mask, Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
+    test(mask, mask);
+    jcc(Assembler::zero, L_linear_scan); // empty table: fallback to linear search
+
+    decrementl(mask, 2); // table_mask = table_size - 2;
+
+    assert(rtmp1 == rcx, "required");
+
+    movl(rtmp2, Address(sub_klass, in_bytes(Klass::hash_code_offset())));   // seed
+    movl(rtmp1, rtmp2);
+    xorl(rtmp1, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // h0 = seed ^ h
+    // h1 = h0 >> (h0 % 32)
+//    andl(rtmp3, 31); // (h0 % 32)
+    shrl(rtmp1); // shrl(rcx, cl);
+    xorl(rtmp1, rtmp2); // h2 = seed ^ h1
+
+    // rtmp1 = h2, rtmp2 = table, rtmp3 = mask
+
+    const Register table = rtmp2;
 
     movptr(table, Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
-    testptr(table, table); // == NULL?
-    jcc(Assembler::zero, L_linear_scan); // FIXME: L_failure1
+//    lea(table, Address(table, Array<Klass*>::base_offset_in_bytes()));
 
-    const Register mask = rtmp2;
-    movl(mask, Address(table, Array<Klass*>::length_offset_in_bytes()));
-    testl(mask, mask); // == 0?
-    jcc(Assembler::zero, L_linear_scan); // FIXME: L_failure1
+    // FIXME! mask (rtmp3) is destroyed
 
-    decrementl(mask, 1); // mask = length - 1;
+    movl(rtmp3, rtmp1); // h2
+    andl(rtmp3, mask); // idx1 = (h2 & mask)
+    // probe1 = [table + (idx1 * ptr_size) + base_offset]
+    movptr(rtmp3, Address(table, rtmp3, Address::times_ptr, Array<Klass*>::base_offset_in_bytes())); // probe1; kills idx1
 
-//    lea(table_base, Address(rtmp2, Array<Klass*>::base_offset_in_bytes()));
-
-    movl(rtmp3, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
-    andl(rtmp3, mask); // idx1 = (hash_code & mask)
-
-    movptr(rtmp3, Address(table, rtmp3, Address::times_ptr, Array<Klass*>::base_offset_in_bytes()));
-    cmpptr(super_klass, rtmp3);  // if (probe1 == k)  success!
+    cmpptr(rtmp3, super_klass);  // if (probe1 == k)  success!
     jcc(Assembler::equal, L_success1);
 
     testptr(rtmp3, rtmp3); // if (probe1 == NULL)  failure
     jcc(Assembler::zero, L_failure1);
 
-    // idx2 = (hash_code >> 16 & mask);
-    movl(rtmp3, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
-    shrl(rtmp3, 16);
-    andl(rtmp3, mask);
+    // idx2 = (h2 >> 16 & mask);
+    shrl(rtmp1, 16);
+    andl(rtmp1, mask);
 
-    movptr(rtmp3, Address(table, rtmp3, Address::times_ptr, Array<Klass*>::base_offset_in_bytes()));
-    cmpptr(super_klass, rtmp3);  // if (probe1 == k)  success!
+    movptr(rtmp1, Address(table, rtmp1, Address::times_ptr, Array<Klass*>::base_offset_in_bytes()));
+    cmpptr(super_klass, rtmp1);  // if (probe1 == k)  success!
     jcc(Assembler::equal, L_success1);
 
-    testptr(rtmp3, rtmp3); // if (probe1 == NULL) failure
+    testptr(rtmp1, rtmp1); // if (probe1 == NULL) failure
     jcc(Assembler::zero, L_failure1);
 
-    // if (probe2 != vmClasses::Object_klass())  failure
-//    assert(vmClasses::Object_klass() != NULL, "");
-//    movptr(rtmp2, (uintptr_t)(address)vmClasses::Object_klass());
-//    cmpptr(rtmp3, rtmp3);
+    // a miss: fallback to linear search
+
+    incrementl(count, 2); // table_size = table_mask + 2
+    jmp(L_linear_scan);
 
     if (needs_post_handling) {
-      jcc(Assembler::equal, L_linear_scan);
       bind(L_success_local);
       if (pushed_rdx) { pop(rdx); }
       if (pushed_rbx) { pop(rbx); }
@@ -4537,57 +4548,178 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,   // rsi,
       if (pushed_rdi) { pop(rdi); }
       if (pushed_rcx) { pop(rcx); }
       jmp(*L_failure);
-    } else {
-      jcc(Assembler::notEqual, *L_failure);
     }
 
     bind(L_linear_scan);
 
-    BLOCK_COMMENT("} secondary_supers_table");
-  }
+//    stop("NYI");
+    movptr(rtmp2, Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
 
-  // Do a linear scan of the secondary super-klass chain.
+    const Register count = mask;
+    const Register table = rtmp2;
 
-  movptr(rtmp2, Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
+    movl(counter, Address(rtmp2, Array<Klass *>::length_offset_in_bytes()));
+    lea(table, Address(rtmp2, Array<Klass *>::base_offset_in_bytes()));
 
-  const Register counter = rtmp1;
-  const Register cur_pos = rtmp2;
+    if (needs_post_handling) {
+      Label L_scan_end;
+      scan(super_klass, table, counter, L_scan_end, L_scan_end, L_scan_end);
+      bind(L_scan_end);
 
-  movl(counter, Address(rtmp2, Array<Klass*>::length_offset_in_bytes()));
-  lea (cur_pos, Address(rtmp2, Array<Klass*>::base_offset_in_bytes()));
+      // Unspill the temp. registers:
+      if (pushed_rdx) { pop(rdx); }
+      if (pushed_rbx) { pop(rbx); }
+      if (pushed_rdi) { pop(rdi); }
+      if (pushed_rcx) { pop(rcx); }
 
-  // Do a linear scan of the secondary super-klass array.
+      testl(counter, counter); // NZ on success, Z on failure
+      LOCAL_JCC(Assembler::zero, *L_failure);
 
-  bool needs_post_handling = pushed_rdi || pushed_rcx || pushed_rbx || pushed_rdx || UseSecondarySuperCache;
-
-  if (needs_post_handling) {
-    Label L_scan_end;
-    scan(super_klass, cur_pos, counter, L_scan_end, L_scan_end, L_scan_end);
-    bind(L_scan_end);
-
-    // Unspill the temp. registers:
-    if (pushed_rdx) { pop(rdx); }
-    if (pushed_rbx) { pop(rbx); }
-    if (pushed_rdi) { pop(rdi); }
-    if (pushed_rcx) { pop(rcx); }
-
-    testl(counter, counter); // NZ on success, Z on failure
-    LOCAL_JCC(Assembler::zero, *L_failure);
-
-    if (UseSecondarySuperCache) {
-      // Success. Cache the super we found and proceed in triumph.
-      Address ssc_addr(sub_klass, in_bytes(Klass::secondary_super_cache_offset()));
-      movptr(ssc_addr, super_klass);
+      FINAL_JMP(*L_success);
+      bind(L_fallthrough);
+    } else {
+      scan(super_klass, table, counter, *L_success, *L_failure, L_fallthrough);
+      bind(L_fallthrough);
     }
 
-    FINAL_JMP(*L_success);
-    bind(L_fallthrough);
+    BLOCK_COMMENT("} secondary_supers_table");
   } else {
-    scan(super_klass, cur_pos, counter, *L_success, *L_failure, L_fallthrough);
-    bind(L_fallthrough);
+    // Do a linear scan of the secondary super-klass chain.
+
+    movptr(rtmp2, Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
+
+    const Register counter = rtmp1;
+    const Register cur_pos = rtmp2;
+
+    movl(counter, Address(rtmp2, Array<Klass *>::length_offset_in_bytes()));
+    lea(cur_pos, Address(rtmp2, Array<Klass *>::base_offset_in_bytes()));
+
+    // Do a linear scan of the secondary super-klass array.
+
+    bool needs_post_handling = pushed_rdi || pushed_rcx || pushed_rbx || pushed_rdx || UseSecondarySuperCache;
+
+    if (needs_post_handling) {
+      Label L_scan_end;
+      scan(super_klass, cur_pos, counter, L_scan_end, L_scan_end, L_scan_end);
+      bind(L_scan_end);
+
+      // Unspill the temp. registers:
+      if (pushed_rdx) { pop(rdx); }
+      if (pushed_rbx) { pop(rbx); }
+      if (pushed_rdi) { pop(rdi); }
+      if (pushed_rcx) { pop(rcx); }
+
+      testl(counter, counter); // NZ on success, Z on failure
+      LOCAL_JCC(Assembler::zero, *L_failure);
+
+      if (UseSecondarySuperCache) {
+        // Success. Cache the super we found and proceed in triumph.
+        Address ssc_addr(sub_klass, in_bytes(Klass::secondary_super_cache_offset()));
+        movptr(ssc_addr, super_klass);
+      }
+
+      FINAL_JMP(*L_success);
+      bind(L_fallthrough);
+    } else {
+      scan(super_klass, cur_pos, counter, *L_success, *L_failure, L_fallthrough);
+      bind(L_fallthrough);
+    }
   }
 
   BLOCK_COMMENT("} check_klass_subtype_slow_path");
+}
+
+void MacroAssembler::check_klass_subtype_slow_path1(Register sub_klass,
+                                                    Register super_klass,
+                                                    Register rtmp1,
+                                                    Register rtmp2,
+                                                    Register rtmp3,
+                                                    Register rtmp4,
+                                                    Label* L_success,
+                                                    Label* L_failure) {
+  assert(UseNewCode, "");
+  assert(L_success != NULL || L_failure != NULL, "one NULL at most");
+
+  Label L_fallthrough;
+  if (L_success == NULL) { L_success = &L_fallthrough; }
+  if (L_failure == NULL) { L_failure = &L_fallthrough; }
+
+  assert_different_registers(sub_klass, super_klass, rtmp1, rtmp2, rtmp3, rtmp4);
+
+#ifndef PRODUCT
+  incrementl(ExternalAddress(SharedRuntime::partial_subtype_ctr_addr()), rtmp1 /*rscratch*/);
+#endif // !PRODUCT
+
+  BLOCK_COMMENT("secondary_supers_table {");
+
+  Label L_linear_scan;
+
+  const Register mask = rtmp1;
+
+  movl(mask, Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
+  testl(mask, mask);
+  jcc(Assembler::zero, L_linear_scan); // empty table: fallback to linear search
+
+  decrementl(mask, 2); // table_mask = table_size - 2;
+
+  assert(rtmp3 == rcx, "required");
+
+  movl(rtmp2, Address(sub_klass, in_bytes(Klass::hash_code_offset())));   // seed
+  movl(rtmp3, rtmp2);
+  xorl(rtmp3, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // h0 = seed ^ h
+  // h1 = h0 >> (h0 % 32)
+//  andl(rtmp3, 31); // (h0 % 32)
+  shrl(rtmp3); // shrl(rcx, cl);
+  xorl(rtmp3, rtmp2); // h2 = seed ^ h1
+
+  // rtmp1 = h2, rtmp2 = table, rtmp3 = mask
+
+  const Register table = rtmp2;
+
+  movptr(table, Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
+//  lea(table, Address(table, Array<Klass*>::base_offset_in_bytes()));
+
+  movl(rtmp4, rtmp3); // h2
+  andl(rtmp4, mask); // idx1 = (h2 & mask)
+  // probe1 = [table + (idx1 * ptr_size) + base_offset]
+  movptr(rtmp4, Address(table, rtmp4, Address::times_ptr, Array<Klass*>::base_offset_in_bytes())); // probe1; kills idx1
+
+  cmpptr(rtmp4, super_klass);  // if (probe1 == k)  success!
+  jcc(Assembler::equal, *L_success);
+
+  testptr(rtmp4, rtmp4); // if (probe1 == NULL)  failure
+  jcc(Assembler::zero, *L_failure);
+
+  // idx2 = (h2 >> 16 & mask);
+  shrl(rtmp3, 16);
+  andl(rtmp3, mask);
+
+  movptr(rtmp4, Address(table, rtmp4, Address::times_ptr, Array<Klass*>::base_offset_in_bytes()));
+  cmpptr(super_klass, rtmp4);  // if (probe2 == k)  success!
+  jcc(Assembler::equal, *L_success);
+
+  testptr(rtmp4, rtmp4); // if (probe2 == NULL) failure
+  jcc(Assembler::zero, *L_failure);
+
+  // a miss: fallback to linear search
+
+  incrementl(mask, 2); // table_size = table_mask + 2
+//  jmp(L_linear_scan);
+
+  bind(L_linear_scan);
+
+  const Register count = mask;
+  const Register table = rtmp2;
+
+  movptr(rtmp3, Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
+
+//  movl(count, Address(rtmp3, Array<Klass*>::length_offset_in_bytes()));
+  lea(table, Address(rtmp3, Array<Klass*>::base_offset_in_bytes()));
+
+  scan(super_klass, table, count, *L_success, *L_failure, L_fallthrough);
+  bind(L_fallthrough);
+
+  BLOCK_COMMENT("} secondary_supers_table");
 }
 
 void MacroAssembler::scan(Register value, Register position, Register counter,

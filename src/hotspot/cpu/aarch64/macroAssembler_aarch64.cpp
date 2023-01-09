@@ -1469,7 +1469,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     cmp(rscratch1, zr);
     br(EQ, L_failure_local);
 
-    // idx2 = (hash_code >> 16 & mask);
+    // idx2 = (h2 >> 16) & mask;
     lsrw(rscratch1, rscratch2, 16);
     andw(rscratch1, rscratch1, count);
     addw(rscratch1, rscratch1, 1);

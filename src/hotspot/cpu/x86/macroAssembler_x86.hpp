@@ -620,6 +620,15 @@ public:
                                      Label* L_success,
                                      Label* L_failure);
 
+  void check_klass_subtype_slow_path1(Register sub_klass,
+                                      Register super_klass,
+                                      Register rtmp1,
+                                      Register rtmp2,
+                                      Register rtmp3,
+                                      Register rtmp4,
+                                      Label* L_success,
+                                      Label* L_failure);
+
   void scan(Register value, Register position, Register counter,
             Label& L_success, Label& L_failure, Label& L_fallthrough);
 
