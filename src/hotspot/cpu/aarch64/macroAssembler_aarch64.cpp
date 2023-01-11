@@ -1567,6 +1567,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
       b(*L_failure);
 
       bind(L_verify_failure);
+
       stop("mismatch");
 
       BLOCK_COMMENT("} verify");
