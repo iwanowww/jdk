@@ -131,7 +131,7 @@ class Klass : public Metadata {
   // secondary supers, else is &_primary_supers[depth()].
   juint       _super_check_offset;
 
-  juint       _hash_code;
+  uint64_t    _hash_code;
 
   // Class name.  Instance classes: java/lang/String, etc.  Array classes: [I,
   // [Ljava/lang/String;, etc.  Set to zero for all other kinds of classes.
@@ -230,8 +230,8 @@ protected:
   juint    super_check_offset() const  { return _super_check_offset; }
   void set_super_check_offset(juint o) { _super_check_offset = o; }
 
-  juint    hash_code() const  { return _hash_code; }
-  void set_hash_code(juint h) { _hash_code = h; }
+  uint64_t hash_code() const  { return _hash_code; }
+  void set_hash_code(uint64_t h) { _hash_code = h; }
 
   Array<Klass*>* secondary_supers() const { return _secondary_supers; }
   void set_secondary_supers(Array<Klass*>* k) { _secondary_supers = k; }
@@ -726,8 +726,10 @@ protected:
   void verify() { verify_on(tty); }
   void dump_on(outputStream* st);
 
-  static juint next_index(juint seed, Klass* k, juint prev_idx, juint table_size);
-  void init_helper(int seed, int idx, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, int table_size);
+  static juint next_index(uint64_t seed, Klass* k, juint prev_idx, juint table_size);
+  void init_helper(uint64_t seed, int idx, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, int table_size);
+
+  static uint64_t get_hash(uint64_t seed, uint64_t x);
 
 #ifndef PRODUCT
   bool verify_vtable_index(int index);

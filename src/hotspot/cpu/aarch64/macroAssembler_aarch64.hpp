@@ -968,6 +968,8 @@ public:
                                      Label* L_failure,
                                      bool set_cond_codes = false);
 
+  void mixer322_337954d5(Register dst, Register x, Register y, Register tmp);
+
   // Simplified, combined version, good for typical uses.
   // Falls through on failure.
   void check_klass_subtype(Register sub_klass,

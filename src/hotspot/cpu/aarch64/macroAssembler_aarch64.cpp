@@ -1430,7 +1430,8 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     juint h2 = ((h1 ^ seed) >> shift) & table_mask; // FIXME: improve mixer function
     return h2 + delta; // (h2 << 1) + delta;
    */
-  if (UseNewCode /*&& Thread::current()->is_Compiler_thread()*/) {
+  if (UseNewCode) {
+//  if (UseNewCode && Thread::current()->is_Compiler_thread()) {
     BLOCK_COMMENT("secondary_supers_table {");
 
     Label L_linear_scan, L_success_local, L_failure_local;
@@ -1440,21 +1441,30 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     ldrw(count, Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
     cbzw(count, L_linear_scan);
 
-    // table_mask = table_size - 2
-    subw(count, count, 2);
+    if (!UseNewCode4) {
+      ldr(r2 /*temp_reg*/,  Address(  sub_klass, in_bytes(Klass::hash_code_offset()))); // seed
+      ldr(r5 /*temp2_reg*/, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
 
-    ldrw(rscratch1, Address(  sub_klass, in_bytes(Klass::hash_code_offset()))); // seed
-    ldrw(rscratch2, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
+      mixer322_337954d5(rscratch2, r2 /*temp_reg*/, r5 /*temp2_reg*/, rscratch1); // h2 = rscratch2
 
-    eorw(rscratch2, rscratch1, rscratch2); // h0 = seed ^ h
+      // table_mask = table_size - 2
+      ldrw(count, Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
+      subw(count, count, 2);
+    } else {
+      // table_mask = table_size - 2
+      subw(count, count, 2);
 
-    // h1 = h0 >> (h0 % 32)
-    andw(r5, rscratch2, 31);         // (h0 % 32)
-    lsrvw(rscratch2, rscratch2, r5); // (h0 >> (h0 % 32))
+      ldrw(rscratch1, Address(  sub_klass, in_bytes(Klass::hash_code_offset()))); // seed
+      ldrw(rscratch2, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
 
-    eorw(rscratch2, rscratch1, rscratch2); // h2 = seed ^ h1
+      eorw(rscratch2, rscratch1, rscratch2); // h0 = seed ^ h
 
-    // drop seed in rscratch1
+      // h1 = h0 >> (h0 % 32)
+      andw(r5, rscratch2, 31);         // (h0 % 32)
+      lsrvw(rscratch2, rscratch2, r5); // (h0 >> (h0 % 32))
+
+      eorw(rscratch2, rscratch1, rscratch2); // h2 = seed ^ h1
+    }
 
     ldr(rscratch1,  Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
     lea(table_base, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
@@ -1606,6 +1616,42 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   bind(L_fallthrough);
 
   BLOCK_COMMENT("} check_klass_subtype_slow_path");
+}
+
+void MacroAssembler::mixer322_337954d5(Register dst, Register x, Register y, Register tmp) {
+  assert_different_registers(dst, x, y, tmp);
+
+  BLOCK_COMMENT("mixer {");
+
+  const Register M = dst;
+  mov_immediate64(M, 0x8ADAE89C337954D5);
+
+  eor(tmp /*H0*/, x, y);         // H0 = x ^ y
+  mul(y /*P0*/, tmp /*H0*/, M);  // P0 = H0 * M
+  eor(x, x, 0xAAAAAAAAAAAAAAAA); // L0 = x ^ A
+
+  // x = L0, y = P0
+
+  umulh(tmp /*U0*/, x /*L0*/, M);      // U0 = L0 *h M
+  eor(y /*L1*/, y /*P0*/, tmp /*U0*/); // L1 = P0 ^ U0;
+
+  // x = L0, y = L1
+
+  mul(tmp /*V0*/, x /*L0*/, M);         // V0 = L0 * M
+  eor(tmp /*P1*/, tmp /*V0*/, M);       // P1 = V0 ^ M;
+  rorv(x /*Q1*/, tmp /*P1*/, y /*L1*/); // Q1 = ror(P1, L1);
+
+  // x = Q1, y = L1
+
+  umulh(tmp /*U1*/, y /*L1*/, M);      // U1 = L1 *h M
+  eor(x /*L2*/, x /*Q1*/, tmp /*U1*/); // L2 = Q1 ^ U1;
+
+  // x = L2, y = L1
+
+  mul(tmp /*V1*/, y /*L1*/, M);   // V1 = L1 * M
+  eor(dst, tmp /*V1*/, x /*L2*/); // V1 ^ L2;
+
+  BLOCK_COMMENT("} mixer");
 }
 
 void MacroAssembler::clinit_barrier(Register klass, Register scratch, Label* L_fast_path, Label* L_slow_path) {

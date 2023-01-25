@@ -830,6 +830,9 @@ inline jlong min_signed_integer(BasicType bt) {
 // least common multiple
 extern size_t lcm(size_t a, size_t b);
 
+extern void mul64to128(uint64_t& hi, uint64_t& lo, uint64_t op1, uint64_t op2);
+extern uint64_t ror64(uint64_t x, uint64_t distance);
+
 
 // NOTE: replicated in SA in vm/agent/sun/jvm/hotspot/runtime/BasicType.java
 enum BasicTypeSize {
