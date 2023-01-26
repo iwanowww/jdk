@@ -740,6 +740,9 @@ const int ObjectAlignmentInBytes = 8;
   product(intx, hashCode, 5, EXPERIMENTAL,                                  \
                "(Unstable) select hashCode generation algorithm")           \
                                                                             \
+  product(int, SecondarySuperMode, 1,                                       \
+               "")                                                          \
+                                                                            \
   product(bool, ReduceSignalUsage, false,                                   \
           "Reduce the use of OS signals in Java and/or the VM")             \
                                                                             \

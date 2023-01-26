@@ -969,6 +969,8 @@ public:
                                      bool set_cond_codes = false);
 
   void mixer322_337954d5(Register dst, Register x, Register y, Register tmp);
+  void mixer317_SVCESG92(Register dst, Register x, Register y, Register tmp);
+  void mixer324_SVCESG75(Register dst, Register x, Register y, Register tmp);
 
   // Simplified, combined version, good for typical uses.
   // Falls through on failure.

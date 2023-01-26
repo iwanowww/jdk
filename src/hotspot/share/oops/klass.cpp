@@ -286,83 +286,132 @@ bool Klass::can_be_primary_super_slow() const {
     return true;
 }
 
-// hashCode() generation :
+static uint64_t mixer_initial(const uint64_t x, const uint64_t y) {
+  const uint64_t h0 = (x ^ y);
+  const uint64_t h1 = h0 >> (h0 % 32);
+  const uint64_t h2 = (h1 ^ x);
+  return h2;
+}
+
+static void fullmul(uint64_t& hi, uint64_t& lo, const uint64_t op1, const uint64_t op2) {
+  __int128 x128 = op1, y128 = op2, xy128 = x128 * y128;
+  hi = (uint64_t)(xy128 >> 64);
+  lo = (uint64_t)(xy128 >>  0);
+//  uint64_t lo_lo = (op1 & 0xFFFFFFFF) * (op2 & 0xFFFFFFFF);
+//  uint64_t hi_lo = (op1 >> 32)        * (op2 & 0xFFFFFFFF);
+//  uint64_t lo_hi = (op1 & 0xFFFFFFFF) * (op2 >> 32);
+//  uint64_t hi_hi = (op1 >> 32)        * (op2 >> 32);
 //
-// Possibilities:
-// * MD5Digest of {obj,stw_random}
-// * CRC32 of {obj,stw_random} or any linear-feedback shift register function.
-// * A DES- or AES-style SBox[] mechanism
-// * One of the Phi-based schemes, such as:
-//   2654435761 = 2^32 * Phi (golden ratio)
-//   HashCodeValue = ((uintptr_t(obj) >> 3) * 2654435761) ^ GVars.stw_random ;
-// * A variation of Marsaglia's shift-xor RNG scheme.
-// * (obj ^ stw_random) is appealing, but can result
-//   in undesirable regularity in the hashCode values of adjacent objects
-//   (objects allocated back-to-back, in particular).  This could potentially
-//   result in hashtable collisions and reduced hashtable efficiency.
-//   There are simple ways to "diffuse" the middle address bits over the
-//   generated hashCode values:
-static inline intptr_t get_next_hash(Thread* current, oop obj) {
-  intptr_t value = 0;
-  if (hashCode == 0) {
-    // This form uses global Park-Miller RNG.
-    // On MP system we'll have lots of RW access to a global, so the
-    // mechanism induces lots of coherency traffic.
-    value = os::random();
-  } else if (hashCode == 1) {
-    // This variation has the property of being stable (idempotent)
-    // between STW operations.  This can be useful in some of the 1-0
-    // synchronization schemes.
-    intptr_t addr_bits = cast_from_oop<intptr_t>(obj) >> 3;
-    int stw_random = *((int*)ObjectSynchronizer::get_gvars_stw_random_addr());
-    value = addr_bits ^ (addr_bits >> 5) ^ stw_random;
-  } else if (hashCode == 2) {
-    value = 1; // for sensitivity testing
-  } else if (hashCode == 3) {
-    int* hc_sequence_ptr = ((int*)ObjectSynchronizer::get_gvars_hc_sequence_addr());
-    int hc_sequence = ++(*hc_sequence_ptr);
-    value = hc_sequence;
-  } else if (hashCode == 4) {
-    value = cast_from_oop<intptr_t>(obj);
-  } else {
-    // Marsaglia's xor-shift scheme with thread-specific state
-    // This is probably the best overall implementation -- we'll
-    // likely make this the default in future releases.
-    unsigned t = current->_hashStateX;
-    t ^= (t << 11);
-    current->_hashStateX = current->_hashStateY;
-    current->_hashStateY = current->_hashStateZ;
-    current->_hashStateZ = current->_hashStateW;
-    unsigned v = current->_hashStateW;
-    v = (v ^ (v >> 19)) ^ (t ^ (t >> 8));
-    current->_hashStateW = v;
-    value = v;
-  }
-  return value;
+//  uint64_t cross = (lo_lo >> 32) + (hi_lo & 0xFFFFFFFF) + lo_hi;
+//  uint64_t upper = (hi_lo >> 32) + (cross >> 32)        + hi_hi;
+//
+//  hi = upper;
+//  lo = (cross << 32) | (lo_lo & 0xFFFFFFFF);
+}
+
+static uint64_t ror(const uint64_t x, uint64_t distance) {
+  distance = distance & 0x3F;
+  return (x >> distance) | (x << (64 - distance));
+}
+
+static uint64_t mixer322_337954d5(const uint64_t x, const uint64_t y) {
+  const uint64_t M  = 0x8ADAE89C337954D5;
+  const uint64_t A  = 0xAAAAAAAAAAAAAAAA; // REPAA
+  const uint64_t H0 = (x ^ y), L0 = (x ^ A);
+
+  uint64_t U0, V0; fullmul(U0, V0, L0, M);
+  const uint64_t Q0 = (H0 * M);
+  const uint64_t L1 = (Q0 ^ U0);
+
+  uint64_t U1, V1; fullmul(U1, V1, L1, M);
+  const uint64_t P1 = (V0 ^ M);
+  const uint64_t Q1 = ror(P1, L1);
+  const uint64_t L2 = (Q1 ^ U1);
+  return V1 ^ L2;
+}
+
+static uint64_t mixer317_SVCESG92(const uint64_t x, const uint64_t y) {
+  // Steele & Vigna 2021 "Computationally Easy Spectrally Good
+  // Multpliers...", constant taken from Table 9, row 2.
+  const uint64_t M = 0xDEFBA91144f2B375;
+  const uint64_t A = 0xAAAAAAAAAAAAAAAA;
+  const uint64_t H0 = x ^ y, L0 = x ^ A;
+  uint64_t U0, V0; fullmul(U0, V0, L0, M);
+  const uint64_t P0 = (H0 * M);
+  const uint64_t Q0 = ror(P0, U0);
+  const uint64_t L1 = Q0 ^ U0;
+  uint64_t U1, V1; fullmul(U1, V1, L1, M);
+  const uint64_t L2 = V0 ^ U1;
+  return V1 ^ L2;
+}
+
+static uint64_t mixer324_SVCESG75(const uint64_t x, const uint64_t y) {
+  const uint64_t M  = 0xF1357AEA2E62A9C5;  // SVCESG75
+  const uint64_t A  = 0xAAAAAAAAAAAAAAAA;  // REPAA
+  const uint64_t H0 = x ^ y, L0 = x ^ A;
+  uint64_t U0, V0; fullmul(U0, V0, L0, M);
+  const uint64_t P0 = H0 * M;
+  const uint64_t L1 = P0 + U0;  //ADD NOT XOR
+  uint64_t U1, V1; fullmul(U1, V1, A ^ L1, M);  // EXTRA XOR (A^)
+  const uint64_t L2 = V0 + U1;  // ADD NOT XOR
+  return V1 ^ L2;
 }
 
 uint64_t Klass::get_hash(uint64_t x, uint64_t y) {
-  if (!UseNewCode4) {
-    const uint64_t M  = 0x8ADAE89C337954D5;
-    const uint64_t A  = 0xAAAAAAAAAAAAAAAA; // REPAA
-    const uint64_t H0 = (x ^ y), L0 = (x ^ A);
+  switch (SecondarySuperMode) {
+    case 0: return mixer_initial(x, y);
+    case 1: return mixer322_337954d5(x, y);
+    case 2: return mixer317_SVCESG92(x, y);
+    case 3: return mixer324_SVCESG75(x, y);
 
-    uint64_t U0, V0; mul64to128(U0, V0, L0, M);
-    const uint64_t Q0 = (H0 * M);
-    const uint64_t L1 = (Q0 ^ U0);
-
-    uint64_t U1, V1; mul64to128(U1, V1, L1, M);
-    const uint64_t P1 = (V0 ^ M);
-    const uint64_t Q1 = ror64(P1, L1);
-    const uint64_t L2 = (Q1 ^ U1);
-    return V1 ^ L2;
-  } else {
-    const uint64_t h0 = (x ^ y);
-    const uint64_t h1 = h0 >> (h0 % 32);
-    const uint64_t h2 = (h1 ^ x);
-    return h2;
+    default: {
+      fatal("%d", SecondarySuperMode);
+      return 0;
+    }
   }
 }
+
+static inline uint64_t get_next_hash(Thread* current) {
+  uint64_t seed = current->_seed;
+  uint64_t value = Klass::get_hash(seed, 0); // TODO: introduce t
+  current->_seed = value;
+  return value;
+}
+
+/*
+uint64_t mixer324_SVCESG75(const uint64_t x) {
+  const uint64_t M  = noncon(0xf1357aea2e62a9c5);  // SVCESG75
+  const uint64_t A  = 0xaaaaaaaaaaaaaaaa;  // REPAA
+  const uint64_t H0 = x, L0 = x;
+  uint64_t U0, V0; fullmul(U0, V0, A ^ L0, M);
+  const uint64_t P0 = H0 * M;
+  const uint64_t Q0 = (P0);  //NO ROR
+  const uint64_t H1 = V0, L1 = Q0 + U0;  //ADD NOT XOR
+  uint64_t U1, V1; fullmul(U1, V1, A ^ L1, M);  // EXTRA XOR (A^)
+  const uint64_t P1 = H1;
+  const uint64_t Q1 = (P1);
+  const uint64_t H2 = V1, L2 = Q1 + U1;  // ADD NOT XOR
+  return H2 ^ L2;
+}
+
+ inline uint64_t mixer317_SVCESG92_X(const uint64_t x, const uint64_t y,
+                                    const uint64_t t, bool do_lx3) {
+  // Steele & Vigna 2021 "Computationally Easy Spectrally Good
+  // Multpliers...", constant taken from Table 9, row 2.
+  const uint64_t M1 = noncon(0xdefba91144f2b375);
+  // M2 is derived from M1 in zero, one, or two ALU operations.
+  const uint64_t M2 = do_lx3 ? M1^(M1<<3) : M1;
+  const uint64_t A  = 0xaaaaaaaaaaaaaaaa;
+  const uint64_t H0 = y ^ x, L0 = x + t;
+  uint64_t U0, V0; fullmul(U0, V0, A ^ L0, M1);
+  const uint64_t P0 = (H0 * M2) + t;
+  const uint64_t Q0 = ror(P0, U0);
+  const uint64_t H1 = V0, L1 = Q0 ^ U0;
+  uint64_t U1, V1; fullmul(U1, V1, L1, M1);
+  const uint64_t H2 = V1, L2 = H1 ^ U1;
+  return (H2 - t) ^ L2;
+}
+ */
 
 juint Klass::next_index(uint64_t seed, Klass* k, juint prev_idx, juint table_size) {
   if (table_size >= 4) {
@@ -575,7 +624,7 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
     GrowableArray<Klass*>* secondaries = compute_secondary_supers(extras, transitive_interfaces);
     if (secondaries == nullptr) {
       // secondary_supers set by compute_secondary_supers
-      uint64_t seed = get_next_hash(THREAD, java_mirror());
+      uint64_t seed = get_next_hash(THREAD);
       set_hash_code(seed);
 //      return;
     } else {
@@ -650,7 +699,7 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
         GrowableArray<Klass*>* table          = new GrowableArray<Klass*>(table_size, table_size, NULL);
         GrowableArray<Klass*>* secondary_list = new GrowableArray<Klass*>(num_of_secondaries);
 
-        uint64_t seed = get_next_hash(THREAD, java_mirror());
+        uint64_t seed = get_next_hash(THREAD);
 
         for (int j = 0; j < num_of_secondaries; j++) {
           init_helper(seed, j, table, secondary_list, table_size);
@@ -709,7 +758,7 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
     } else if (secondary_supers() != NULL && secondary_supers()->length() == 0) {
       set_secondary_supers_table(Universe::the_empty_klass_array(), 0);
 
-      uint64_t seed = get_next_hash(THREAD, java_mirror());
+      uint64_t seed = get_next_hash(THREAD);
       set_hash_code(seed);
     } else {
       // not yet initialized
@@ -722,7 +771,7 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
     int min_mask = min_size - 1;
 
     do {
-      int h = get_next_hash(THREAD, java_mirror());
+      int h = get_next_hash(THREAD);
       int idx1 = (h >>  0) & min_mask;
       int idx2 = (h >> 16) & min_mask;
       if (idx1 != idx2) {

@@ -614,6 +614,8 @@ protected:
   jint _hashStateY;
   jint _hashStateZ;
 
+  int64_t _seed;
+
   // Low-level leaf-lock primitives used to implement synchronization.
   // Not for general synchronization use.
   static void SpinAcquire(volatile int * Lock, const char * Name);

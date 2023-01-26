@@ -401,16 +401,19 @@ size_t lcm(size_t a, size_t b) {
 }
 
 void mul64to128(uint64_t& hi, uint64_t& lo, uint64_t op1, uint64_t op2) {
-  uint64_t lo_lo = (op1 & 0xFFFFFFFF) * (op2 & 0xFFFFFFFF);
-  uint64_t hi_lo = (op1 >> 32)        * (op2 & 0xFFFFFFFF);
-  uint64_t lo_hi = (op1 & 0xFFFFFFFF) * (op2 >> 32);
-  uint64_t hi_hi = (op1 >> 32)        * (op2 >> 32);
-
-  uint64_t cross = (lo_lo >> 32) + (hi_lo & 0xFFFFFFFF) + lo_hi;
-  uint64_t upper = (hi_lo >> 32) + (cross >> 32)        + hi_hi;
-
-  hi = upper;
-  lo = (cross << 32) | (lo_lo & 0xFFFFFFFF);
+  __int128 x128 = op1, y128 = op2, xy128 = x128 * y128;
+  hi = (uint64_t)(xy128 >> 64);
+  lo = (uint64_t)(xy128 >>  0);
+//  uint64_t lo_lo = (op1 & 0xFFFFFFFF) * (op2 & 0xFFFFFFFF);
+//  uint64_t hi_lo = (op1 >> 32)        * (op2 & 0xFFFFFFFF);
+//  uint64_t lo_hi = (op1 & 0xFFFFFFFF) * (op2 >> 32);
+//  uint64_t hi_hi = (op1 >> 32)        * (op2 >> 32);
+//
+//  uint64_t cross = (lo_lo >> 32) + (hi_lo & 0xFFFFFFFF) + lo_hi;
+//  uint64_t upper = (hi_lo >> 32) + (cross >> 32)        + hi_hi;
+//
+//  hi = upper;
+//  lo = (cross << 32) | (lo_lo & 0xFFFFFFFF);
 }
 
 uint64_t ror64(uint64_t x, uint64_t distance) {
