@@ -740,8 +740,32 @@ const int ObjectAlignmentInBytes = 8;
   product(intx, hashCode, 5, EXPERIMENTAL,                                  \
                "(Unstable) select hashCode generation algorithm")           \
                                                                             \
-  product(int, SecondarySuperMode, 1,                                       \
-               "")                                                          \
+  product(bool, UseSecondarySupersTable, false, DIAGNOSTIC,                 \
+          "")                                                               \
+                                                                            \
+  product(int, SecondarySuperMode, 2,                                       \
+          "")                                                               \
+                                                                            \
+  product(uintx, SecondarySupersMaxAttempts, 1, DIAGNOSTIC,                 \
+          "")                                                               \
+          range(1, max_uintx)                                               \
+                                                                            \
+  product(uintx, SecondarySupersTableMinSize, 4, DIAGNOSTIC,                \
+          "")                                                               \
+          range(0, max_uintx)                                               \
+                                                                            \
+  product(uintx, SecondarySupersTableMaxSize, 128, DIAGNOSTIC,              \
+          "")                                                               \
+          range(0, max_uintx)                                               \
+                                                                            \
+  product(bool, TraceSecondarySupers, false, DIAGNOSTIC,                    \
+          "")                                                               \
+                                                                            \
+  product(bool, StressSecondarySupers, false, DIAGNOSTIC,                   \
+          "")                                                               \
+                                                                            \
+  product(bool, VerifySecondarySupers, false, DIAGNOSTIC,                   \
+          "")                                                               \
                                                                             \
   product(bool, ReduceSignalUsage, false,                                   \
           "Reduce the use of OS signals in Java and/or the VM")             \

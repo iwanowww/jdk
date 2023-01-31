@@ -1418,20 +1418,8 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   str(rscratch1, pst_counter_addr);
 #endif //PRODUCT
 
-  /*
-    uintptr_t h = k->hash_code();
-    uint table_mask = table_size - 2; // (table_size >> 1) - 1;
-    juint h0 = (seed ^ h);
-    juint h1 = h0 >> (h0 % 32);
-
-    // primary vs secondary index
-    uint shift = (prev_idx & 1) ? 0 : 16;
-    uint delta = (prev_idx & 1) ? 0 : 1;
-    juint h2 = ((h1 ^ seed) >> shift) & table_mask; // FIXME: improve mixer function
-    return h2 + delta; // (h2 << 1) + delta;
-   */
-  if (UseNewCode) {
-//  if (UseNewCode && Thread::current()->is_Compiler_thread()) {
+  if (UseSecondarySupersTable) {
+//  if (UseSecondarySupersTable && Thread::current()->is_Compiler_thread()) {
     BLOCK_COMMENT("secondary_supers_table {");
 
     Label L_linear_scan, L_success_local, L_failure_local;
@@ -1443,6 +1431,10 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 
     switch (SecondarySuperMode) {
       case 0: {
+        eorw(count, count, count); // mask = 0 (== "h2 = 0")
+        break;
+      }
+      case 1: {
         // table_mask = table_size - 2
         subw(count, count, 2);
 
@@ -1458,7 +1450,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
         eorw(rscratch2, rscratch1, rscratch2); // h2 = seed ^ h1
         break;
       }
-      case 1: {
+      case 2: {
         ldr(r2 /*temp_reg*/,  Address(  sub_klass, in_bytes(Klass::hash_code_offset()))); // seed
         ldr(r5 /*temp2_reg*/, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
 
@@ -1469,7 +1461,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
         subw(count, count, 2);
         break;
       }
-      case 2: {
+      case 3: {
         ldr(r2 /*temp_reg*/,  Address(  sub_klass, in_bytes(Klass::hash_code_offset()))); // seed
         ldr(r5 /*temp2_reg*/, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
 
@@ -1480,7 +1472,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
         subw(count, count, 2);
         break;
       }
-      case 3: {
+      case 4: {
         ldr(r2 /*temp_reg*/,  Address(  sub_klass, in_bytes(Klass::hash_code_offset()))); // seed
         ldr(r5 /*temp2_reg*/, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
 
@@ -1552,7 +1544,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 
     br(Assembler::NE, L_failure_local);
     //b(L_success_local);
-    if (!UseNewCode2) {
+    if (!VerifySecondarySupers) {
       bind(L_success_local);
       pop(pushed_registers, sp);
       b(*L_success);

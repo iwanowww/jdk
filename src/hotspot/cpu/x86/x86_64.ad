@@ -13135,7 +13135,7 @@ instruct partialSubtypeCheck(rdi_RegP result,
                              rsi_RegP sub, rax_RegP super, rcx_RegI tmp, rRegP tmp2,
                              rFlagsReg cr)
 %{
-  predicate(!UseNewCode);
+  predicate(!UseSecondarySupersTable);
   match(Set result (PartialSubtypeCheck sub super));
   effect(TEMP_DEF result, TEMP tmp, TEMP tmp2, KILL cr);
 
@@ -13156,12 +13156,12 @@ instruct partialSubtypeCheck(rdi_RegP result,
 instruct partialSubtypeCheck1(rRegP result, rRegP sub, rRegP super,
                               rRegP rtmp1, rcx_RegI rtmp3, rRegP rtmp4, rFlagsReg cr)
 %{
-  predicate(UseNewCode);
+  predicate(UseSecondarySupersTable);
   match(Set result (PartialSubtypeCheck sub super));
   effect(TEMP_DEF result, TEMP rtmp1, TEMP rtmp3, TEMP rtmp4, KILL cr);
 
   ins_cost(1000);
-  format %{ "check_klass_subtype_slow_path1" %}
+  format %{ "check_klass_subtype_slow_path # w/ table lookup" %}
 
   ins_encode %{
     Label miss;
