@@ -108,17 +108,6 @@ void Klass::release_C_heap_structures(bool release_constant_pool) {
   if (_name != nullptr) _name->decrement_refcount();
 }
 
-/*
-static juint next_index(juint seed, juint h, juint prev_idx, juint table_size) {
-  assert(is_power_of_2(table_size), "");
-  uint table_mask = (table_size >> 1) - 1;
-  uint shift = (prev_idx & 1) ? 0 : 16;
-  uint delta = (prev_idx & 1) ? 0 :  1;
-  juint h1 = (seed ^ (h >> shift)) & table_mask; // FIXME: improve mixer function
-  return (h1 << 1) + delta;
-}
-*/
-
 bool Klass::search_secondary_supers(Klass* k) const {
   // Put some extra logic here out-of-line, before the search proper.
   // This cuts down the size of the inline method.
@@ -135,21 +124,18 @@ bool Klass::search_secondary_supers(Klass* k) const {
 
       uint idx1 = next_index(hash_code(), k, 1, table_size);
       Klass* probe1 = ss_table->at(idx1);
-      if (probe1 == NULL) {
-        return false;
+      if (probe1 == vmClasses::Object_klass()) {
+        return false; // empty slot
       } else if (probe1 == k) {
-        return true;
+        return true; // match
       } else {
         uint idx2 = next_index(hash_code(), k, 0, table_size);
         Klass* probe2 = ss_table->at(idx2);
-        if (probe2 == NULL) {
-          return false;
+        if (probe2 == vmClasses::Object_klass()) {
+          return false; // empty slot
         } else if (probe2 == k) {
-          return true;
-//        } else if (probe2 != vmClasses::Object_klass()) {
-//          return false;
+          return true; // match
         } else {
-          // Object klass is used as a sentinel value to mark evicted element.
           // Need to check the tail.
         }
       }
@@ -416,7 +402,7 @@ juint Klass::next_index(uint64_t seed, Klass* k, juint prev_idx, juint table_siz
   if (table_size >= 4) {
     assert(is_power_of_2(table_size), "");
     uint64_t h = k->hash_code();
-    uint table_mask = table_size - 2; // (table_size >> 1) - 1;
+    uint table_mask = table_size - 2; // (table_size >> 1);
     uint shift = (prev_idx & 1) ? 0 : 16;
     uint delta = (prev_idx & 1) ? 0 : 1;
     uint64_t h2 = (get_hash(seed, h) >> shift) & table_mask;
@@ -430,11 +416,9 @@ void Klass::init_helper(uint64_t seed, Klass* const elem, GrowableArray<Klass*>*
   juint prev_idx = 1; // = 0;
   Klass* cur_elem = elem;
 
-  for (int attempts = 0; true; attempts++) {
-    assert(attempts < 2*table_size, "");
-//    if (attempts == table_size) {
-//      tty->print_cr("!!!HIT!!!");
-//    }
+  for (int attempts = 0; attempts <= 2 * table_size; attempts++) {
+    assert(attempts != 2 * table_size, "too many attempts");
+
     juint idx = Klass::next_index(seed, cur_elem, prev_idx, table_size);
     Klass* probe = table->at(idx);
     assert(probe != cur_elem, "duplicated");
@@ -443,7 +427,7 @@ void Klass::init_helper(uint64_t seed, Klass* const elem, GrowableArray<Klass*>*
       cur_elem = NULL;
       break; // done
     } else if (probe == elem && ((idx & 1) == 0)) {
-      if (TraceSecondarySupers) {
+      if (TraceSecondarySupers && Verbose) {
         tty->print_cr("CIRCLE @ %d of %d", attempts, 2 * table_size);
       }
       break; // circle detected
@@ -458,105 +442,6 @@ void Klass::init_helper(uint64_t seed, Klass* const elem, GrowableArray<Klass*>*
     secondary_list->push(cur_elem); // give up
   }
 }
-
-/*
-static juint next_index(juint h, juint prev_idx, juint table_mask) {
-  juint alt_idx = ((h >> 0) & table_mask);
-  if (alt_idx == prev_idx) {
-    alt_idx = ((h >> 16) & table_mask);
-  }
-  return alt_idx;
-}
-
-static void init_helper(Klass* elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, int table_size) {
-  if (table_size == 0) {
-    secondary_list->push(elem);
-  } else {
-    assert(is_power_of_2(table_size), "");
-    int table_mask = table_size - 1;
-    juint idx1 = (elem->hash_code() & table_mask);
-    Klass* probe1 = table->at(idx1);
-    assert(probe1 != elem, "duplicated");
-    if (probe1 == NULL) {
-      table->at_put(idx1, elem);
-    } else {
-//      if (probe1 != vmClasses::Object_klass()) {
-        table->at_put(idx1, elem);
-        elem = probe1;
-//      }
-
-      int attempts = 0;
-      do {
-        juint idx2 = next_index(elem->hash_code(), idx1, table_mask);
-        Klass* probe2 = table->at(idx2);
-        assert(probe2 != elem, "duplicated");
-        if (probe2 == NULL) {
-          table->at_put(idx2, elem);
-          break;
-//        } else if (probe2 == vmClasses::Object_klass()) {
-//          secondary_list->push(elem); // evict
-//          break;
-        } else if (attempts < table_size) {
-          table->at_put(idx2, elem);
-          elem = probe2;
-          idx1 = idx2;
-          attempts++;
-        } else {
-          // Object klass is used as a sentinel value to mark evicted element.
-//          secondary_list->push(probe2);
-          secondary_list->push(elem); // give up
-//          table->at_put(idx2, vmClasses::Object_klass());
-          break;
-        }
-      } while (true);
-    }
-  }
-}
-*/
-
-/*
-static void init_helper(Klass* elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, int table_size) {
-  if (table_size == 0) {
-    secondary_list->push(elem);
-  } else {
-    assert(is_power_of_2(table_size), "");
-    int table_mask = table_size - 1;
-    juint idx1 = (elem->hash_code() & table_mask);
-    Klass *probe1 = table->at(idx1);
-    assert(probe1 != elem, "duplicated");
-    if (probe1 == NULL) {
-      table->at_put(idx1, elem);
-    } else {
-      juint idx2 = ((elem->hash_code() >> 16) & table_mask);
-      do {
-        Klass *probe2 = table->at(idx2);
-        assert(probe2 != elem, "duplicated");
-        if (probe2 == NULL) {
-          table->at_put(idx2, elem);
-          break;
-//        } else if (probe2 == vmClasses::Object_klass()) {
-//          secondary_list->push(elem);
-//          break;
-        } else {
-          juint probe2_idx = ((probe2->hash_code() >> 16) & table_mask);
-          if (probe2_idx != idx2) {
-            table->at_put(idx2, elem);
-            elem = probe2;
-            idx2 = probe2_idx;
-            continue;
-          } else {
-            // Object klass is used as a sentinel value to mark evicted element.
-//            secondary_list->push(probe2);
-            secondary_list->push(elem);
-//            table->at_put(idx2, vmClasses::Object_klass());
-            break;
-          }
-        }
-      } while (true);
-    }
-  }
-}
-*/
 
 void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interfaces, TRAPS) {
   if (k == nullptr) {
@@ -687,11 +572,11 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
       elapsedTimer et;
       et.start();
 
+      uint64_t best_seed = 0;
+      uint best_score = num_of_secondaries + 1;
       GrowableArray<Klass*>* best_table          = new GrowableArray<Klass*>(table_size, table_size, NULL);
       GrowableArray<Klass*>* best_secondary_list = new GrowableArray<Klass*>(num_of_secondaries);
 
-      uint64_t best_seed = 0;
-      uint best_score = num_of_secondaries + 1;
       for (uint attempt = 0; attempt < SecondarySupersMaxAttempts; attempt++) {
         ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
 
@@ -710,8 +595,8 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
             assert(empty_slots > 0, "");
             init_helper(seed, elem, table, secondary_list, table_size);
           }
-          if ((uint)secondary_list->length() >= best_score || !StressSecondarySupers) {
-            continue; // no luck this time; fail-fast
+          if ((uint)secondary_list->length() >= best_score && !StressSecondarySupers) {
+            break; // no luck this time; fail-fast
           }
         }
         assert((uint)table->length() == table_size, "");
@@ -746,11 +631,17 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
         Array<Klass*>* secondary_table = MetadataFactory::new_array<Klass*>(class_loader_data(),
                                                                             table_size + best_secondary_list->length(), CHECK);
         for (int j = 0; j < best_table->length(); j++) {
-          secondary_table->at_put(j, best_table->at(j));
+          Klass* elem = best_table->at(j);
+          if (elem == NULL) {
+            elem = vmClasses::Object_klass();
+          }
+          secondary_table->at_put(j, elem);
         }
+        assert(table_size == (uint)best_table->length(), "");
         for (int j = 0; j < best_secondary_list->length(); j++) {
           secondary_table->at_put(table_size + j, best_secondary_list->at(j));
         }
+        set_secondary_supers(secondary_table);
         set_secondary_supers_table(secondary_table, table_size);
         set_hash_code(best_seed);
       }
@@ -774,7 +665,11 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
 
 static void print_entry(outputStream* st, int idx, Klass* k, Klass* owner) {
   st->print("| %3d: ", idx);
-  if (k != NULL) {
+  if (k == NULL) {
+    st->print_cr("NULL");
+  } else if (k == vmClasses::Object_klass()) {
+    st->print_cr("<empty>");
+  } else {
     uint64_t seed = owner->hash_code();
     juint table_size = owner->secondary_supers_table_size();
     juint primary_idx   = Klass::next_index(seed, k, 1, table_size);
@@ -783,8 +678,6 @@ static void print_entry(outputStream* st, int idx, Klass* k, Klass* owner) {
     st->print_cr(UINTX_FORMAT_X_0 " %s h=" UINT64_FORMAT_X_0 " 1st=%02d 2nd=%02d",
                  (uintptr_t)k, k->external_name(), k->hash_code(),
                  primary_idx, secondary_idx);
-  } else {
-    st->print_cr("NULL");
   }
 }
 
@@ -1274,7 +1167,7 @@ void Klass::verify_on(outputStream* st) {
         Klass* k = _secondary_supers->at(idx);
         guarantee(k != NULL && k->is_klass(), "");
 
-        guarantee(search_secondary_supers(k), "missing");
+        guarantee(search_secondary_supers(k) || k == vmClasses::Object_klass(), "missing");
 
         uint idx1 = next_index(hash_code(), k, 1, cnt);
         Klass* probe1 = _secondary_supers_table->at(idx1);

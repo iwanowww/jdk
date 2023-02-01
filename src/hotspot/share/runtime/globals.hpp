@@ -746,7 +746,7 @@ const int ObjectAlignmentInBytes = 8;
   product(int, SecondarySuperMode, 2,                                       \
           "")                                                               \
                                                                             \
-  product(uintx, SecondarySupersMaxAttempts, 1, DIAGNOSTIC,                 \
+  product(uintx, SecondarySupersMaxAttempts, 10, DIAGNOSTIC,                \
           "")                                                               \
           range(1, max_uintx)                                               \
                                                                             \

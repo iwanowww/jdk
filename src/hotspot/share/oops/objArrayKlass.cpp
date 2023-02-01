@@ -391,9 +391,13 @@ GrowableArray<Klass*>* ObjArrayKlass::compute_secondary_supers(int num_extra_slo
     secondaries->push(vmClasses::Serializable_klass());
     for (int i = 0; i < num_elem_supers; i++) {
       Klass* elem_super = elem_supers->at(i);
-      Klass* array_super = elem_super->array_klass_or_null();
-      assert(array_super != nullptr, "must already have been created");
-      secondaries->push(array_super);
+      if (elem_super != vmClasses::Object_klass()) {
+        Klass* array_super = elem_super->array_klass_or_null();
+        assert(array_super != nullptr, "must already have been created");
+        secondaries->push(array_super);
+      } else {
+        assert(UseSecondarySupersTable, "placeholder");
+      }
     }
     return secondaries;
   }

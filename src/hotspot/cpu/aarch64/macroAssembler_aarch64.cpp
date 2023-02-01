@@ -1435,9 +1435,10 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
         break;
       }
       case 1: {
-        // table_mask = table_size - 2
-        subw(count, count, 2);
-
+        if (!UseNewCode2) {
+          // table_mask = table_size - 2
+          subw(count, count, 2);
+        }
         ldrw(rscratch1, Address(  sub_klass, in_bytes(Klass::hash_code_offset()))); // seed
         ldrw(rscratch2, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
 
@@ -1456,9 +1457,11 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 
         mixer322_337954d5(rscratch2, r2 /*temp_reg*/, r5 /*temp2_reg*/, rscratch1); // h2 = rscratch2
 
-        // table_mask = table_size - 2
         ldrw(count, Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
-        subw(count, count, 2);
+        if (!UseNewCode2) {
+          // table_mask = table_size - 2
+          subw(count, count, 2);
+        }
         break;
       }
       case 3: {
@@ -1467,9 +1470,11 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 
         mixer317_SVCESG92(rscratch2, r2 /*temp_reg*/, r5 /*temp2_reg*/, rscratch1); // h2 = rscratch2
 
-        // table_mask = table_size - 2
         ldrw(count, Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
-        subw(count, count, 2);
+        if (!UseNewCode2) {
+          // table_mask = table_size - 2
+          subw(count, count, 2);
+        }
         break;
       }
       case 4: {
@@ -1478,9 +1483,11 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 
         mixer324_SVCESG75(rscratch2, r2 /*temp_reg*/, r5 /*temp2_reg*/, rscratch1); // h2 = rscratch2
 
-        // table_mask = table_size - 2
         ldrw(count, Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
-        subw(count, count, 2);
+        if (!UseNewCode2) {
+          // table_mask = table_size - 2
+          subw(count, count, 2);
+        }
         break;
       }
       default: fatal("%d", SecondarySuperMode);
@@ -1488,42 +1495,64 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     ldr(rscratch1,  Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
     lea(table_base, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
 
-    andw(rscratch1, rscratch2, count); // idx1 = (h2 & mask)
+    if (UseNewCode2) {
+      udivw(rscratch1, rscratch2, count);
+      Assembler::msubw(rscratch1, rscratch1, count, rscratch2);
+      andw(rscratch1, rscratch1, 0xFFFE);
+    } else {
+      andw(rscratch1, rscratch2, count); // idx1 = (h2 & mask)
+    }
+
     ldr(rscratch1, Address(table_base, rscratch1, Address::lsl(LogBytesPerWord))); // probe1
 
     cmp(rscratch1, super_klass);  // if (probe1 == k)
     br(EQ, L_success_local);
 
-    // if (probe1 == NULL)
-    cmp(rscratch1, zr);
-    br(EQ, L_failure_local);
-
-    // idx2 = (h2 >> 16) & mask;
-    lsrw(rscratch1, rscratch2, 16);
-    andw(rscratch1, rscratch1, count);
-    addw(rscratch1, rscratch1, 1);
+    // idx2 = (h2 >> 16) & mask
+    lsrw(rscratch2, rscratch2, 16);
+    if (UseNewCode2) {
+      udivw(rscratch1, rscratch2, count);
+      Assembler::msubw(rscratch2, rscratch1, count, rscratch2);
+      andw(rscratch2, rscratch2, 0xFFFE);
+    } else {
+      andw(rscratch2, rscratch2, count);
+    }
+    addw(rscratch2, rscratch2, 1);
 
     // probe2 = sstable->at(idx2);
-    ldr(rscratch1, Address(table_base, rscratch1, Address::lsl(LogBytesPerWord))); // probe2
+    ldr(rscratch2, Address(table_base, rscratch2, Address::lsl(LogBytesPerWord))); // probe2
 
     // if (probe2 == k)  return true;
-    cmp(rscratch1, super_klass);
+    cmp(rscratch2, super_klass);
     br(EQ, L_success_local);
 
-    // if (probe2 == NULL)  return false;
-    cmp(rscratch1, zr);
+    assert(table_base == r5, "");
+    mov(r5, (address)vmClasses::Object_klass());
+
+    if (UseNewCode2) {
+      // no fast negative check: probe1 is destroyed
+    } else {
+      // if (probe1 == Object.klass)  return false;
+      cmp(rscratch1, zr);
+      br(EQ, L_failure_local);
+
+      cmp(rscratch1, r5);
+      br(EQ, L_failure_local);
+    }
+
+    // if (probe2 == Object.klass)  return false;
+    cmp(rscratch2, zr);
     br(EQ, L_failure_local);
 
-    addw(count, count, 2); // table_size = table_mask + 2
+    cmp(rscratch2, r5);
+    br(EQ, L_failure_local);
+
+    if (!UseNewCode2) {
+      addw(count, count, 2); // table_size = table_mask + 2
+    }
 
     // TODO: signal about conflicts?
     // may help to avoid iterating over the tail, but the tail is intended to be small anyway
-
-    // if (probe2 != vmClasses::Object_klass())  return false;
-//    assert(vmClasses::Object_klass() != NULL, "");
-//    movptr(rscratch1, (uintptr_t)(address)vmClasses::Object_klass());
-//    cmp(rscratch2, rscratch1);
-//    br(NE, L_failure_local);
 
     bind(L_linear_scan);
 
