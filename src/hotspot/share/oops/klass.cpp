@@ -587,6 +587,7 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
 
         for (uint idx = 0; idx < num_of_secondaries; idx++) {
           Klass* elem = secondary_supers()->at(idx);
+          assert(elem != NULL, "");
           int empty_slots = (table_size - idx) + secondary_list->length();
           if (empty_slots == 0) {
             // table is full
@@ -633,7 +634,7 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
         for (int j = 0; j < best_table->length(); j++) {
           Klass* elem = best_table->at(j);
           if (elem == NULL) {
-            elem = vmClasses::Object_klass();
+            //elem = vmClasses::Object_klass();
           }
           secondary_table->at_put(j, elem);
         }
@@ -1162,21 +1163,13 @@ void Klass::verify_on(outputStream* st) {
           guarantee(_secondary_supers->contains(k), "absent");
         }
       }
-      uint ss_length = _secondary_supers->length();
-      for (uint idx = 0; idx < ss_length; idx++) {
-        Klass* k = _secondary_supers->at(idx);
-        guarantee(k != NULL && k->is_klass(), "");
 
-        guarantee(search_secondary_supers(k) || k == vmClasses::Object_klass(), "missing");
-
-        uint idx1 = next_index(hash_code(), k, 1, cnt);
-        Klass* probe1 = _secondary_supers_table->at(idx1);
-        uint idx2 = next_index(hash_code(), k, 0, cnt);
-        Klass* probe2 = _secondary_supers_table->at(idx2);
-
-        guarantee(probe1 != NULL || !_secondary_supers->contains(k), "");
-        if (probe1 != k) {
-          guarantee(probe2 != NULL || !_secondary_supers->contains(k), "");
+      if (_secondary_supers != _secondary_supers_table) {
+        uint ss_length = _secondary_supers->length();
+        for (uint idx = 0; idx < ss_length; idx++) {
+          Klass* k = _secondary_supers->at(idx);
+          guarantee(k != NULL && k->is_klass(), "");
+          guarantee(search_secondary_supers(k), "missing");
         }
       }
     }

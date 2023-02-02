@@ -70,7 +70,7 @@ ObjArrayKlass* ObjArrayKlass::allocate_objArray_klass(ClassLoaderData* loader_da
       const Array<Klass*>* element_supers = element_klass->secondary_supers();
       for( int i = element_supers->length()-1; i >= 0; i-- ) {
         Klass* elem_super = element_supers->at(i);
-        if (elem_super->array_klass_or_null() == nullptr) {
+        if (elem_super != NULL && elem_super->array_klass_or_null() == nullptr) {
           supers_exist = false;
           break;
         }
@@ -83,7 +83,9 @@ ObjArrayKlass* ObjArrayKlass::allocate_objArray_klass(ClassLoaderData* loader_da
           super_klass = element_super->array_klass(CHECK_NULL);
           for( int i = element_supers->length()-1; i >= 0; i-- ) {
             Klass* elem_super = element_supers->at(i);
-            elem_super->array_klass(CHECK_NULL);
+            if (elem_super != NULL) {
+              elem_super->array_klass(CHECK_NULL);
+            }
           }
           // Now retry from the beginning
           ek = element_klass->array_klass(n, CHECK_NULL);
@@ -391,12 +393,12 @@ GrowableArray<Klass*>* ObjArrayKlass::compute_secondary_supers(int num_extra_slo
     secondaries->push(vmClasses::Serializable_klass());
     for (int i = 0; i < num_elem_supers; i++) {
       Klass* elem_super = elem_supers->at(i);
-      if (elem_super != vmClasses::Object_klass()) {
+      if (elem_super != NULL && elem_super != vmClasses::Object_klass()) {
         Klass* array_super = elem_super->array_klass_or_null();
         assert(array_super != nullptr, "must already have been created");
         secondaries->push(array_super);
       } else {
-        assert(UseSecondarySupersTable, "placeholder");
+        assert(UseSecondarySupersTable, "placeholder"); // FIXME: CDS?
       }
     }
     return secondaries;
