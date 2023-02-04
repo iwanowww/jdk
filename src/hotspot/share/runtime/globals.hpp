@@ -743,20 +743,17 @@ const int ObjectAlignmentInBytes = 8;
   product(bool, UseSecondarySupersTable, false, DIAGNOSTIC,                 \
           "")                                                               \
                                                                             \
-  product(int, SecondarySuperMode, 2,                                       \
+  product(uint, SecondarySuperMode, 2,                                      \
           "")                                                               \
                                                                             \
-  product(uintx, SecondarySupersMaxAttempts, 10, DIAGNOSTIC,                \
+  product(uint, SecondarySupersMaxAttempts, 10, DIAGNOSTIC,                 \
           "")                                                               \
-          range(1, max_uintx)                                               \
                                                                             \
-  product(uintx, SecondarySupersTableMinSize, 4, DIAGNOSTIC,                \
+  product(uint, SecondarySupersTableMinSize, 4, DIAGNOSTIC,                 \
           "")                                                               \
-          range(0, max_uintx)                                               \
                                                                             \
-  product(uintx, SecondarySupersTableMaxSize, 128, DIAGNOSTIC,              \
+  product(uint, SecondarySupersTableMaxSize, 128, DIAGNOSTIC,               \
           "")                                                               \
-          range(0, max_uintx)                                               \
                                                                             \
   product(bool, TraceSecondarySupers, false, DIAGNOSTIC,                    \
           "")                                                               \

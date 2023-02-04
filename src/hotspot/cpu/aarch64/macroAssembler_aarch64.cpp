@@ -1418,7 +1418,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   str(rscratch1, pst_counter_addr);
 #endif //PRODUCT
 
-  if (UseSecondarySupersTable) {
+  if (UseSecondarySupersTable && (!UseNewCode3 || Thread::current()->is_Compiler_thread())) {
 //  if (UseSecondarySupersTable && Thread::current()->is_Compiler_thread()) {
     BLOCK_COMMENT("secondary_supers_table {");
 
@@ -1431,7 +1431,8 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 
     switch (SecondarySuperMode) {
       case 0: {
-        eorw(count, count, count); // mask = 0 (== "h2 = 0")
+        eorw(count, count, count);
+        mov(rscratch2, 0); // h2 = 0
         break;
       }
       case 1: {
@@ -1439,16 +1440,16 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
           // table_mask = table_size - 2
           subw(count, count, 2);
         }
-        ldrw(rscratch1, Address(  sub_klass, in_bytes(Klass::hash_code_offset()))); // seed
-        ldrw(rscratch2, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
+        ldr(rscratch1, Address(  sub_klass, in_bytes(Klass::hash_code_offset()))); // seed
+        ldr(rscratch2, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
 
-        eorw(rscratch2, rscratch1, rscratch2); // h0 = seed ^ h
+        eor(rscratch2, rscratch1, rscratch2); // h0 = seed ^ h
 
         // h1 = h0 >> (h0 % 32)
-        andw(r5, rscratch2, 31);         // (h0 % 32)
-        lsrvw(rscratch2, rscratch2, r5); // (h0 >> (h0 % 32))
+        andr(r5, rscratch2, 31);         // (h0 % 32)
+        lsrv(rscratch2, rscratch2, r5); // (h0 >> (h0 % 32))
 
-        eorw(rscratch2, rscratch1, rscratch2); // h2 = seed ^ h1
+        eor(rscratch2, rscratch1, rscratch2); // h2 = seed ^ h1
         break;
       }
       case 2: {
@@ -1496,11 +1497,11 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     lea(table_base, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
 
     if (UseNewCode2) {
-      udivw(rscratch1, rscratch2, count);
-      Assembler::msubw(rscratch1, rscratch1, count, rscratch2);
-      andw(rscratch1, rscratch1, 0xFFFE);
+      udiv(rscratch1, rscratch2, count);
+      Assembler::msub(rscratch1, rscratch1, count, rscratch2);
+      andr(rscratch1, rscratch1, 0xFFFFFFFE);
     } else {
-      andw(rscratch1, rscratch2, count); // idx1 = (h2 & mask)
+      andr(rscratch1, rscratch2, count); // idx1 = (h2 & mask)
     }
 
     ldr(rscratch1, Address(table_base, rscratch1, Address::lsl(LogBytesPerWord))); // probe1
@@ -1509,15 +1510,15 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     br(EQ, L_success_local);
 
     // idx2 = (h2 >> 16) & mask
-    lsrw(rscratch2, rscratch2, 16);
+    lsr(rscratch2, rscratch2, 16);
     if (UseNewCode2) {
-      udivw(rscratch1, rscratch2, count);
-      Assembler::msubw(rscratch2, rscratch1, count, rscratch2);
-      andw(rscratch2, rscratch2, 0xFFFE);
+      udiv(rscratch1, rscratch2, count);
+      Assembler::msub(rscratch2, rscratch1, count, rscratch2);
+      andr(rscratch2, rscratch2, 0xFFFE);
     } else {
-      andw(rscratch2, rscratch2, count);
+      andr(rscratch2, rscratch2, count);
     }
-    addw(rscratch2, rscratch2, 1);
+    add(rscratch2, rscratch2, 1);
 
     // probe2 = sstable->at(idx2);
     ldr(rscratch2, Address(table_base, rscratch2, Address::lsl(LogBytesPerWord))); // probe2
