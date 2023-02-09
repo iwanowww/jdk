@@ -256,6 +256,8 @@ class StubRoutines: AllStatic {
   JFR_ONLY(static RuntimeStub* _jfr_write_checkpoint_stub;)
   JFR_ONLY(static address _jfr_write_checkpoint;)
 
+  static address _secondary_supers_addr;
+
   // Vector Math Routines
   static address _vector_f_math[VectorSupport::NUM_VEC_SIZES][VectorSupport::NUM_SVML_OP];
   static address _vector_d_math[VectorSupport::NUM_VEC_SIZES][VectorSupport::NUM_SVML_OP];
@@ -431,6 +433,8 @@ class StubRoutines: AllStatic {
   JFR_ONLY(static address jfr_write_checkpoint() { return _jfr_write_checkpoint; })
 
   static address select_fill_function(BasicType t, bool aligned, const char* &name);
+
+  static address secondary_supers()    { return _secondary_supers_addr; }
 
   //
   // Default versions of the above arraycopy functions for platforms which do

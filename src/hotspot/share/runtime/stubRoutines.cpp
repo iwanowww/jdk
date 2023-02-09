@@ -175,6 +175,8 @@ address StubRoutines::_cont_thaw          = nullptr;
 address StubRoutines::_cont_returnBarrier = nullptr;
 address StubRoutines::_cont_returnBarrierExc = nullptr;
 
+address StubRoutines::_secondary_supers_addr = nullptr;
+
 JFR_ONLY(RuntimeStub* StubRoutines::_jfr_write_checkpoint_stub = nullptr;)
 JFR_ONLY(address StubRoutines::_jfr_write_checkpoint = nullptr;)
 

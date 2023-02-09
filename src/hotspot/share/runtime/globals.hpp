@@ -755,6 +755,9 @@ const int ObjectAlignmentInBytes = 8;
   product(uint, SecondarySupersTableMaxSize, 128, DIAGNOSTIC,               \
           "")                                                               \
                                                                             \
+  product(bool, UseSecondarySupersStub, true, DIAGNOSTIC,                   \
+          "")                                                               \
+                                                                            \
   product(bool, TraceSecondarySupers, false, DIAGNOSTIC,                    \
           "")                                                               \
                                                                             \

@@ -968,6 +968,13 @@ public:
                                      Label* L_failure,
                                      bool set_cond_codes = false);
 
+  void lookup_secondary_supers_table(Register sub_klass,
+                                     Register super_klass,
+                                     Register temp_reg,
+                                     Register temp2_reg,
+                                     Label* L_success,
+                                     Label* L_failure);
+
   void mixer322_337954d5(Register dst, Register x, Register y, Register tmp);
   void mixer317_SVCESG92(Register dst, Register x, Register y, Register tmp);
   void mixer324_SVCESG75(Register dst, Register x, Register y, Register tmp);

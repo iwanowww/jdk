@@ -6913,6 +6913,27 @@ class StubGenerator: public StubCodeGenerator {
     return start;
   }
 
+  address generate_secondary_supers() {
+    assert(UseSecondarySupersStub, "");
+
+    __ align(CodeEntryAlignment);
+    StubCodeMark mark(this, "StubRoutines", "search_secondary_supers");
+    address start = __ pc();
+
+    __ enter();
+
+    Label miss;
+    __ lookup_secondary_supers_table(r4, r0, r2, r5,
+                                     NULL, &miss);
+    __ mov(r5, zr);
+    __ bind(miss);
+
+    __ leave();
+    __ ret(lr);
+
+    return start;
+  }
+
 #if INCLUDE_JFR
 
   static void jfr_prologue(address the_pc, MacroAssembler* _masm, Register thread) {
@@ -8095,6 +8116,10 @@ class StubGenerator: public StubCodeGenerator {
     // generate Adler32 intrinsics code
     if (UseAdler32Intrinsics) {
       StubRoutines::_updateBytesAdler32 = generate_updateBytesAdler32();
+    }
+
+    if (UseSecondarySupersStub) {
+      StubRoutines::_secondary_supers_addr = generate_secondary_supers();
     }
 
     StubRoutines::aarch64::_spin_wait = generate_spin_wait();
