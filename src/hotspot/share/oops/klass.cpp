@@ -1199,7 +1199,7 @@ void Klass::verify_on(outputStream* st) {
   if (super() != nullptr) {
     guarantee(super()->is_klass(), "should be klass");
   }
-  if (secondary_super_cache() != nullptr) {
+  if (_secondary_super_cache != nullptr) {
     Klass* ko = _secondary_super_cache;
     guarantee(ko->is_klass(), "should be klass");
   }
