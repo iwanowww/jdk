@@ -1534,6 +1534,8 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   ldrw(count, Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
   cbzw(count, L_linear_scan);
 
+  bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
+
   switch (SecondarySuperMode) {
     case 0: {
       eorw(count, count, count);
@@ -1541,7 +1543,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
       break;
     }
     case 1: {
-      if (!UseNewCode2) {
+      if (is_power_of_2_sizes_only) {
         // table_mask = table_size - 2
         subw(count, count, 2);
       }
@@ -1564,7 +1566,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
       mixer322_337954d5(rscratch2, r2 /*temp_reg*/, r5 /*temp2_reg*/, rscratch1); // h2 = rscratch2
 
       ldrw(count, Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
-      if (!UseNewCode2) {
+      if (is_power_of_2_sizes_only) {
         // table_mask = table_size - 2
         subw(count, count, 2);
       }
@@ -1577,7 +1579,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
       mixer317_SVCESG92(rscratch2, r2 /*temp_reg*/, r5 /*temp2_reg*/, rscratch1); // h2 = rscratch2
 
       ldrw(count, Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
-      if (!UseNewCode2) {
+      if (is_power_of_2_sizes_only) {
         // table_mask = table_size - 2
         subw(count, count, 2);
       }
@@ -1590,7 +1592,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
       mixer324_SVCESG75(rscratch2, r2 /*temp_reg*/, r5 /*temp2_reg*/, rscratch1); // h2 = rscratch2
 
       ldrw(count, Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
-      if (!UseNewCode2) {
+      if (is_power_of_2_sizes_only) {
         // table_mask = table_size - 2
         subw(count, count, 2);
       }
@@ -1601,12 +1603,12 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   ldr(rscratch1,  Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
   lea(table_base, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
 
-  if (UseNewCode2) {
+  if (is_power_of_2_sizes_only) {
+    andr(rscratch1, rscratch2, count); // idx1 = (h2 & mask)
+  } else {
     udiv(rscratch1, rscratch2, count);
     Assembler::msub(rscratch1, rscratch1, count, rscratch2);
     andr(rscratch1, rscratch1, 0xFFFFFFFE);
-  } else {
-    andr(rscratch1, rscratch2, count); // idx1 = (h2 & mask)
   }
 
   ldr(rscratch1, Address(table_base, rscratch1, Address::lsl(LogBytesPerWord))); // probe1
@@ -1619,12 +1621,12 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
 
   // idx2 = (h2 >> 16) & mask
   lsr(rscratch2, rscratch2, 16);
-  if (UseNewCode2) {
+  if (is_power_of_2_sizes_only) {
+    andr(rscratch2, rscratch2, count);
+  } else {
     udiv(rscratch1, rscratch2, count);
     Assembler::msub(rscratch2, rscratch1, count, rscratch2);
-    andr(rscratch2, rscratch2, 0xFFFE);
-  } else {
-    andr(rscratch2, rscratch2, count);
+    andr(rscratch2, rscratch2, 0xFFFFFFFE);
   }
   add(rscratch2, rscratch2, 1);
 
@@ -1640,18 +1642,18 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
 
 //    assert(table_base == r5, "");
 //    mov(r5, (address)vmClasses::Object_klass());
-//    if (UseNewCode2) {
-//      // no fast negative check: probe1 is destroyed
-//    } else {
+//    if (is_power_of_2_sizes_only) {
 //      // if (probe1 == Object.klass)  return false;
 //      cmp(rscratch1, r5);
 //      br(EQ, L_failure_local);
+//    } else {
+//      // no fast negative check: probe1 is destroyed
 //    }
 //    // if (probe2 == Object.klass)  return false;
 //    cmp(rscratch2, r5);
 //    br(EQ, L_failure_local);
 
-  if (!UseNewCode2) {
+  if (is_power_of_2_sizes_only) {
     addw(count, count, 2); // restore count: table_size = table_mask + 2
   }
 
@@ -1664,7 +1666,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
 
   // NB! r5/table_base should hold non-zero value when exiting on failure.
   ldr (table_base, Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
-//    ldrw(count,      Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
+//  ldrw(count,      Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
 
   ldrw(rscratch2, Address(table_base, Array<Klass*>::length_offset_in_bytes()));
   cbzw(rscratch2, L_failure_local);  // left == 0?  r5 != 0!

@@ -146,7 +146,8 @@ bool Klass::search_secondary_supers_table(Klass* k) const {
   Array<Klass*>* ss_table = secondary_supers_table();
   int table_size = secondary_supers_table_size();
   if (table_size > 0) {
-    assert(is_power_of_2(table_size) || UseNewCode2, "");
+    bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
+    assert(is_power_of_2(table_size) || !is_power_of_2_sizes_only, "");
 
     uint idx1 = next_index(hash_code(), k, 1, table_size);
     Klass* probe1 = ss_table->at(idx1);
@@ -433,7 +434,8 @@ uint64_t mixer324_SVCESG75(const uint64_t x) {
 
 juint Klass::next_index(uint64_t seed, Klass* k, juint prev_idx, juint table_size) {
   if (table_size >= 4) {
-    assert(is_power_of_2(table_size) || UseNewCode2, "");
+    bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
+    assert(is_power_of_2(table_size) || !is_power_of_2_sizes_only, "");
     uint64_t h = k->hash_code();
     uint mask = 0xFFFE; // table_size - 2; // (table_size >> 1);
     uint shift = (prev_idx & 1) ? 0 : 16;
@@ -597,13 +599,18 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
 
       uint num_of_secondaries = secondary_supers()->length();
       uint table_size = 0;
-      if (UseNewCode2) {
+
+      bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
+      bool allow_resizing           = (SecondarySupersTableSizingMode & 2) == 1;
+      bool aggressive_sizing        = (SecondarySupersTableSizingMode & 4) == 1;
+
+      if (is_power_of_2_sizes_only) {
+        int delta = (is_power_of_2(num_of_secondaries) ? 0 : 1) + (aggressive_sizing ? 1 : 0);
+        table_size = 1 << (log2i(num_of_secondaries) + delta);
+      } else {
         bool is_partial = (num_of_secondaries % SecondarySupersTableSlotSize) > 0;
         uint num_of_slots = (num_of_secondaries / SecondarySupersTableSlotSize) + (is_partial ? 1 : 0);
         table_size = num_of_slots * SecondarySupersTableSlotSize;
-      } else {
-        int delta = (is_power_of_2(num_of_secondaries) ? 0 : 1) + (UseNewCode4 ? 1 : 0);
-        table_size = 1 << (log2i(num_of_secondaries) + delta);
       }
 
       if (table_size < SecondarySupersTableMinSize) {
@@ -675,8 +682,12 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
         if (table_size + secondary_list->length() == num_of_secondaries) {
           break; // table is full
         }
-        if (UseNewCode2 && (attempt + 1) == SecondarySupersMaxAttempts && table_size < SecondarySupersTableMaxSize) {
-          table_size = MIN2(table_size + SecondarySupersTableSlotSize, SecondarySupersTableMaxSize);
+        if (allow_resizing && (attempt + 1) == SecondarySupersMaxAttempts && table_size < SecondarySupersTableMaxSize) {
+          if (is_power_of_2_sizes_only) {
+            table_size = MIN2(table_size * 2, SecondarySupersTableMaxSize);
+          } else {
+            table_size = MIN2(table_size + SecondarySupersTableSlotSize, SecondarySupersTableMaxSize);
+          }
           attempt = 0; // reset
         }
       }
@@ -1206,7 +1217,8 @@ void Klass::verify_on(outputStream* st) {
   if (_secondary_supers_table != NULL) {
     uint table_size = _secondary_supers_table_size;
     if (table_size > 0) {
-      guarantee(is_power_of_2(table_size) || UseNewCode2, "");
+      bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
+      guarantee(!is_power_of_2_sizes_only || is_power_of_2(table_size), "");
       for (uint idx = 0; idx < table_size; idx++) {
         Klass* k = _secondary_supers_table->at(idx);
         if (k != NULL && k != vmClasses::Object_klass()) {

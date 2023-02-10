@@ -743,7 +743,7 @@ const int ObjectAlignmentInBytes = 8;
   product(bool, UseSecondarySupersTable, false, DIAGNOSTIC,                 \
           "")                                                               \
                                                                             \
-  product(uint, SecondarySuperMode, 2,                                      \
+  product(uint, SecondarySuperMode, 2, DIAGNOSTIC,                          \
           "")                                                               \
                                                                             \
   product(uint, SecondarySupersMaxAttempts, 10, DIAGNOSTIC,                 \
@@ -753,6 +753,9 @@ const int ObjectAlignmentInBytes = 8;
           "")                                                               \
                                                                             \
   product(uint, SecondarySupersTableMaxSize, 128, DIAGNOSTIC,               \
+          "")                                                               \
+                                                                            \
+  product(uint, SecondarySupersTableSizingMode, 0, DIAGNOSTIC,              \
           "")                                                               \
                                                                             \
   product(bool, UseSecondarySupersStub, true, DIAGNOSTIC,                   \
