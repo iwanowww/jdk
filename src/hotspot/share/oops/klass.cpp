@@ -432,28 +432,28 @@ uint64_t mixer324_SVCESG75(const uint64_t x) {
 }
  */
 
-juint Klass::next_index(uint64_t seed, Klass* k, juint prev_idx, juint table_size) {
+uint Klass::next_index(uintptr_t seed, Klass* k, uint prev_idx, uint table_size) {
   if (table_size >= 4) {
     bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
     assert(is_power_of_2(table_size) || !is_power_of_2_sizes_only, "");
-    uint64_t h = k->hash_code();
+    uint h = k->hash_code();
     uint mask = 0xFFFE; // table_size - 2; // (table_size >> 1);
     uint shift = (prev_idx & 1) ? 0 : 16;
     uint delta = (prev_idx & 1) ? 0 : 1;
-    uint64_t h2 = (get_hash(seed, h) >> shift) % table_size;
+    uintptr_t h2 = (get_hash(seed, h) >> shift) % table_size;
     return (h2 & mask) + delta; // (h2 << 1) + delta;
   } else {
     return -1;
   }
 }
 
-void Klass::init_helper(uint64_t seed, Klass* const elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, uint table_size) {
-  juint prev_idx = 1; // = 0;
+void Klass::init_helper(uintptr_t seed, Klass* const elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, uint table_size) {
+  uint prev_idx = 1; // = 0;
   Klass* cur_elem = elem;
 
   uint attempts = 0;
   while (true) {
-    juint idx = Klass::next_index(seed, cur_elem, prev_idx, table_size);
+    uint idx = Klass::next_index(seed, cur_elem, prev_idx, table_size);
     Klass* probe = table->at(idx);
     assert(probe != cur_elem, "duplicated");
     if (probe == NULL) {
@@ -544,7 +544,7 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
     GrowableArray<Klass*>* secondaries = compute_secondary_supers(extras, transitive_interfaces);
     if (secondaries == nullptr) {
       // secondary_supers set by compute_secondary_supers
-      uint64_t seed = get_next_hash(THREAD);
+      uintptr_t seed = get_next_hash(THREAD);
       set_hash_code(seed);
     } else {
       GrowableArray<Klass*>* primaries = new GrowableArray<Klass*>(extras);
@@ -622,7 +622,7 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
       elapsedTimer et;
       et.start();
 
-      uint64_t best_seed = 0;
+      uintptr_t best_seed = 0;
       uint best_score = num_of_secondaries + 1;
       uint best_table_size = table_size;
       GrowableArray<Klass*>* best_table          = new GrowableArray<Klass*>(SecondarySupersTableMaxSize, SecondarySupersTableMaxSize, NULL);
@@ -635,7 +635,7 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
         GrowableArray<Klass*>* table          = new GrowableArray<Klass*>(table_size, table_size, NULL);
         GrowableArray<Klass*>* secondary_list = new GrowableArray<Klass*>(num_of_secondaries);
 
-        uint64_t seed = get_next_hash(THREAD);
+        uintptr_t seed = get_next_hash(THREAD);
 
         for (uint idx = 0; idx < num_of_secondaries; idx++) {
           Klass* elem = secondary_supers()->at(idx);
@@ -719,7 +719,7 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
     } else if (secondary_supers() != NULL && secondary_supers()->length() == 0) {
       set_secondary_supers_table(Universe::the_empty_klass_array(), 0);
 
-      uint64_t seed = get_next_hash(THREAD);
+      uintptr_t seed = get_next_hash(THREAD);
       set_hash_code(seed);
     } else {
       // not yet initialized
@@ -736,12 +736,12 @@ static void print_entry(outputStream* st, int idx, Klass* k, Klass* owner) {
   } else if (k == vmClasses::Object_klass()) {
     st->print_cr("<empty>");
   } else {
-    uint64_t seed = owner->hash_code();
+    uintptr_t seed = owner->hash_code();
     juint table_size = owner->secondary_supers_table_size();
     juint primary_idx   = Klass::next_index(seed, k, 1, table_size);
     juint secondary_idx = Klass::next_index(seed, k, 0, table_size);
 
-    st->print_cr(UINTX_FORMAT_X_0 " %s h=" UINT64_FORMAT_X_0 " 1st=%02d 2nd=%02d",
+    st->print_cr(UINTX_FORMAT_X_0 " %s h=" UINTX_FORMAT_X_0 " 1st=%02d 2nd=%02d",
                  (uintptr_t)k, k->external_name(), k->hash_code(),
                  primary_idx, secondary_idx);
   }
@@ -750,7 +750,7 @@ static void print_entry(outputStream* st, int idx, Klass* k, Klass* owner) {
 void Klass::dump_on(outputStream* st) {
   ResourceMark rm;
   st->print_cr("================= TABLE ==================");
-  st->print_cr("--- %s table_size=%d seed=" UINT64_FORMAT_X_0 " ---",
+  st->print_cr("--- %s table_size=%d seed=" UINTX_FORMAT_X_0 " ---",
                external_name(), secondary_supers_table_size(), hash_code());
   st->print_cr("------------------------------------------");
 
