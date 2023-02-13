@@ -2784,57 +2784,6 @@ Node* Phase::gen_subtype_check(Node* subklass, Node* superklass, Node** ctrl, No
   r_ok_subtype->init_req(2, gvn.transform(new IfTrueNode(iff3)));
   *ctrl = gvn.transform(new IfFalseNode(iff3));
 
-  if (false /*UseNewCode2*/) {
-/*
-  if (ss_table != NULL && ss_table->length() > 0) {
-    int table_size = ss_table->length();
-    assert(is_power_of_2(table_size), "");
-    juint mask = table_size - 1;
-    juint idx1 = (k->hash_code() & mask);
-    Klass* probe1 = ss_table->at(idx1);
-    if (probe1 == NULL) {
-      return false;
-    } else if (probe1 == k) {
-      return true;
-    } else {
-      juint idx2 = ((k->hash_code() >> 16) & mask);
-      Klass* probe2 = ss_table->at(idx2);
-      if (probe2 == NULL) {
-        return false;
-      } else if (probe2 == k) {
-        return true;
-      } else if (probe2 != vmClasses::Object_klass()){
-        return false;
-      } else {
-        // Object klass is used as a sentinel value to mark evicted element.
-      }
-    }
- */
-    RegionNode* r_linear_search = new RegionNode(2);
-
-    Node* table_adr = gvn.transform(new AddPNode(subklass, subklass, gvn.MakeConX(in_bytes(Klass::secondary_supers_table_offset()))));
-    Node* table     = gvn.transform(new LoadPNode(NULL, C->immutable_memory(), table_adr, gvn.type(table_adr)->is_ptr(), TypePtr::BOTTOM, MemNode::unordered));
-
-    Node* cmp = gvn.transform(new CmpPNode(table, gvn.makecon(TypePtr::NULL_PTR)));
-    Node* bol = gvn.transform(new BoolNode(cmp, BoolTest::ne));
-    Node* iff = gvn.transform(new IfNode(*ctrl, bol, PROB_LIKELY(0.1f), COUNT_UNKNOWN));
-
-    *ctrl = gvn.transform(new IfTrueNode(iff->as_If()));
-    r_linear_search->init_req(1, gvn.transform(new IfFalseNode(iff->as_If())));
-
-    table = gvn.transform(ConstraintCastNode::make_cast_for_type(*ctrl, table, TypePtr::NOTNULL, ConstraintCastNode::RegularDependency));
-
-    // basic_plus_adr(C->top()/*!oop*/, table, Array<Klass*>::length_offset_in_bytes());
-    Node* table_size_adr = gvn.transform(new AddPNode(C->top() /*!oop*/, table, gvn.MakeConX(Array<Klass*>::length_offset_in_bytes())));
-//    Node* table_size     = gvn.transform(LoadNode::make(gvn, ));
-//    Node* mask = gvn.transform(new SubP);
-
-//    Node* probe1 = gvn.transform(LoadKlassNode::make(gvn, NULL, kmem, p2, gvn.type(probe1_adr)->is_ptr(), TypeInstKlassPtr::OBJECT_OR_NULL));
-
-//    Node* probe2 = gvn.transform(LoadKlassNode::make(gvn, NULL, kmem, p2, gvn.type(probe2_adr)->is_ptr(), TypeInstKlassPtr::OBJECT_OR_NULL));
-
-  }
-
   // -- Roads not taken here: --
   // We could also have chosen to perform the self-check at the beginning
   // of this code sequence, as the assembler does.  This would not pay off

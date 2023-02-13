@@ -436,10 +436,10 @@ uint Klass::next_index(uintptr_t seed, Klass* k, uint prev_idx, uint table_size)
   if (table_size >= 4) {
     bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
     assert(is_power_of_2(table_size) || !is_power_of_2_sizes_only, "");
-    uint h = k->hash_code();
-    uint mask = 0xFFFE; // table_size - 2; // (table_size >> 1);
-    uint shift = (prev_idx & 1) ? 0 : 16;
-    uint delta = (prev_idx & 1) ? 0 : 1;
+    uint mask = -2; // 0xFFFE; // table_size - 2; // (table_size >> 1);
+    uintptr_t h = k->hash_code();
+    uintptr_t shift = (prev_idx & 1) ? 0 : 16;
+    uintptr_t delta = (prev_idx & 1) ? 0 : 1;
     uintptr_t h2 = (get_hash(seed, h) >> shift) % table_size;
     return (h2 & mask) + delta; // (h2 << 1) + delta;
   } else {
@@ -527,205 +527,220 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
 #endif
   }
 
+  _hash_code = get_next_hash(THREAD);
+
   if (secondary_supers() == nullptr) {
+    initialize_secondary_supers(transitive_interfaces, CHECK);
+  }
+}
 
-    // Now compute the list of secondary supertypes.
-    // Secondaries can occasionally be on the super chain,
-    // if the inline "_primary_supers" array overflows.
-    int extras = 0;
-    Klass* p;
-    for (p = super(); !(p == nullptr || p->can_be_primary_super()); p = p->super()) {
-      ++extras;
+void Klass::initialize_secondary_supers(Array<InstanceKlass*>* transitive_interfaces, TRAPS) {
+  // Now compute the list of secondary supertypes.
+  // Secondaries can occasionally be on the super chain,
+  // if the inline "_primary_supers" array overflows.
+  int extras = 0;
+  for (Klass* p = super(); (p != nullptr && !p->can_be_primary_super()); p = p->super()) {
+    ++extras;
+  }
+
+  ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
+
+  // Compute the "real" non-extra secondaries.
+  GrowableArray<Klass*>* primaries   = new GrowableArray<Klass*>(extras);
+  GrowableArray<Klass*>* secondaries = compute_secondary_supers(extras, transitive_interfaces);
+  if (secondaries == nullptr) {
+    // secondary_supers set by compute_secondary_supers
+    if (secondary_supers() == nullptr) {
+      return; // still bootstrapping
     }
+  } else {
+    for (Klass* p = super(); (p != nullptr && !p->can_be_primary_super()); p = p->super()) {
+      int i; // Scan for overflow primaries being duplicates of 2nd'arys
 
-    ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
-
-    // Compute the "real" non-extra secondaries.
-    GrowableArray<Klass*>* secondaries = compute_secondary_supers(extras, transitive_interfaces);
-    if (secondaries == nullptr) {
-      // secondary_supers set by compute_secondary_supers
-      uintptr_t seed = get_next_hash(THREAD);
-      set_hash_code(seed);
-    } else {
-      GrowableArray<Klass*>* primaries = new GrowableArray<Klass*>(extras);
-
-      for (p = super(); !(p == nullptr || p->can_be_primary_super()); p = p->super()) {
-        int i;                    // Scan for overflow primaries being duplicates of 2nd'arys
-
-        // This happens frequently for very deeply nested arrays: the
-        // primary superclass chain overflows into the secondary.  The
-        // secondary list contains the element_klass's secondaries with
-        // an extra array dimension added.  If the element_klass's
-        // secondary list already contains some primary overflows, they
-        // (with the extra level of array-ness) will collide with the
-        // normal primary superclass overflows.
-        for (i = 0; i < secondaries->length(); i++ ) {
-          if (secondaries->at(i) == p) {
-            break;
-          }
+      // This happens frequently for very deeply nested arrays: the
+      // primary superclass chain overflows into the secondary.  The
+      // secondary list contains the element_klass's secondaries with
+      // an extra array dimension added.  If the element_klass's
+      // secondary list already contains some primary overflows, they
+      // (with the extra level of array-ness) will collide with the
+      // normal primary superclass overflows.
+      for (i = 0; i < secondaries->length(); i++ ) {
+        if (secondaries->at(i) == p) {
+          break;
         }
-        if (i < secondaries->length()) {
-          continue; // It's a dup, don't put it in
-        }
-        primaries->push(p);
       }
-      // Combine the two arrays into a metadata object to pack the array.
-      // The primaries are added in the reverse order, then the secondaries.
-      int new_length = primaries->length() + secondaries->length();
-      Array<Klass*>* s2 = MetadataFactory::new_array<Klass*>(
-                                         class_loader_data(), new_length, CHECK);
-      int fill_p = primaries->length();
-      for (int j = 0; j < fill_p; j++) {
-        s2->at_put(j, primaries->pop());  // add primaries in reverse order.
+      if (i < secondaries->length()) {
+        continue; // It's a dup, don't put it in
       }
-      for( int j = 0; j < secondaries->length(); j++ ) {
-        s2->at_put(j+fill_p, secondaries->at(j));  // add secondaries on the end.
-      }
-#ifdef ASSERT
-      // We must not copy any NULL placeholders left over from bootstrap.
-      for (int j = 0; j < s2->length(); j++) {
-        assert(s2->at(j) != nullptr, "correct bootstrapping order");
-      }
-#endif
-      set_secondary_supers(s2);
+      primaries->push(p);
     }
   }
 
-  if (UseSecondarySupersTable && secondary_supers_table() == NULL && SecondarySupersMaxAttempts > 0) {
-    if (secondary_supers() != NULL && secondary_supers()->length() > 0) {
-      ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
-
-      const uint SecondarySupersTableSlotSize = 4;
-
-      uint num_of_secondaries = secondary_supers()->length();
-      uint table_size = 0;
-
-      bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
-      bool allow_resizing           = (SecondarySupersTableSizingMode & 2) == 1;
-      bool aggressive_sizing        = (SecondarySupersTableSizingMode & 4) == 1;
-
-      if (is_power_of_2_sizes_only) {
-        int delta = (is_power_of_2(num_of_secondaries) ? 0 : 1) + (aggressive_sizing ? 1 : 0);
-        table_size = 1 << (log2i(num_of_secondaries) + delta);
-      } else {
-        bool is_partial = (num_of_secondaries % SecondarySupersTableSlotSize) > 0;
-        uint num_of_slots = (num_of_secondaries / SecondarySupersTableSlotSize) + (is_partial ? 1 : 0);
-        table_size = num_of_slots * SecondarySupersTableSlotSize;
+  if (UseSecondarySupersTable && SecondarySupersMaxAttempts > 0 &&
+      (secondaries != nullptr || (uint)secondary_supers()->length() >= SecondarySupersTableMinSize)) {
+    if (secondaries == nullptr) {
+      int num_of_secondary_supers = secondary_supers()->length();
+      secondaries = new GrowableArray<Klass*>(num_of_secondary_supers, num_of_secondary_supers, nullptr);
+      for (int i = 0; i < num_of_secondary_supers; i++) {
+        secondaries->at_put(i, secondary_supers()->at(i));
       }
-
-      if (table_size < SecondarySupersTableMinSize) {
-        table_size = 0;
-      } else if (table_size > SecondarySupersTableMaxSize) {
-        table_size = SecondarySupersTableMaxSize;
-      }
-
-      elapsedTimer et;
-      et.start();
-
-      uintptr_t best_seed = 0;
-      uint best_score = num_of_secondaries + 1;
-      uint best_table_size = table_size;
-      GrowableArray<Klass*>* best_table          = new GrowableArray<Klass*>(SecondarySupersTableMaxSize, SecondarySupersTableMaxSize, NULL);
-      GrowableArray<Klass*>* best_secondary_list = new GrowableArray<Klass*>(num_of_secondaries);
-
-      uint total_attempts = 0;
-      for (uint attempt = 0; attempt < SecondarySupersMaxAttempts; attempt++, total_attempts++) {
-        ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
-
-        GrowableArray<Klass*>* table          = new GrowableArray<Klass*>(table_size, table_size, NULL);
-        GrowableArray<Klass*>* secondary_list = new GrowableArray<Klass*>(num_of_secondaries);
-
-        uintptr_t seed = get_next_hash(THREAD);
-
-        for (uint idx = 0; idx < num_of_secondaries; idx++) {
-          Klass* elem = secondary_supers()->at(idx);
-          assert(elem != NULL, "");
-          int empty_slots = (table_size - idx) + secondary_list->length();
-          if (empty_slots == 0) {
-            // table is full
-            secondary_list->push(elem);
-          } else {
-            assert(empty_slots > 0, "");
-            init_helper(seed, elem, table, secondary_list, table_size);
-          }
-          if ((uint)secondary_list->length() >= best_score && !StressSecondarySupers) {
-            break; // no luck this time; fail-fast
-          }
-        }
-        assert((uint)table->length() == table_size, "");
-
-        if ((uint)secondary_list->length() < best_score) {
-          best_score = secondary_list->length();
-          best_seed = seed;
-          best_table_size = table_size;
-
-          best_table->clear();
-          best_secondary_list->clear();
-
-          assert(table->length() <= best_table->capacity(), "no resizing");
-
-          best_table->appendAll(table);
-          best_secondary_list->appendAll(secondary_list);
-
-          if (TraceSecondarySupers) {
-            tty->print_cr("#%d: secondary_supers_table: %s: total=%d size=%d secondary=%d",
-                          total_attempts, name()->as_C_string(), num_of_secondaries, table_size, secondary_list->length());
-          }
-        }
-        if (best_score == 0 && !StressSecondarySupers) {
-          break; // found a perfect match
-        }
-        if (table_size == 0) {
-          assert(best_score == num_of_secondaries, "");
-          break; // empty table: nothing more to do
-        }
-        if (table_size + secondary_list->length() == num_of_secondaries) {
-          break; // table is full
-        }
-        if (allow_resizing && (attempt + 1) == SecondarySupersMaxAttempts && table_size < SecondarySupersTableMaxSize) {
-          if (is_power_of_2_sizes_only) {
-            table_size = MIN2(table_size * 2, SecondarySupersTableMaxSize);
-          } else {
-            table_size = MIN2(table_size + SecondarySupersTableSlotSize, SecondarySupersTableMaxSize);
-          }
-          attempt = 0; // reset
-        }
-      }
-      {
-        assert(best_table_size <= (uint)best_table->length(), "");
-        Array<Klass*>* secondary_table = MetadataFactory::new_array<Klass*>(class_loader_data(),
-                                                                            best_table_size + best_secondary_list->length(), CHECK);
-        for (uint j = 0; j < best_table_size; j++) {
-          Klass* elem = best_table->at(j);
-//          if (elem == NULL) {
-//            elem = vmClasses::Object_klass();
-//          }
-          secondary_table->at_put(j, elem);
-        }
-        for (int j = 0; j < best_secondary_list->length(); j++) {
-          secondary_table->at_put(best_table_size + j, best_secondary_list->at(j));
-        }
-        set_secondary_supers(secondary_table);
-        set_secondary_supers_table(secondary_table, best_table_size);
-        set_hash_code(best_seed);
-      }
-      et.stop();
-      if (TraceSecondarySupers) {
-        ttyLocker ttyl;
-        tty->print_cr("secondary_supers_table: END: %s: attempts=%d elapsed_time=%ld ms (ticks=%ld)",
-                      name()->as_C_string(), total_attempts, et.milliseconds(), et.ticks());
-        dump_on(tty);
-      }
-    } else if (secondary_supers() != NULL && secondary_supers()->length() == 0) {
-      set_secondary_supers_table(Universe::the_empty_klass_array(), 0);
-
-      uintptr_t seed = get_next_hash(THREAD);
-      set_hash_code(seed);
-    } else {
-      // not yet initialized
     }
+    uint num_of_secondaries = primaries->length() + secondaries->length();
+    GrowableArray<Klass*>* secondary_supers = new GrowableArray<Klass*>(num_of_secondaries, num_of_secondaries, nullptr);
+    for (int i = 0; i < primaries->length(); i++) {
+      secondary_supers->at_put(i, primaries->at(i));
+    }
+    for (int i = 0; i < secondaries->length(); i++) {
+      secondary_supers->at_put(primaries->length() + i, secondaries->at(i));
+    }
+    initialize_secondary_supers_table(secondary_supers, CHECK);
+  } else if (secondary_supers() == nullptr) {
+    assert(secondaries != nullptr, "");
+    // Combine the two arrays into a metadata object to pack the array.
+    // The primaries are added in the reverse order, then the secondaries.
+    int new_length = primaries->length() + secondaries->length();
+    Array<Klass*>* s2 = MetadataFactory::new_array<Klass*>(
+        class_loader_data(), new_length, CHECK);
+    int fill_p = primaries->length();
+    for (int j = 0; j < fill_p; j++) {
+      s2->at_put(j, primaries->pop());  // add primaries in reverse order.
+    }
+    for( int j = 0; j < secondaries->length(); j++ ) {
+      s2->at_put(j+fill_p, secondaries->at(j));  // add secondaries on the end.
+    }
+#ifdef ASSERT
+    // We must not copy any NULL placeholders left over from bootstrap.
+    for (int j = 0; j < s2->length(); j++) {
+      assert(s2->at(j) != nullptr, "correct bootstrapping order");
+    }
+#endif
+    set_secondary_supers(s2);
+  }
+  assert(secondary_supers() != nullptr, "");
+}
+
+void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* secondaries, TRAPS) {
+  ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
+
+  const uint SecondarySupersTableSlotSize = 4;
+
+  uint num_of_secondaries = secondaries->length();
+  uint table_size = 0;
+
+  bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
+  bool allow_resizing           = (SecondarySupersTableSizingMode & 2) == 1;
+  bool aggressive_sizing        = (SecondarySupersTableSizingMode & 4) == 1;
+
+  if (is_power_of_2_sizes_only && num_of_secondaries > 0) {
+    int delta = (is_power_of_2(num_of_secondaries) ? 0 : 1) + (aggressive_sizing ? 1 : 0);
+    table_size = 1 << (log2i(num_of_secondaries) + delta);
   } else {
-    set_secondary_supers_table(secondary_supers(), 0);
+    bool is_partial = (num_of_secondaries % SecondarySupersTableSlotSize) > 0;
+    uint num_of_slots = (num_of_secondaries / SecondarySupersTableSlotSize) + (is_partial ? 1 : 0);
+    table_size = num_of_slots * SecondarySupersTableSlotSize;
+  }
+
+  if (table_size < SecondarySupersTableMinSize) {
+    table_size = 0;
+  } else if (table_size > SecondarySupersTableMaxSize) {
+    table_size = SecondarySupersTableMaxSize;
+  }
+
+  elapsedTimer et;
+  et.start();
+
+  uintptr_t best_seed = 0;
+  uint best_score = num_of_secondaries + 1;
+  uint best_table_size = table_size;
+  GrowableArray<Klass*>* best_table          = new GrowableArray<Klass*>(SecondarySupersTableMaxSize, SecondarySupersTableMaxSize, nullptr);
+  GrowableArray<Klass*>* best_secondary_list = new GrowableArray<Klass*>(num_of_secondaries);
+
+  uint total_attempts = 0;
+  for (uint attempt = 0; attempt < SecondarySupersMaxAttempts; attempt++, total_attempts++) {
+    ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
+
+    GrowableArray<Klass*>* table          = new GrowableArray<Klass*>(table_size, table_size, nullptr);
+    GrowableArray<Klass*>* secondary_list = new GrowableArray<Klass*>(num_of_secondaries);
+
+    uintptr_t seed = get_next_hash(THREAD);
+
+    for (uint idx = 0; idx < num_of_secondaries; idx++) {
+      Klass* elem = secondaries->at(idx);
+      assert(elem != nullptr, "");
+      int empty_slots = (table_size - idx) + secondary_list->length();
+      if (empty_slots == 0) {
+        // table is full
+        secondary_list->push(elem);
+      } else {
+        assert(empty_slots > 0, "");
+        init_helper(seed, elem, table, secondary_list, table_size);
+      }
+      if ((uint)secondary_list->length() >= best_score && !StressSecondarySupers) {
+        break; // no luck this time; fail-fast
+      }
+    }
+    assert((uint)table->length() == table_size, "");
+
+    if ((uint)secondary_list->length() < best_score) {
+      best_score = secondary_list->length();
+      best_seed = seed;
+      best_table_size = table_size;
+
+      best_table->clear();
+      best_secondary_list->clear();
+
+      assert(table->length() <= best_table->capacity(), "no resizing");
+
+      best_table->appendAll(table);
+      best_secondary_list->appendAll(secondary_list);
+
+      if (TraceSecondarySupers) {
+        tty->print_cr("#%d: secondary_supers_table: %s: total=%d size=%d secondary=%d",
+                      total_attempts, name()->as_C_string(), num_of_secondaries, table_size, secondary_list->length());
+      }
+    }
+    if (best_score == 0 && !StressSecondarySupers) {
+      break; // found a perfect match
+    }
+    if (table_size == 0) {
+      assert(best_score == num_of_secondaries, "");
+      break; // empty table: nothing more to do
+    }
+    if (table_size + secondary_list->length() == num_of_secondaries) {
+      break; // table is full
+    }
+    if (allow_resizing && (attempt + 1) == SecondarySupersMaxAttempts && table_size < SecondarySupersTableMaxSize) {
+      if (is_power_of_2_sizes_only) {
+        table_size = MIN2(table_size * 2, SecondarySupersTableMaxSize);
+      } else {
+        table_size = MIN2(table_size + SecondarySupersTableSlotSize, SecondarySupersTableMaxSize);
+      }
+      attempt = 0; // reset
+    }
+  }
+  {
+    assert(best_table_size <= (uint)best_table->length(), "");
+    Array<Klass*>* secondary_table = MetadataFactory::new_array<Klass*>(class_loader_data(),
+                                                                        best_table_size + best_secondary_list->length(), CHECK);
+    for (uint j = 0; j < best_table_size; j++) {
+      Klass* elem = best_table->at(j);
+//      if (elem == NULL) {
+//        elem = vmClasses::Object_klass();
+//      }
+      secondary_table->at_put(j, elem);
+    }
+    for (int j = 0; j < best_secondary_list->length(); j++) {
+      secondary_table->at_put(best_table_size + j, best_secondary_list->at(j));
+    }
+    set_secondary_supers_table(secondary_table, best_table_size); // FIXME: NB! memory leak! drops previous secondary_supers on the floor!
+    _hash_code = best_seed;
+  }
+  et.stop();
+  if (TraceSecondarySupers) {
+    ttyLocker ttyl;
+    tty->print_cr("secondary_supers_table: END: %s: attempts=%d elapsed_time=%ld ms (ticks=%ld)",
+                  name()->as_C_string(), total_attempts, et.milliseconds(), et.ticks());
+    dump_on(tty);
   }
 }
 
@@ -779,7 +794,6 @@ GrowableArray<Klass*>* Klass::compute_secondary_supers(int num_extra_slots,
   assert(num_extra_slots == 0, "override for complex klasses");
   assert(transitive_interfaces == nullptr, "sanity");
   set_secondary_supers(Universe::the_empty_klass_array());
-  set_secondary_supers_table(Universe::the_empty_klass_array(), 0);
   return nullptr;
 }
 
@@ -942,7 +956,6 @@ void Klass::metaspace_pointers_do(MetaspaceClosure* it) {
   it->push(&_name);
   it->push(&_secondary_super_cache);
   it->push(&_secondary_supers);
-  it->push(&_secondary_supers_table);
   for (int i = 0; i < _primary_super_limit; i++) {
     it->push(&_primary_supers[i]);
   }
@@ -1214,27 +1227,19 @@ void Klass::verify_on(outputStream* st) {
     guarantee(java_lang_Class::is_instance(java_mirror_no_keepalive()), "should be instance");
   }
 
-  if (_secondary_supers_table != NULL) {
+  if (_secondary_supers != NULL) {
     uint table_size = _secondary_supers_table_size;
     if (table_size > 0) {
       bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
       guarantee(!is_power_of_2_sizes_only || is_power_of_2(table_size), "");
       for (uint idx = 0; idx < table_size; idx++) {
-        Klass* k = _secondary_supers_table->at(idx);
+        Klass* k = _secondary_supers->at(idx);
         if (k != NULL && k != vmClasses::Object_klass()) {
           uint idx1 = next_index(hash_code(), k, 1, table_size);
           uint idx2 = next_index(hash_code(), k, 0, table_size);
           guarantee(idx == idx1 || idx == idx2, "misplaced");
           guarantee(_secondary_supers->contains(k), "absent");
         }
-      }
-    }
-    if (_secondary_supers != _secondary_supers_table) {
-      uint ss_length = _secondary_supers->length();
-      for (uint idx = 0; idx < ss_length; idx++) {
-        Klass* k = _secondary_supers->at(idx);
-        guarantee(k != NULL && k->is_klass(), "");
-        guarantee(search_secondary_supers(k), "missing");
       }
     }
   }

@@ -1450,10 +1450,8 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     }
   } else {
     // a couple of useful fields in sub_klass:
-    int ss_offset = in_bytes(Klass::secondary_supers_offset());
-    int sc_offset = in_bytes(Klass::secondary_super_cache_offset());
-    Address secondary_supers_addr(sub_klass, ss_offset);
-    Address super_cache_addr(     sub_klass, sc_offset);
+    Address secondary_supers_addr(sub_klass, Klass::secondary_supers_offset());
+    Address super_cache_addr(     sub_klass, Klass::secondary_super_cache_offset());
 
 #ifndef PRODUCT
     BLOCK_COMMENT("SharedRuntime::_partial_subtype_ctr {");
@@ -1600,7 +1598,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
     }
     default: fatal("%d", SecondarySuperMode);
   }
-  ldr(rscratch1,  Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
+  ldr(rscratch1,  Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
   lea(table_base, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
 
   if (is_power_of_2_sizes_only) {
@@ -1665,7 +1663,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   bind(L_linear_scan);
 
   // NB! r5/table_base should hold non-zero value when exiting on failure.
-  ldr (table_base, Address(sub_klass, in_bytes(Klass::secondary_supers_table_offset())));
+  ldr(table_base, Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
 //  ldrw(count,      Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
 
   ldrw(rscratch2, Address(table_base, Array<Klass*>::length_offset_in_bytes()));

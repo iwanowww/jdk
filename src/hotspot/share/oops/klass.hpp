@@ -141,9 +141,8 @@ class Klass : public Metadata {
   Klass*      _secondary_super_cache;
   // Array of all secondary supertypes
   Array<Klass*>* _secondary_supers;
+  uint           _secondary_supers_table_size;
 
-  juint          _secondary_supers_table_size;
-  Array<Klass*>* _secondary_supers_table;
   // Ordered list of all primary supertypes
   Klass*      _primary_supers[_primary_super_limit];
   // java/lang/Class instance mirroring this class
@@ -217,8 +216,12 @@ protected:
   Klass* super() const               { return _super; }
   void set_super(Klass* k)           { _super = k; }
 
-  // initializes _super link, _primary_supers & _secondary_supers arrays
+  // initializes _super link and _primary_supers array
   void initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interfaces, TRAPS);
+
+  // initializes _secondary_supers array
+  void initialize_secondary_supers(Array<InstanceKlass*>* transitive_interfaces, TRAPS);
+  void initialize_secondary_supers_table(GrowableArray<Klass*>* secondaries, TRAPS);
 
   // klass-specific helper for initializing _secondary_supers
   virtual GrowableArray<Klass*>* compute_secondary_supers(int num_extra_slots,
@@ -231,15 +234,16 @@ protected:
   void set_super_check_offset(juint o) { _super_check_offset = o; }
 
   uintptr_t hash_code() const  { return _hash_code; }
-  void set_hash_code(uintptr_t h) { _hash_code = h; }
 
   Array<Klass*>* secondary_supers() const { return _secondary_supers; }
-  void set_secondary_supers(Array<Klass*>* k) { _secondary_supers = k; }
+  void set_secondary_supers(Array<Klass*>* k) {
+    set_secondary_supers_table(k, 0);
+  }
 
-  Array<Klass*>* secondary_supers_table()      const { return _secondary_supers_table;      }
-  juint          secondary_supers_table_size() const { return _secondary_supers_table_size; }
-  void set_secondary_supers_table(Array<Klass*>* k, juint size) {
-    _secondary_supers_table = k;
+  Array<Klass*>* secondary_supers_table()      const { return _secondary_supers;      }
+  uint          secondary_supers_table_size() const { return _secondary_supers_table_size; }
+  void set_secondary_supers_table(Array<Klass*>* k, uint size) {
+    _secondary_supers = k;
     _secondary_supers_table_size = size;
   }
 
@@ -392,7 +396,6 @@ protected:
   static ByteSize primary_supers_offset()        { return in_ByteSize(offset_of(Klass, _primary_supers)); }
   static ByteSize secondary_super_cache_offset() { return in_ByteSize(offset_of(Klass, _secondary_super_cache)); }
   static ByteSize secondary_supers_offset()      { return in_ByteSize(offset_of(Klass, _secondary_supers)); }
-  static ByteSize secondary_supers_table_offset(){ return in_ByteSize(offset_of(Klass, _secondary_supers_table)); }
   static ByteSize secondary_supers_table_size_offset(){ return in_ByteSize(offset_of(Klass, _secondary_supers_table_size)); }
   static ByteSize java_mirror_offset()           { return in_ByteSize(offset_of(Klass, _java_mirror)); }
   static ByteSize class_loader_data_offset()     { return in_ByteSize(offset_of(Klass, _class_loader_data)); }

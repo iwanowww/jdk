@@ -642,13 +642,6 @@ void InstanceKlass::deallocate_contents(ClassLoaderData* loader_data) {
   }
   set_secondary_supers(nullptr);
 
-  if (secondary_supers_table() != NULL &&
-      secondary_supers_table() != Universe::the_empty_klass_array() &&
-      !secondary_supers_table()->is_shared()) {
-    MetadataFactory::free_array<Klass*>(loader_data, secondary_supers_table());
-  }
-  set_secondary_supers_table(nullptr, 0);
-
   deallocate_interfaces(loader_data, super(), local_interfaces(), transitive_interfaces());
   set_transitive_interfaces(nullptr);
   set_local_interfaces(nullptr);
