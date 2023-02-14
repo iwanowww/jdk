@@ -144,20 +144,20 @@ bool Klass::search_secondary_supers_table(Klass* k) const {
   assert(secondary_supers_table() != NULL, "");
 
   Array<Klass*>* ss_table = secondary_supers_table();
-  int table_size = secondary_supers_table_size();
+  uint table_size = secondary_supers_table_size();
   if (table_size > 0) {
     bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
     assert(is_power_of_2(table_size) || !is_power_of_2_sizes_only, "");
 
     uintptr_t seed = secondary_supers_seed();
-    uint idx1 = next_index(seed, k, 1, table_size);
+    uint idx1 = k->index1(seed, table_size);
     Klass* probe1 = ss_table->at(idx1);
     if (probe1 == NULL || probe1 == vmClasses::Object_klass()) {
       return false; // empty slot
     } else if (probe1 == k) {
       return true; // match
     } else {
-      uint idx2 = next_index(seed, k, 0, table_size);
+      uint idx2 = k->index2(seed, table_size);
       Klass* probe2 = ss_table->at(idx2);
       if (probe1 == NULL || probe2 == vmClasses::Object_klass()) {
         return false; // empty slot
@@ -433,14 +433,22 @@ uint64_t mixer324_SVCESG75(const uint64_t x) {
 }
  */
 
-uint Klass::next_index(uintptr_t seed, Klass* k, uint prev_idx, uint table_size) {
+uint Klass::index1(uintptr_t seed, uint table_size) {
+  return index(seed, this, true, table_size);
+}
+
+uint Klass::index2(uintptr_t seed, uint table_size) {
+  return index(seed, this, false, table_size);
+}
+
+uint Klass::index(uintptr_t seed, Klass* k, bool is_primary, uint table_size) {
   if (table_size >= 4) {
     bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
     assert(is_power_of_2(table_size) || !is_power_of_2_sizes_only, "");
     uint mask = -2; // 0xFFFE; // table_size - 2; // (table_size >> 1);
     uintptr_t h = k->hash_code();
-    uintptr_t shift = (prev_idx & 1) ? 0 : 16;
-    uintptr_t delta = (prev_idx & 1) ? 0 : 1;
+    uintptr_t shift = (is_primary ? 0 : 16);
+    uintptr_t delta = (is_primary ? 0 : 1);
     uintptr_t h2 = (get_hash(seed, h) >> shift) % table_size;
     return (h2 & mask) + delta; // (h2 << 1) + delta;
   } else {
@@ -449,19 +457,19 @@ uint Klass::next_index(uintptr_t seed, Klass* k, uint prev_idx, uint table_size)
 }
 
 void Klass::init_helper(uintptr_t seed, Klass* const elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, uint table_size) {
-  uint prev_idx = 1; // = 0;
+  bool is_primary = true;
   Klass* cur_elem = elem;
 
   uint attempts = 0;
   while (true) {
-    uint idx = Klass::next_index(seed, cur_elem, prev_idx, table_size);
+    uint idx = Klass::index(seed, cur_elem, is_primary, table_size);
     Klass* probe = table->at(idx);
     assert(probe != cur_elem, "duplicated");
     if (probe == NULL) {
       table->at_put(idx, cur_elem);
       cur_elem = NULL;
       break; // done
-    } else if (probe == elem && ((idx & 1) == 0)) {
+    } else if (probe == elem && is_primary) {
       if (TraceSecondarySupers && Verbose) {
         tty->print_cr("CIRCLE @ %d of %d", attempts, 2 * table_size);
       }
@@ -470,7 +478,7 @@ void Klass::init_helper(uintptr_t seed, Klass* const elem, GrowableArray<Klass*>
       assert(attempts++ < 2 * table_size, "too many attempts");
       table->at_put(idx, cur_elem);
       cur_elem = probe;
-      prev_idx = idx;
+      is_primary = !is_primary;
       continue; // one more try
     }
   }
@@ -757,9 +765,9 @@ static void print_entry(outputStream* st, int idx, Klass* k, Klass* owner) {
     st->print_cr("<empty>");
   } else {
     uintptr_t seed = owner->secondary_supers_seed();
-    juint table_size = owner->secondary_supers_table_size();
-    juint primary_idx   = Klass::next_index(seed, k, 1, table_size);
-    juint secondary_idx = Klass::next_index(seed, k, 0, table_size);
+    uint table_size = owner->secondary_supers_table_size();
+    uint primary_idx   = k->index1(seed, table_size);
+    uint secondary_idx = k->index2(seed, table_size);
 
     st->print_cr(UINTX_FORMAT_X_0 " %s h=" UINTX_FORMAT_X_0 " 1st=%02d 2nd=%02d",
                  (uintptr_t)k, k->external_name(), k->hash_code(),
@@ -1240,8 +1248,9 @@ void Klass::verify_on(outputStream* st) {
       for (uint idx = 0; idx < table_size; idx++) {
         Klass* k = _secondary_supers->at(idx);
         if (k != NULL && k != vmClasses::Object_klass()) {
-          uint idx1 = next_index(secondary_supers_seed(), k, 1, table_size);
-          uint idx2 = next_index(secondary_supers_seed(), k, 0, table_size);
+          uintptr_t seed = secondary_supers_seed();
+          uint idx1 = k->index1(seed, table_size);
+          uint idx2 = k->index2(seed, table_size);
           guarantee(idx == idx1 || idx == idx2, "misplaced");
           guarantee(_secondary_supers->contains(k), "absent");
         }

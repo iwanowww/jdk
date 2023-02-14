@@ -737,7 +737,10 @@ protected:
   void verify() { verify_on(tty); }
   void dump_on(outputStream* st);
 
-  static uint next_index(uintptr_t seed, Klass* k, uint prev_idx, uint table_size);
+  uint index1(uintptr_t seed, uint table_size);
+  uint index2(uintptr_t seed, uint table_size);
+
+  static uint index(uintptr_t seed, Klass* k, bool is_primary, uint table_size);
   void init_helper(uintptr_t seed, Klass* const elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, uint table_size);
 
   static uint64_t get_hash(uint64_t seed, uint64_t x);
