@@ -131,8 +131,6 @@ class Klass : public Metadata {
   // secondary supers, else is &_primary_supers[depth()].
   juint       _super_check_offset;
 
-  uintptr_t    _hash_code;
-
   // Class name.  Instance classes: java/lang/String, etc.  Array classes: [I,
   // [Ljava/lang/String;, etc.  Set to zero for all other kinds of classes.
   Symbol*     _name;
@@ -141,7 +139,8 @@ class Klass : public Metadata {
   Klass*      _secondary_super_cache;
   // Array of all secondary supertypes
   Array<Klass*>* _secondary_supers;
-  uint           _secondary_supers_table_size;
+  uintptr_t   _secondary_supers_seed; // seed + size
+  uintptr_t   _hash_code;
 
   // Ordered list of all primary supertypes
   Klass*      _primary_supers[_primary_super_limit];
@@ -240,11 +239,17 @@ protected:
     set_secondary_supers_table(k, 0);
   }
 
-  Array<Klass*>* secondary_supers_table()      const { return _secondary_supers;      }
-  uint          secondary_supers_table_size() const { return _secondary_supers_table_size; }
-  void set_secondary_supers_table(Array<Klass*>* k, uint size) {
+  Array<Klass*>* secondary_supers_table()      const { return _secondary_supers; }
+  uintptr_t      secondary_supers_seed()       const { return _secondary_supers_seed; }
+  uint          secondary_supers_table_size() const {
+    assert(is_power_of_2(SecondarySupersTableMaxSize), "");
+    uintptr_t size_mask = (SecondarySupersTableMaxSize << 1) - 1;
+    return secondary_supers_seed() & size_mask;
+  }
+  void set_secondary_supers_table(Array<Klass*>* k, uintptr_t seed) {
     _secondary_supers = k;
-    _secondary_supers_table_size = size;
+    _secondary_supers_seed = seed;
+    assert(secondary_supers_table_size() != 0 || seed == 0, "");
   }
 
   // Return the element of the _super chain of the given depth.
@@ -396,7 +401,7 @@ protected:
   static ByteSize primary_supers_offset()        { return in_ByteSize(offset_of(Klass, _primary_supers)); }
   static ByteSize secondary_super_cache_offset() { return in_ByteSize(offset_of(Klass, _secondary_super_cache)); }
   static ByteSize secondary_supers_offset()      { return in_ByteSize(offset_of(Klass, _secondary_supers)); }
-  static ByteSize secondary_supers_table_size_offset(){ return in_ByteSize(offset_of(Klass, _secondary_supers_table_size)); }
+  static ByteSize secondary_supers_seed_offset() { return in_ByteSize(offset_of(Klass, _secondary_supers_seed)); }
   static ByteSize java_mirror_offset()           { return in_ByteSize(offset_of(Klass, _java_mirror)); }
   static ByteSize class_loader_data_offset()     { return in_ByteSize(offset_of(Klass, _class_loader_data)); }
   static ByteSize modifier_flags_offset()        { return in_ByteSize(offset_of(Klass, _modifier_flags)); }
