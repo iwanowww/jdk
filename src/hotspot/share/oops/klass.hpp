@@ -220,11 +220,13 @@ protected:
 
   // initializes _secondary_supers array
   void initialize_secondary_supers(Array<InstanceKlass*>* transitive_interfaces, TRAPS);
-  void initialize_secondary_supers_table(GrowableArray<Klass*>* secondaries, TRAPS);
+  void initialize_secondary_supers_table(GrowableArray<Klass*>* primaries,
+                                         GrowableArray<Klass*>* secondaries, TRAPS);
 
   // klass-specific helper for initializing _secondary_supers
   virtual GrowableArray<Klass*>* compute_secondary_supers(int num_extra_slots,
                                                           Array<InstanceKlass*>* transitive_interfaces);
+  GrowableArray<Klass*>* compute_primary_supers(int num_extra_slots, GrowableArray<Klass*>* secondaries);
 
   // java_super is the Java-level super type as specified by Class.getSuperClass.
   virtual InstanceKlass* java_super() const  { return nullptr; }
@@ -241,7 +243,7 @@ protected:
 
   Array<Klass*>* secondary_supers_table()      const { return _secondary_supers; }
   uintptr_t      secondary_supers_seed()       const { return _secondary_supers_seed; }
-  uint          secondary_supers_table_size() const {
+  uint           secondary_supers_table_size() const {
     assert(is_power_of_2(SecondarySupersTableMaxSize), "");
     uintptr_t size_mask = (SecondarySupersTableMaxSize << 1) - 1;
     return secondary_supers_seed() & size_mask;
@@ -737,10 +739,12 @@ protected:
   void verify() { verify_on(tty); }
   void dump_on(outputStream* st);
 
+  uint index(uintptr_t seed, uint table_size, bool is_primary);
+
   uint index1(uintptr_t seed, uint table_size);
   uint index2(uintptr_t seed, uint table_size);
 
-  static uint index(uintptr_t seed, Klass* k, bool is_primary, uint table_size);
+  static uint index_helper(uintptr_t seed, uintptr_t h, bool is_primary, uint table_size);
   void init_helper(uintptr_t seed, Klass* const elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, uint table_size);
 
   static uint64_t get_hash(uint64_t seed, uint64_t x);

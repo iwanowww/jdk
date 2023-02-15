@@ -149,7 +149,6 @@ public class IntfSubtype {
 
     @Setup
     public void warmup() {
-
         for (int i = 0; i < 20_000; i++) {
             Class<?> s = getSuper(i);
             test(obj01, s, s.isInstance(obj01));
@@ -282,4 +281,13 @@ public class IntfSubtype {
     @Benchmark public void testParallel() {
         test(obj40, perThreadSuper, true);
     }
+
+    public static void main(String[] args) {}
+
+    public static class Startup {
+        @Benchmark public Object test() {
+            return new IntfSubtype();
+        }
+    }
+
 }

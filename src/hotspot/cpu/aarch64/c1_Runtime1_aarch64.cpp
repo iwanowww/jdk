@@ -834,7 +834,7 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         __ ldp(r4, r0, Address(sp, (sup_k_off) * VMRegImpl::stack_slot_size));
 
         Label miss;
-        __ check_klass_subtype_slow_path(r4, r0, r2, r5, NULL, &miss);
+        __ lookup_secondary_supers_table(r4, r0, r2, r5, NULL, &miss);
 
         // fallthrough on success:
         __ mov(rscratch1, 1);

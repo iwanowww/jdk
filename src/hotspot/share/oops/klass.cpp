@@ -433,20 +433,23 @@ uint64_t mixer324_SVCESG75(const uint64_t x) {
 }
  */
 
+uint Klass::index(uintptr_t seed, uint table_size, bool is_primary) {
+  return index_helper(seed, hash_code(), is_primary, table_size);
+}
+
 uint Klass::index1(uintptr_t seed, uint table_size) {
-  return index(seed, this, true, table_size);
+  return index_helper(seed, hash_code(), true, table_size);
 }
 
 uint Klass::index2(uintptr_t seed, uint table_size) {
-  return index(seed, this, false, table_size);
+  return index_helper(seed, hash_code(), false, table_size);
 }
 
-uint Klass::index(uintptr_t seed, Klass* k, bool is_primary, uint table_size) {
+uint Klass::index_helper(uintptr_t seed, uintptr_t h, bool is_primary, uint table_size) {
   if (table_size >= 4) {
     bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
     assert(is_power_of_2(table_size) || !is_power_of_2_sizes_only, "");
     uint mask = -2; // 0xFFFE; // table_size - 2; // (table_size >> 1);
-    uintptr_t h = k->hash_code();
     uintptr_t shift = (is_primary ? 0 : 16);
     uintptr_t delta = (is_primary ? 0 : 1);
     uintptr_t h2 = (get_hash(seed, h) >> shift) % table_size;
@@ -457,33 +460,32 @@ uint Klass::index(uintptr_t seed, Klass* k, bool is_primary, uint table_size) {
 }
 
 void Klass::init_helper(uintptr_t seed, Klass* const elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, uint table_size) {
+  assert(elem != NULL, "");
+
   bool is_primary = true;
   Klass* cur_elem = elem;
 
   uint attempts = 0;
-  while (true) {
-    uint idx = Klass::index(seed, cur_elem, is_primary, table_size);
+  while (cur_elem != NULL) {
+    uint idx = cur_elem->index(seed, table_size, is_primary);
     Klass* probe = table->at(idx);
     assert(probe != cur_elem, "duplicated");
     if (probe == NULL) {
       table->at_put(idx, cur_elem);
-      cur_elem = NULL;
       break; // done
-    } else if (probe == elem && is_primary) {
+    } else if (probe == elem && is_primary) { // circle detected
       if (TraceSecondarySupers && Verbose) {
         tty->print_cr("CIRCLE @ %d of %d", attempts, 2 * table_size);
       }
-      break; // circle detected
+      secondary_list->push(cur_elem);
+      break; // done
     } else {
       assert(attempts++ < 2 * table_size, "too many attempts");
       table->at_put(idx, cur_elem);
       cur_elem = probe;
-      is_primary = !is_primary;
+      is_primary = !is_primary; // switch between primary and secondary locations
       continue; // one more try
     }
-  }
-  if (cur_elem != NULL) {
-    secondary_list->push(cur_elem); // give up
   }
 }
 
@@ -543,6 +545,27 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
   }
 }
 
+GrowableArray<Klass*>* Klass::compute_primary_supers(int num_extra_slots, GrowableArray<Klass*>* secondaries) {
+  GrowableArray<Klass*>* primaries = new GrowableArray<Klass*>(num_extra_slots);
+
+  for (Klass* p = super(); (p != nullptr && !p->can_be_primary_super()); p = p->super()) {
+    // Scan for overflow primaries being duplicates of 2nd'arys.
+    //
+    // This happens frequently for very deeply nested arrays: the
+    // primary superclass chain overflows into the secondary.  The
+    // secondary list contains the element_klass's secondaries with
+    // an extra array dimension added.  If the element_klass's
+    // secondary list already contains some primary overflows, they
+    // (with the extra level of array-ness) will collide with the
+    // normal primary superclass overflows.
+    if (!secondaries->contains(p)) {
+      primaries->push(p);
+    }
+  }
+
+  return primaries;
+}
+
 void Klass::initialize_secondary_supers(Array<InstanceKlass*>* transitive_interfaces, TRAPS) {
   // Now compute the list of secondary supertypes.
   // Secondaries can occasionally be on the super chain,
@@ -555,56 +578,15 @@ void Klass::initialize_secondary_supers(Array<InstanceKlass*>* transitive_interf
   ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
 
   // Compute the "real" non-extra secondaries.
-  GrowableArray<Klass*>* primaries   = new GrowableArray<Klass*>(extras);
   GrowableArray<Klass*>* secondaries = compute_secondary_supers(extras, transitive_interfaces);
   if (secondaries == nullptr) {
-    // secondary_supers set by compute_secondary_supers
-    if (secondary_supers() == nullptr) {
-      return; // still bootstrapping
-    }
-  } else {
-    for (Klass* p = super(); (p != nullptr && !p->can_be_primary_super()); p = p->super()) {
-      int i; // Scan for overflow primaries being duplicates of 2nd'arys
-
-      // This happens frequently for very deeply nested arrays: the
-      // primary superclass chain overflows into the secondary.  The
-      // secondary list contains the element_klass's secondaries with
-      // an extra array dimension added.  If the element_klass's
-      // secondary list already contains some primary overflows, they
-      // (with the extra level of array-ness) will collide with the
-      // normal primary superclass overflows.
-      for (i = 0; i < secondaries->length(); i++ ) {
-        if (secondaries->at(i) == p) {
-          break;
-        }
-      }
-      if (i < secondaries->length()) {
-        continue; // It's a dup, don't put it in
-      }
-      primaries->push(p);
-    }
+    return; // secondary_supers set by compute_secondary_supers
   }
+  GrowableArray<Klass*>* primaries = compute_primary_supers(extras, secondaries);
 
-  if (UseSecondarySupersTable && SecondarySupersMaxAttempts > 0 &&
-      (secondaries != nullptr || (uint)secondary_supers()->length() >= SecondarySupersTableMinSize)) {
-    if (secondaries == nullptr) {
-      int num_of_secondary_supers = secondary_supers()->length();
-      secondaries = new GrowableArray<Klass*>(num_of_secondary_supers, num_of_secondary_supers, nullptr);
-      for (int i = 0; i < num_of_secondary_supers; i++) {
-        secondaries->at_put(i, secondary_supers()->at(i));
-      }
-    }
-    uint num_of_secondaries = primaries->length() + secondaries->length();
-    GrowableArray<Klass*>* secondary_supers = new GrowableArray<Klass*>(num_of_secondaries, num_of_secondaries, nullptr);
-    for (int i = 0; i < primaries->length(); i++) {
-      secondary_supers->at_put(i, primaries->at(i));
-    }
-    for (int i = 0; i < secondaries->length(); i++) {
-      secondary_supers->at_put(primaries->length() + i, secondaries->at(i));
-    }
-    initialize_secondary_supers_table(secondary_supers, CHECK);
-  } else if (secondary_supers() == nullptr) {
-    assert(secondaries != nullptr, "");
+  if (UseSecondarySupersTable && SecondarySupersMaxAttempts > 0) {
+    initialize_secondary_supers_table(primaries, secondaries, CHECK);
+  } else {
     // Combine the two arrays into a metadata object to pack the array.
     // The primaries are added in the reverse order, then the secondaries.
     int new_length = primaries->length() + secondaries->length();
@@ -628,15 +610,13 @@ void Klass::initialize_secondary_supers(Array<InstanceKlass*>* transitive_interf
   assert(secondary_supers() != nullptr, "");
 }
 
-void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* secondaries, TRAPS) {
+void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* primaries, GrowableArray<Klass*>* secondaries, TRAPS) {
   ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
 
   elapsedTimer et;
   et.start();
 
-  const uint SecondarySupersTableSlotSize = 4;
-
-  uint num_of_secondaries = secondaries->length();
+  uint num_of_secondaries = primaries->length() + secondaries->length();
   uint table_size = 0;
 
   bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
@@ -647,9 +627,9 @@ void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* secondaries
     int delta = (is_power_of_2(num_of_secondaries) ? 0 : 1) + (aggressive_sizing ? 1 : 0);
     table_size = 1 << (log2i(num_of_secondaries) + delta);
   } else {
-    bool is_partial = (num_of_secondaries % SecondarySupersTableSlotSize) > 0;
-    uint num_of_slots = (num_of_secondaries / SecondarySupersTableSlotSize) + (is_partial ? 1 : 0);
-    table_size = num_of_slots * SecondarySupersTableSlotSize;
+    bool is_partial = (num_of_secondaries % SecondarySupersTableChunkSize) > 0;
+    uint num_of_slots = (num_of_secondaries / SecondarySupersTableChunkSize) + (is_partial ? 1 : 0);
+    table_size = num_of_slots * SecondarySupersTableChunkSize;
   }
 
   if (table_size < SecondarySupersTableMinSize) {
@@ -674,12 +654,16 @@ void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* secondaries
     assert(is_power_of_2(SecondarySupersTableMaxSize), "%d", SecondarySupersTableMaxSize);
     assert(table_size <= SecondarySupersTableMaxSize, "");
     uintptr_t size_mask = ~((SecondarySupersTableMaxSize << 1) - 1);
-    uintptr_t seed = (get_next_hash(THREAD) & size_mask) | table_size; // encode size as part of seed
+    uintptr_t seed = 0;
+    if (table_size > 0) {
+      seed = (get_next_hash(THREAD) & size_mask) | table_size;
+    }
 
+    const uint secondary_base = primaries->length();
     for (uint idx = 0; idx < num_of_secondaries; idx++) {
-      Klass* elem = secondaries->at(idx);
+      Klass* elem = (idx < secondary_base ? primaries->at(idx) : secondaries->at(idx - secondary_base));
       assert(elem != nullptr, "");
-      int empty_slots = (table_size - idx) + secondary_list->length();
+      int empty_slots = secondary_list->length() + (table_size - idx);
       if (empty_slots == 0) {
         // table is full
         secondary_list->push(elem);
@@ -725,7 +709,7 @@ void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* secondaries
       if (is_power_of_2_sizes_only) {
         table_size = MIN2(table_size * 2, SecondarySupersTableMaxSize);
       } else {
-        table_size = MIN2(table_size + SecondarySupersTableSlotSize, SecondarySupersTableMaxSize);
+        table_size = MIN2(table_size + SecondarySupersTableChunkSize, SecondarySupersTableMaxSize);
       }
       attempt = 0; // reset
     }

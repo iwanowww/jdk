@@ -758,6 +758,9 @@ const int ObjectAlignmentInBytes = 8;
   product(uint, SecondarySupersTableSizingMode, 0, DIAGNOSTIC,              \
           "")                                                               \
                                                                             \
+  product(uint, SecondarySupersTableChunkSize, 4, DIAGNOSTIC,               \
+          "")                                                               \
+                                                                            \
   product(bool, UseSecondarySupersStub, true, DIAGNOSTIC,                   \
           "")                                                               \
                                                                             \
