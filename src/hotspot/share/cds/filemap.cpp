@@ -287,7 +287,12 @@ void FileMapHeader::populate(FileMapInfo *info, size_t core_region_alignment,
   _use_optimized_module_handling = MetaspaceShared::use_optimized_module_handling();
   _use_full_module_graph = MetaspaceShared::use_full_module_graph();
 
-  // The following fields are for sanity checks for whether this archive
+  _secondary_supers_table = UseSecondarySupersTable;
+  _secondary_supers_table_mode = SecondarySuperMode;
+  _secondary_supers_table_max_size = SecondarySupersTableMaxSize;
+  _secondary_supers_table_sizing_mode = SecondarySupersTableSizingMode;
+
+    // The following fields are for sanity checks for whether this archive
   // will function correctly with this JVM and the bootclasspath it's
   // invoked with.
 
@@ -2727,6 +2732,19 @@ bool FileMapHeader::validate() {
                           compressed_oops(), compressed_class_pointers());
   if (compressed_oops() != UseCompressedOops || compressed_class_pointers() != UseCompressedClassPointers) {
     FileMapInfo::fail_continue("Unable to use shared archive.\nThe saved state of UseCompressedOops and UseCompressedClassPointers is "
+                               "different from runtime, CDS will be disabled.");
+    return false;
+  }
+
+  log_info(cds)("Archive was created with UseSecondarySupersTable = %d, SecondarySuperMode = %d, "
+                "SecondarySupersTableMaxSize = %d, SecondarySupersTableSizingMode = %d",
+                _secondary_supers_table, _secondary_supers_table_mode, _secondary_supers_table_max_size,
+                _secondary_supers_table_sizing_mode);
+  if (_secondary_supers_table             != UseSecondarySupersTable      ||
+      _secondary_supers_table_mode        != SecondarySuperMode           ||
+      _secondary_supers_table_max_size    != SecondarySupersTableMaxSize  ||
+      _secondary_supers_table_sizing_mode != SecondarySupersTableSizingMode) {
+    FileMapInfo::fail_continue("Unable to use shared archive.\nThe saved state of UseSecondarySupersTable is "
                                "different from runtime, CDS will be disabled.");
     return false;
   }

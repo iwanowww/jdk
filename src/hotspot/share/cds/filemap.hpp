@@ -206,6 +206,10 @@ private:
   bool _has_non_jar_in_classpath;                 // non-jar file entry exists in classpath
   unsigned int _common_app_classpath_prefix_size; // size of the common prefix of app class paths
                                                   //    0 if no common prefix exists
+  bool _secondary_supers_table;
+  uint _secondary_supers_table_mode;
+  uint _secondary_supers_table_max_size;
+  uint _secondary_supers_table_sizing_mode;
 
   // The following fields are all sanity checks for whether this archive
   // will function correctly with this JVM and the bootclasspath it's

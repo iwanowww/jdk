@@ -282,7 +282,9 @@ public class IntfSubtype {
         test(obj40, perThreadSuper, true);
     }
 
-    public static void main(String[] args) {}
+    public static void main(String[] args) {
+        new Startup().testAll();
+    }
 
     public static class Startup {
         @Benchmark public Object testA00() {
