@@ -285,7 +285,27 @@ public class IntfSubtype {
     public static void main(String[] args) {}
 
     public static class Startup {
-        @Benchmark public Object test() {
+        @Benchmark public Object testA00() {
+            return new A0();
+        }
+        @Benchmark public Object testA04() {
+            return new A4();
+        }
+        @Benchmark public Object testA08() {
+            return new A8();
+        }
+        @Benchmark public Object testA16() {
+            return new A16();
+        }
+        @Benchmark public Object testA32() {
+            return new A32();
+        }
+
+        @Benchmark public Object testA64() {
+            return new A64();
+        }
+
+        @Benchmark public Object testAll() {
             return new IntfSubtype();
         }
     }
