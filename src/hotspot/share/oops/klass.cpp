@@ -298,7 +298,7 @@ static uint64_t ror(uint64_t x, uint64_t distance) {
   return (x >> distance) | (x << (64 - distance));
 }
 
-uint64_t Klass::get_hash(uint64_t x, uint64_t y) {
+static uint64_t get_hash(uint64_t x, uint64_t y) {
   const uint64_t M  = 0x8ADAE89C337954D5;
   const uint64_t A  = 0xAAAAAAAAAAAAAAAA; // REPAA
   const uint64_t H0 = (x ^ y), L0 = (x ^ A);
@@ -316,87 +316,9 @@ uint64_t Klass::get_hash(uint64_t x, uint64_t y) {
 
 static inline uint64_t get_next_hash(Thread* current) {
   uint64_t seed = current->_seed;
-  uint64_t value = Klass::get_hash(seed, 0xAAAAAAAA) + 1; // TODO: introduce t
+  uint64_t value = get_hash(seed, 0xAAAAAAAA) + 1; // TODO: introduce t
   current->_seed = value;
   return value;
-}
-
-static inline uintptr_t size_mask() {
-  assert(is_power_of_2(SecondarySupersTableMaxSize), "");
-  return ((SecondarySupersTableMaxSize << 1) - 1);
-}
-
-static uint seed2size(uintptr_t seed) {
-  return seed & size_mask();
-}
-
-static inline uintptr_t get_random_seed(Thread* t, uint table_size) {
-  assert(table_size <= SecondarySupersTableMaxSize, "");
-  if (table_size > 0) {
-    return (get_next_hash(t) & ~size_mask()) | table_size;
-  }
-  return 0;
-}
-
-uint Klass::index(uintptr_t seed, uint table_size, bool is_primary) {
-  return index_helper(seed, hash_code(), is_primary, table_size);
-}
-
-uint Klass::index1(uintptr_t seed, uint table_size) {
-  return index_helper(seed, hash_code(), true, table_size);
-}
-
-uint Klass::index2(uintptr_t seed, uint table_size) {
-  return index_helper(seed, hash_code(), false, table_size);
-}
-
-uint Klass::index_helper(uintptr_t seed, uintptr_t h, bool is_primary, uint table_size) {
-  if (table_size >= 4) {
-    bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
-    assert(is_power_of_2(table_size) || !is_power_of_2_sizes_only, "");
-    uint mask = -2; // 0xFFFE; // table_size - 2; // (table_size >> 1);
-    uintptr_t shift = (is_primary ? 0 : 16);
-    uintptr_t delta = (is_primary ? 0 : 1);
-    uintptr_t h2 = (get_hash(seed, h) >> shift) % table_size;
-    return (h2 & mask) + delta; // (h2 << 1) + delta;
-  } else {
-    return -1;
-  }
-}
-
-void Klass::init_helper(uintptr_t seed,
-                        Klass* const elem,
-                        GrowableArray<Klass*>* table,
-                        GrowableArray<Klass*>* secondary_list,
-                        uint table_size) {
-  assert(elem != NULL, "");
-  assert(seed2size(seed) == table_size, "");
-
-  bool is_primary = true;
-  Klass* cur_elem = elem;
-
-  for (uint attempts = 0; attempts < 2 * table_size; attempts++) {
-    uint idx = cur_elem->index(seed, table_size, is_primary);
-    Klass* probe = table->at(idx);
-    assert(probe != cur_elem, "duplicated");
-    if (probe == NULL) {
-      table->at_put(idx, cur_elem);
-      return; // done
-    } else if (probe == elem && is_primary) { // circle detected
-      if (TraceSecondarySupers && Verbose) {
-        tty->print_cr("CIRCLE @ %d of %d", attempts, 2 * table_size);
-      }
-      secondary_list->push(cur_elem);
-      return; // done
-    } else {
-      table->at_put(idx, cur_elem);
-      cur_elem = probe;
-      is_primary = !is_primary; // switch between primary and secondary locations
-      continue; // one more try
-    }
-  }
-  assert(false, "too many attempts");
-  secondary_list->push(cur_elem);
 }
 
 void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interfaces, TRAPS) {
@@ -524,6 +446,84 @@ void Klass::initialize_secondary_supers(Array<InstanceKlass*>* transitive_interf
   assert(secondary_supers() != nullptr, "");
 }
 
+static inline uintptr_t size_mask() {
+  assert(is_power_of_2(SecondarySupersTableMaxSize), "");
+  return ((SecondarySupersTableMaxSize << 1) - 1);
+}
+
+static uint seed2size(uintptr_t seed) {
+  return seed & size_mask();
+}
+
+static uint compute_table_index(uintptr_t seed, uintptr_t h, bool is_primary, uint table_size) {
+  if (table_size >= 4) {
+    bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
+    assert(is_power_of_2(table_size) || !is_power_of_2_sizes_only, "");
+    uint mask = -2; // 0xFFFE; // table_size - 2; // (table_size >> 1);
+    uintptr_t shift = (is_primary ? 0 : 16);
+    uintptr_t delta = (is_primary ? 0 : 1);
+    uintptr_t h2 = (get_hash(seed, h) >> shift) % table_size;
+    return (h2 & mask) + delta; // (h2 << 1) + delta;
+  } else {
+    return -1;
+  }
+}
+
+static void put_element(uintptr_t seed,
+                        Klass* const elem,
+                        GrowableArray<Klass*>* table,
+                        GrowableArray<Klass*>* secondary_list,
+                        uint table_size, uint elem_count) {
+  assert(elem != nullptr, "");
+  assert(seed2size(seed) == table_size, "");
+
+  Klass* cur_elem = elem;
+
+  int empty_slots = secondary_list->length() + table_size - elem_count;
+  assert(empty_slots >= 0, "");
+  if (empty_slots > 0) {
+    bool is_primary = true;
+    for (uint attempts = 0; attempts < 2 * table_size; attempts++) {
+      uint idx = compute_table_index(seed, cur_elem->hash_code(), is_primary, table_size);
+      Klass *probe = table->at(idx);
+      assert(probe != cur_elem, "duplicated");
+      if (probe == NULL) {
+        table->at_put(idx, cur_elem);
+        return; // done
+      } else if (probe == elem && is_primary) { // circle detected
+        if (TraceSecondarySupers && Verbose) {
+          tty->print_cr("CIRCLE @ %d of %d", attempts, 2 * table_size);
+        }
+        secondary_list->push(cur_elem);
+        return; // done
+      } else {
+        table->at_put(idx, cur_elem);
+        cur_elem = probe;
+        is_primary = !is_primary; // switch between primary and secondary locations
+        continue; // one more try
+      }
+    }
+    assert(false, "too many attempts");
+  }
+  secondary_list->push(cur_elem); // table is full
+}
+
+static bool pack_table(uintptr_t seed,
+                       uint table_size,
+                       int best_score,
+                       GrowableArray<Klass*>* elements,
+                       GrowableArray<Klass*>* secondary_table,
+                       GrowableArray<Klass*>* secondary_list) {
+  for (uint idx = 0; idx < (uint) elements->length(); idx++) {
+    put_element(seed, elements->at(idx), secondary_table, secondary_list, table_size, idx);
+
+    if (secondary_list->length() >= best_score && !StressSecondarySupers) {
+      return false; // no luck this time; fail-fast
+    }
+  }
+  return true;
+}
+
 static bool pack_table(uintptr_t seed,
                        uint table_size,
                        int best_score,
@@ -533,23 +533,9 @@ static bool pack_table(uintptr_t seed,
                        GrowableArray<Klass*>* secondary_list) {
   assert(seed2size(seed) == table_size, "");
 
-  const uint num_of_secondaries = (uint) primaries->length() + (uint) secondaries->length();
-  const uint secondary_base = primaries->length();
-  for (uint idx = 0; idx < num_of_secondaries; idx++) {
-    Klass* elem = (idx < secondary_base ? primaries->at(idx) : secondaries->at(idx - secondary_base));
-    assert(elem != nullptr, "");
-    int empty_slots = secondary_list->length() + (table_size - idx);
-    if (empty_slots == 0) {
-      // table is full
-      secondary_list->push(elem);
-    } else {
-      assert(empty_slots > 0, "");
-      Klass::init_helper(seed, elem, secondary_table, secondary_list, table_size);
-    }
-    if (secondary_list->length() >= best_score && !StressSecondarySupers) {
-      return false; // no luck this time; fail-fast
-    }
-  }
+  pack_table(seed, table_size, best_score, primaries,   secondary_table, secondary_list);
+  pack_table(seed, table_size, best_score, secondaries, secondary_table, secondary_list);
+
   assert((uint) secondary_table->length() == table_size, "");
   assert(secondary_list->length() < best_score || StressSecondarySupers, "");
   if (StressSecondarySupers) {
@@ -590,6 +576,14 @@ static uint resize_table(uint table_size, uint num_of_secondaries) {
   return new_size;
 }
 
+uint Klass::index1(uintptr_t seed, uint table_size) {
+  return compute_table_index(seed, hash_code(), true, table_size);
+}
+
+uint Klass::index2(uintptr_t seed, uint table_size) {
+  return compute_table_index(seed, hash_code(), false, table_size);
+}
+
 Array<Klass*>* Klass::create_secondary_supers_table(uintptr_t seed,
                                                     GrowableArray<Klass*>* table,
                                                     GrowableArray<Klass*>* conflicts, TRAPS) {
@@ -618,6 +612,14 @@ static bool is_done(uint table_size, uint num_of_conflicts, uint num_of_secondar
     return true; // table is full
   }
   return false;
+}
+
+static inline uintptr_t get_random_seed(Thread* t, uint table_size) {
+  assert(table_size <= SecondarySupersTableMaxSize, "");
+  if (table_size > 0) {
+    return (get_next_hash(t) & ~size_mask()) | table_size;
+  }
+  return 0;
 }
 
 void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* primaries, GrowableArray<Klass*>* secondaries, TRAPS) {
@@ -697,7 +699,7 @@ static void print_entry(outputStream* st, int idx, Klass* k, Klass* owner) {
   } else if (k == vmClasses::Object_klass()) {
     st->print_cr("<empty>");
   } else {
-    uintptr_t seed = owner->secondary_supers_seed();
+    uintptr_t seed  = owner->secondary_supers_seed();
     uint table_size = owner->secondary_supers_table_size();
     uint primary_idx   = k->index1(seed, table_size);
     uint secondary_idx = k->index2(seed, table_size);

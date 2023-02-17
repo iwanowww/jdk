@@ -749,9 +749,6 @@ protected:
   uint index2(uintptr_t seed, uint table_size);
 
   static uint index_helper(uintptr_t seed, uintptr_t h, bool is_primary, uint table_size);
-  static void init_helper(uintptr_t seed, Klass* const elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, uint table_size);
-
-  static uint64_t get_hash(uint64_t seed, uint64_t x);
 
 #ifndef PRODUCT
   bool verify_vtable_index(int index);
