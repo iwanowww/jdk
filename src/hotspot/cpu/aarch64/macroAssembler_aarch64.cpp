@@ -1530,39 +1530,9 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
 
   bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
 
-  switch (SecondarySuperMode) {
-    case 0: {
-      mov(rscratch2, 0); // h2 = 0
-      break;
-    }
-    case 1: {
-      ldr(rscratch2, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
-      eor(rscratch2, temp_reg /*seed*/, rscratch2); // h0 = seed ^ h
-
-      // h1 = h0 >> (h0 % 32)
-      andr(temp2_reg, rscratch2, 31);         // (h0 % 32)
-      lsrv(rscratch2, rscratch2, temp2_reg); // (h0 >> (h0 % 32))
-
-      eor(rscratch2, temp_reg /*seed*/, rscratch2); // h2 = seed ^ h1
-      break;
-    }
-    case 2: {
-      ldr(r5 /*temp2_reg*/, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
-      mixer322_337954d5(rscratch2, temp_reg, temp2_reg, rscratch1); // h2 = rscratch2
-      break;
-    }
-    case 3: {
-      ldr(r5 /*temp2_reg*/, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
-      mixer317_SVCESG92(rscratch2, temp_reg, temp2_reg, rscratch1); // h2 = rscratch2
-      break;
-    }
-    case 4: {
-      ldr(r5 /*temp2_reg*/, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
-      mixer324_SVCESG75(rscratch2, temp_reg, temp2_reg, rscratch1); // h2 = rscratch2
-      break;
-    }
-    default: fatal("%d", SecondarySuperMode);
-  }
+//  mov(rscratch2, 0); // h2 = 0
+  ldr(r5 /*temp2_reg*/, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
+  mixer322_337954d5(rscratch2, temp_reg, temp2_reg, rscratch1); // h2 = rscratch2
 
   const Register count      = temp_reg;
   const Register table_base = r5;
@@ -1752,102 +1722,6 @@ void MacroAssembler::mixer322_337954d5(Register dst, Register x, Register y, Reg
   eor(dst, tmp /*V1*/, x /*L2*/); // V1 ^ L2
 
   BLOCK_COMMENT("} mixer322_337954d5");
-}
-
-//uint64_t mixer317_SVCESG92(const uint64_t x, const uint64_t y) {
-//  // Steele & Vigna 2021 "Computationally Easy Spectrally Good
-//  // Multpliers...", constant taken from Table 9, row 2.
-//  const uint64_t M = 0xDEFBA91144f2B375;
-//  const uint64_t A = 0xAAAAAAAAAAAAAAAA;
-//  const uint64_t H0 = x ^ y, L0 = x ^ A;
-//  uint64_t U0, V0; fullmul(U0, V0, L0, M);
-//  const uint64_t P0 = (H0 * M);
-//  const uint64_t Q0 = ror(P0, U0);
-//  const uint64_t L1 = Q0 ^ U0;
-//  uint64_t U1, V1; fullmul(U1, V1, L1, M);
-//  const uint64_t L2 = V0 ^ U1;
-//  return V1 ^ L2;
-//}
-void MacroAssembler::mixer317_SVCESG92(Register dst, Register x, Register y, Register tmp) {
-  assert_different_registers(dst, x, y, tmp);
-
-  BLOCK_COMMENT("mixer317_SVCESG92 {");
-
-  const Register M = dst;
-  mov_immediate64(M, 0xDEFBA91144f2B375);
-
-  eor(tmp /*H0*/, x, y);         // H0 = x ^ y
-  mul(y /*P0*/, tmp /*H0*/, M);  // P0 = H0 * M
-  eor(x, x, 0xAAAAAAAAAAAAAAAA); // L0 = x ^ A
-
-  // x = L0, y = P0
-
-  umulh(tmp /*U0*/, x /*L0*/, M);       // U0 = L0 *h M
-  rorv(y /*Q0*/, y /*P0*/, tmp /*U0*/); // Q0 = ror(P0, U0)
-  eor(y /*L1*/, y /*Q0*/, tmp /*U0*/);  // L1 = Q0 ^ U0
-
-  // x = L0, y = L1
-
-  mul(x /*V0*/, x /*L0*/, M);         // V0 = L0 * M
-
-  // x = V0, y = L1
-
-  umulh(tmp /*U1*/, y /*L1*/, M);      // U1 = L1 *h M
-  eor(x /*L2*/, x /*V1*/, tmp /*U1*/); // L2 = V0 ^ U1
-
-  // x = L2, y = L1
-
-  mul(tmp /*V1*/, y /*L1*/, M);   // V1 = L1 * M
-  eor(dst, tmp /*V1*/, x /*L2*/); // V1 ^ L2
-
-  BLOCK_COMMENT("} mixer317_SVCESG92");
-}
-
-//uint64_t mixer324_SVCESG75(const uint64_t x, const uint64_t y) {
-//  const uint64_t M  = 0xF1357AEA2E62A9C5;  // SVCESG75
-//  const uint64_t A  = 0xAAAAAAAAAAAAAAAA;  // REPAA
-//  const uint64_t H0 = x ^ y, L0 = x ^ A;
-//  uint64_t U0, V0; fullmul(U0, V0, L0, M);
-//  const uint64_t P0 = H0 * M;
-//  const uint64_t L1 = P0 + U0; // ADD NOT XOR
-//  const uint64_t L2 = L1 ^ A;  // EXTRA XOR (A^)
-//  uint64_t U1, V1; fullmul(U1, V1, L2, M);
-//  const uint64_t L3 = V0 + U1; // ADD NOT XOR
-//  return V1 ^ L3;
-//}
-void MacroAssembler::mixer324_SVCESG75(Register dst, Register x, Register y, Register tmp) {
-  assert_different_registers(dst, x, y, tmp);
-
-  BLOCK_COMMENT("mixer324_SVCESG75 {");
-
-  const Register M = dst;
-  mov_immediate64(M, 0xF1357AEA2E62A9C5);
-
-  eor(tmp /*H0*/, x, y);         // H0 = x ^ y
-  mul(y /*P0*/, tmp /*H0*/, M);  // P0 = H0 * M
-  eor(x, x, 0xAAAAAAAAAAAAAAAA); // L0 = x ^ A
-
-  // x = L0, y = P0
-
-  umulh(tmp /*U0*/, x /*L0*/, M);              // U0 = L0 *h M
-  add(y /*L1*/, y /*P0*/, tmp /*U0*/);         // L1 = P0 + U0
-  eor(y /*L2*/, y /*L1*/, 0xAAAAAAAAAAAAAAAA); // L2 = L1 ^ A
-
-  // x = L0, y = L2
-
-  mul(x /*V0*/, x /*L0*/, M);         // V0 = L0 * M
-
-  // x = V0, y = L2
-
-  umulh(tmp /*U1*/, y /*L2*/, M);      // U1 = L2 *h M
-  add(x /*L3*/, x /*V0*/, tmp /*U1*/); // L3 = V1 + U1;
-
-  // x = L3, y = L2
-
-  mul(tmp /*V1*/, y /*L2*/, M);   // V1 = L2 * M
-  eor(dst, tmp /*V1*/, x /*L3*/); // V1 ^ L3
-
-  BLOCK_COMMENT("} mixer324_SVCESG75");
 }
 
 void MacroAssembler::clinit_barrier(Register klass, Register scratch, Label* L_fast_path, Label* L_slow_path) {

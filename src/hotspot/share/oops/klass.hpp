@@ -228,6 +228,10 @@ protected:
                                                           Array<InstanceKlass*>* transitive_interfaces);
   GrowableArray<Klass*>* compute_primary_supers(int num_extra_slots, GrowableArray<Klass*>* secondaries);
 
+  Array<Klass*>* create_secondary_supers_table(uintptr_t seed,
+                                               GrowableArray<Klass*>* table,
+                                               GrowableArray<Klass*>* conflicts, TRAPS);
+
   // java_super is the Java-level super type as specified by Class.getSuperClass.
   virtual InstanceKlass* java_super() const  { return nullptr; }
 
@@ -745,7 +749,7 @@ protected:
   uint index2(uintptr_t seed, uint table_size);
 
   static uint index_helper(uintptr_t seed, uintptr_t h, bool is_primary, uint table_size);
-  void init_helper(uintptr_t seed, Klass* const elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, uint table_size);
+  static void init_helper(uintptr_t seed, Klass* const elem, GrowableArray<Klass*>* table, GrowableArray<Klass*>* secondary_list, uint table_size);
 
   static uint64_t get_hash(uint64_t seed, uint64_t x);
 
