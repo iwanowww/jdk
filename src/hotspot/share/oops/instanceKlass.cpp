@@ -1308,11 +1308,16 @@ GrowableArray<Klass*>* InstanceKlass::compute_secondary_supers(int num_extra_slo
     return nullptr;
   }
   if (num_extra_slots == 0) {
-    if (UseSecondarySupersTable) {
-      InstanceKlass* super = java_super();
-      if (super != nullptr && super->transitive_interfaces() == transitive_interfaces) {
+    InstanceKlass* super = java_super();
+    if (UseSecondarySupersTable && super != nullptr) {
+      if (transitive_interfaces == super->transitive_interfaces()) {
+        // Can reuse table from the superclass when superinterface set is the same.
+        assert((uint) super->transitive_interfaces()->length() < SecondarySupersTableMinSize ||
+               super->secondary_supers_seed() > 0, "missing");
         set_secondary_supers_table(super->secondary_supers_table(), super->secondary_supers_seed());
         return nullptr;
+      } else {
+        // The class declares new local interfaces, so can't reuse the table from the superclass.
       }
     } else {
       // The secondary super list is exactly the same as the transitive interfaces, so
