@@ -241,21 +241,18 @@ protected:
   uintptr_t hash_code() const  { return _hash_code; }
 
   Array<Klass*>* secondary_supers() const { return _secondary_supers; }
-  void set_secondary_supers(Array<Klass*>* k) {
-    set_secondary_supers_table(k, 0);
+  void set_secondary_supers(Array<Klass*>* k, uintptr_t seed = 0) {
+    assert(seed == 0 || UseSecondarySupersTable, "");
+    _secondary_supers = k;
+    _secondary_supers_seed = seed;
+    assert(secondary_supers_table_size() != 0 || seed == 0, "");
   }
 
-  Array<Klass*>* secondary_supers_table()      const { return _secondary_supers; }
   uintptr_t      secondary_supers_seed()       const { return _secondary_supers_seed; }
   uint           secondary_supers_table_size() const {
     assert(is_power_of_2(SecondarySupersTableMaxSize), "");
     uintptr_t size_mask = (SecondarySupersTableMaxSize << 1) - 1;
     return secondary_supers_seed() & size_mask;
-  }
-  void set_secondary_supers_table(Array<Klass*>* k, uintptr_t seed) {
-    _secondary_supers = k;
-    _secondary_supers_seed = seed;
-    assert(secondary_supers_table_size() != 0 || seed == 0, "");
   }
 
   // Return the element of the _super chain of the given depth.

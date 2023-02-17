@@ -112,15 +112,16 @@ protected:
 
   bool is_empty() const               { return length() == 0; }
 
-  int index_of(const T& x) const {
-    int i = length();
-    while (i-- > 0 && data()[i] != x) ;
-
-    return i;
+  int index_of(const T& x, int start_idx = 0) const {
+    for (int i = start_idx; i < length(); i++) {
+      if (data()[i] == x) {
+        return i;
+      }
+    }
+    return -1;
   }
 
-  // sort the array.
-  bool contains(const T& x) const      { return index_of(x) >= 0; }
+  bool contains(const T& x, int start_idx = 0) const      { return index_of(x, start_idx) >= 0; }
 
   T    at(int i) const                 { assert(i >= 0 && i< _length, "oob: 0 <= %d < %d", i, _length); return data()[i]; }
   void at_put(const int i, const T& x) { assert(i >= 0 && i< _length, "oob: 0 <= %d < %d", i, _length); data()[i] = x; }

@@ -141,9 +141,8 @@ bool Klass::search_secondary_supers_linear(Klass* k) const {
 
 bool Klass::search_secondary_supers_table(Klass* k) const {
   assert(UseSecondarySupersTable, "");
-  assert(secondary_supers_table() != NULL, "");
 
-  Array<Klass*>* ss_table = secondary_supers_table();
+  Array<Klass*>* ss_table = secondary_supers();
   uint table_size = secondary_supers_table_size();
   if (table_size > 0) {
     bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
@@ -151,30 +150,19 @@ bool Klass::search_secondary_supers_table(Klass* k) const {
 
     uintptr_t seed = secondary_supers_seed();
     uint idx1 = k->index1(seed, table_size);
+    uint idx2 = k->index2(seed, table_size);
     Klass* probe1 = ss_table->at(idx1);
-    if (probe1 == NULL || probe1 == vmClasses::Object_klass()) {
-      return false; // empty slot
-    } else if (probe1 == k) {
+    Klass* probe2 = ss_table->at(idx2);
+    if (probe1 == k || probe2 == k) {
       return true; // match
+    } else if (probe1 == nullptr || probe2 == nullptr) {
+      return false;
     } else {
-      uint idx2 = k->index2(seed, table_size);
-      Klass* probe2 = ss_table->at(idx2);
-      if (probe1 == NULL || probe2 == vmClasses::Object_klass()) {
-        return false; // empty slot
-      } else if (probe2 == k) {
-        return true; // match
-      } else {
-        // Need to check the tail.
-      }
+      // Need to check the tail.
     }
   }
-  // Scan the tail for a match.
-  for (int i = table_size; i < ss_table->length(); i++) {
-    if (ss_table->at(i) == k) {
-      return true;
-    }
-  }
-  return false;}
+  return ss_table->contains(k, table_size); // scan the tail for a match
+}
 
 // Return self, except for abstract classes with exactly 1
 // implementor.  Then return the 1 concrete implementation.
@@ -512,16 +500,18 @@ static bool pack_table(uintptr_t seed,
                        uint table_size,
                        int best_score,
                        GrowableArray<Klass*>* elements,
-                       GrowableArray<Klass*>* secondary_table,
-                       GrowableArray<Klass*>* secondary_list) {
+                       GrowableArray<Klass*>* table,
+                       GrowableArray<Klass*>* conflicts) {
   for (uint idx = 0; idx < (uint) elements->length(); idx++) {
-    put_element(seed, elements->at(idx), secondary_table, secondary_list, table_size, idx);
+    put_element(seed, elements->at(idx), table, conflicts, table_size, idx);
 
-    if (secondary_list->length() >= best_score && !StressSecondarySupers) {
+    if (conflicts->length() >= best_score && !StressSecondarySupers) {
       return false; // no luck this time; fail-fast
     }
   }
-  return true;
+  bool is_better_packing = (conflicts->length() < best_score);
+  assert(is_better_packing || StressSecondarySupers, "");
+  return is_better_packing;
 }
 
 static bool pack_table(uintptr_t seed,
@@ -529,20 +519,11 @@ static bool pack_table(uintptr_t seed,
                        int best_score,
                        GrowableArray<Klass*>* primaries,
                        GrowableArray<Klass*>* secondaries,
-                       GrowableArray<Klass*>* secondary_table,
-                       GrowableArray<Klass*>* secondary_list) {
+                       GrowableArray<Klass*>* table,
+                       GrowableArray<Klass*>* conflicts) {
   assert(seed2size(seed) == table_size, "");
-
-  pack_table(seed, table_size, best_score, primaries,   secondary_table, secondary_list);
-  pack_table(seed, table_size, best_score, secondaries, secondary_table, secondary_list);
-
-  assert((uint) secondary_table->length() == table_size, "");
-  assert(secondary_list->length() < best_score || StressSecondarySupers, "");
-  if (StressSecondarySupers) {
-    return (secondary_list->length() < best_score);
-  } else {
-    return true;
-  }
+  return pack_table(seed, table_size, best_score, primaries,   table, conflicts) &&
+         pack_table(seed, table_size, best_score, secondaries, table, conflicts);
 }
 
 static uint resize_table(uint table_size, uint num_of_secondaries) {
@@ -679,8 +660,8 @@ void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* primaries, 
   assert(num_of_secondaries <= (uint) best_table->length() + (uint) best_conflicts->length(), "");
 
   Array<Klass*>* ss_table = create_secondary_supers_table(best_seed, best_table, best_conflicts, CHECK);
-  assert(secondary_supers() == nullptr, ""); // FIXME: NB! memory leak? does it drop previous secondary_supers on the floor?
-  set_secondary_supers_table(ss_table, best_seed);
+  assert(secondary_supers() == nullptr, "");
+  set_secondary_supers(ss_table, best_seed);
   assert(best_table_size == secondary_supers_table_size(), "mismatch");
 
   et.stop();
@@ -694,10 +675,8 @@ void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* primaries, 
 
 static void print_entry(outputStream* st, int idx, Klass* k, Klass* owner) {
   st->print("| %3d: ", idx);
-  if (k == NULL) {
+  if (k == nullptr) {
     st->print_cr("NULL");
-  } else if (k == vmClasses::Object_klass()) {
-    st->print_cr("<empty>");
   } else {
     uintptr_t seed  = owner->secondary_supers_seed();
     uint table_size = owner->secondary_supers_table_size();
@@ -717,18 +696,18 @@ void Klass::dump_on(outputStream* st) {
                external_name(), secondary_supers_table_size(), secondary_supers_seed());
   st->print_cr("------------------------------------------");
 
-  if (secondary_supers_table() != NULL) {
+  if (secondary_supers() != nullptr) {
     st->print_cr("-------------- PRIMARY -------------------");
     for (int i = 0; i < (int)secondary_supers_table_size(); i += 2) {
-      print_entry(st, i, secondary_supers_table()->at(i), this);
+      print_entry(st, i, secondary_supers()->at(i), this);
     }
     st->print_cr("------------- SECONDARY ------------------");
     for (int i = 1; i < (int)secondary_supers_table_size(); i += 2) {
-      print_entry(st, i, secondary_supers_table()->at(i), this);
+      print_entry(st, i, secondary_supers()->at(i), this);
     }
     st->print_cr("-------------- LINEAR --------------------");
-    for (int i = (int)secondary_supers_table_size(); i < secondary_supers_table()->length(); i++) {
-      print_entry(st, i, secondary_supers_table()->at(i), this);
+    for (int i = (int)secondary_supers_table_size(); i < secondary_supers()->length(); i++) {
+      print_entry(st, i, secondary_supers()->at(i), this);
     }
   } else {
     st->print_cr("NULL");
@@ -1175,19 +1154,19 @@ void Klass::verify_on(outputStream* st) {
     guarantee(java_lang_Class::is_instance(java_mirror_no_keepalive()), "should be instance");
   }
 
-  if (_secondary_supers != NULL) {
+  if (secondary_supers() != nullptr) {
     uint table_size = secondary_supers_table_size();
     if (table_size > 0) {
       bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
       guarantee(!is_power_of_2_sizes_only || is_power_of_2(table_size), "");
       for (uint idx = 0; idx < table_size; idx++) {
-        Klass* k = _secondary_supers->at(idx);
-        if (k != NULL && k != vmClasses::Object_klass()) {
+        Klass* k = secondary_supers()->at(idx);
+        if (k != nullptr) {
           uintptr_t seed = secondary_supers_seed();
           uint idx1 = k->index1(seed, table_size);
           uint idx2 = k->index2(seed, table_size);
           guarantee(idx == idx1 || idx == idx2, "misplaced");
-          guarantee(_secondary_supers->contains(k), "absent");
+          guarantee(secondary_supers()->contains(k), "absent");
         }
       }
     }

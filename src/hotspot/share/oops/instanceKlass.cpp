@@ -1314,7 +1314,7 @@ GrowableArray<Klass*>* InstanceKlass::compute_secondary_supers(int num_extra_slo
         // Can reuse table from the superclass when superinterface set is the same.
         assert((uint) super->transitive_interfaces()->length() < SecondarySupersTableMinSize ||
                super->secondary_supers_seed() > 0, "missing");
-        set_secondary_supers_table(super->secondary_supers_table(), super->secondary_supers_seed());
+        set_secondary_supers(super->secondary_supers(), super->secondary_supers_seed());
         return nullptr;
       } else {
         // The class declares new local interfaces, so can't reuse the table from the superclass.
