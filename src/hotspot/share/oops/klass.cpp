@@ -656,6 +656,11 @@ static void print_table(outputStream* st, uintptr_t seed, GrowableArray<Klass*>*
   uint tail_size = tail->length();
   uint num_of_secondaries = (UseNewCode ? (table_size / 2) : table_size) + tail_size;
 
+  double coeff1; // = 0.0f;
+  double coeff2;
+  double coeff3;
+  double coeff_size;
+
   GrowableArray<uint>* conflicts = new GrowableArray<uint>(table_size, table_size, 0);
   if (table_size > 0) {
     for (uint i = 1; i < table_size; i += 2) {
@@ -687,6 +692,9 @@ static void print_table(outputStream* st, uintptr_t seed, GrowableArray<Klass*>*
         empty_cnt += (table->at(i) == nullptr ? 1 : 0);
       }
       st->print_cr(" empty=%d conflicts=%d size=%d", empty_cnt, primary_cnt, table_size / 2);
+      coeff2 = (1.0f * primary_cnt) / (table_size / 2);
+      coeff1 = 1.0f - coeff2;
+      coeff_size = empty_cnt;
     }
     if (verbose) {
       for (uint i = 0; i < table_size; i += 2) {
@@ -707,6 +715,14 @@ static void print_table(outputStream* st, uintptr_t seed, GrowableArray<Klass*>*
         empty_cnt += (table->at(i) == nullptr ? 1 : 0);
       }
       st->print_cr(" empty=%d conflicts=%d size=%d", empty_cnt, secondary_cnt, table_size / 2);
+      if (UseNewCode) {
+        coeff3 = coeff2; // empty
+        coeff2 = 0.0f;
+      } else {
+        coeff3 = (1.0f * secondary_cnt) / (table_size / 2);
+        coeff2 = coeff2 * (1.0f - coeff3);
+      }
+      coeff_size += empty_cnt;
     }
     if (verbose && !UseNewCode) {
       for (uint i = 1; i < table_size; i += 2) {
@@ -728,6 +744,9 @@ static void print_table(outputStream* st, uintptr_t seed, GrowableArray<Klass*>*
       print_entry(st, i, s, seed, table_size);
     }
   }
+  st->print("------------------------------------------");
+  double weight = coeff1 + (coeff2 * 2) + (coeff3 * ((tail_size / 2) + (UseNewCode ? 1 : 2))) /*+ coeff_size*/;
+  st->print_cr("weight=%f coeff1=%f coeff2=%f coeff3=%f coeff_size=%f", weight, coeff1, coeff2, coeff3, coeff_size);
 }
 
 void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* primaries, GrowableArray<Klass*>* secondaries, TRAPS) {
