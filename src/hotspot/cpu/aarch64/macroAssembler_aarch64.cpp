@@ -1550,9 +1550,43 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   if (is_power_of_2_sizes_only) {
     andr(rscratch1, rscratch2, count); // idx1 = (h2 & mask)
   } else {
-    udiv(rscratch1, rscratch2, count);
-    Assembler::msub(rscratch1, rscratch1, count, rscratch2);
+    uint rounding_mode = (SecondarySupersTableSizingMode & 8);
+    if (rounding_mode == 0) {
+      udiv(rscratch1, rscratch2, count);
+      Assembler::msub(rscratch1, rscratch1, count, rscratch2);
+    } else {
+      assert(rounding_mode == 8, "");
+      uint count_shift = log2i_exact(SecondarySupersTableMaxSize) + 1;
+      uint count_mask = ((SecondarySupersTableMaxSize << 1) - 1);
+      ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
+      lsr(rscratch1, rscratch1, count_shift);
+      andr(rscratch1, rscratch1, count_mask);
+
+      andr(rscratch1, rscratch2, rscratch1); // apply the mask
+
+      Label L_tmp;
+      cmp(rscratch1, count);
+      br(LT, L_tmp);
+      sub(rscratch1, rscratch1, count);
+      bind(L_tmp);
+    }
     andr(rscratch1, rscratch1, 0xFFFFFFFE);
+  }
+
+  if (VerifySecondarySupers) {
+    BLOCK_COMMENT("verify index1 {");
+    Label L_tmp1;
+    if (is_power_of_2_sizes_only) {
+      add(count, count, 2);
+    }
+    cmp(rscratch1, count);
+    br(LT, L_tmp1);
+    stop("wrong index1");
+    bind(L_tmp1);
+    if (is_power_of_2_sizes_only) {
+      sub(count, count, 2);
+    }
+    BLOCK_COMMENT("} verify index1");
   }
 
   ldr(rscratch1, Address(table_base, rscratch1, Address::lsl(LogBytesPerWord))); // probe1
@@ -1568,17 +1602,56 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   if (is_power_of_2_sizes_only) {
     andr(rscratch2, rscratch2, count);
   } else {
-    udiv(rscratch1, rscratch2, count);
-    Assembler::msub(rscratch2, rscratch1, count, rscratch2);
+    uint rounding_mode = (SecondarySupersTableSizingMode & 8);
+
+    if (rounding_mode == 0) {
+      udiv(rscratch1, rscratch2, count);
+      Assembler::msub(rscratch2, rscratch1, count, rscratch2);
+    } else {
+      assert(rounding_mode == 8, "");
+      uint count_shift = log2i_exact(SecondarySupersTableMaxSize) + 1;
+      uint count_mask = ((SecondarySupersTableMaxSize << 1) - 1);
+      ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
+      lsr(rscratch1, rscratch1, count_shift);
+      andr(rscratch1, rscratch1, count_mask);
+
+      andr(rscratch2, rscratch2, rscratch1); // apply the mask
+
+      Label L_tmp;
+      cmp(rscratch2, count);
+      br(LT, L_tmp);
+      sub(rscratch2, rscratch2, count);
+      bind(L_tmp);
+    }
     andr(rscratch2, rscratch2, 0xFFFFFFFE);
   }
   add(rscratch2, rscratch2, 1);
 
+  if (VerifySecondarySupers) {
+    BLOCK_COMMENT("verify index2 {");
+    Label L_tmp1;
+    if (is_power_of_2_sizes_only) {
+      add(count, count, 2);
+    }
+    cmp(rscratch2, count);
+    br(LT, L_tmp1);
+    stop("wrong index2");
+    bind(L_tmp1);
+    if (is_power_of_2_sizes_only) {
+      sub(count, count, 2);
+    }
+    BLOCK_COMMENT("} verify index2");
+  }
+
   // probe2 = sstable->at(idx2);
   ldr(rscratch2, Address(table_base, rscratch2, Address::lsl(LogBytesPerWord))); // probe2
 
-  cmp(rscratch2, zr);
-  br(EQ, L_failure_local);
+  if (UseNewCode) {
+    // secondary part of the table is empty
+  } else {
+    cmp(rscratch2, zr);
+    br(EQ, L_failure_local);
+  }
 
   // if (probe2 == k)  return true;
   cmp(rscratch2, super_klass);

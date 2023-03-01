@@ -738,7 +738,7 @@ protected:
   // Verification
   virtual void verify_on(outputStream* st);
   void verify() { verify_on(tty); }
-  void dump_on(outputStream* st);
+  void dump_on(outputStream* st, bool verbose);
 
   uint index(uintptr_t seed, uint table_size, bool is_primary);
 

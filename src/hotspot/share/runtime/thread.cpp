@@ -114,7 +114,7 @@ Thread::Thread() {
   _hashStateZ = 0x8767;    // (int)(3579807591LL & 0xffff) ;
   _hashStateW = 273326509;
 
-  _seed = (((uint64_t)os::random()) << 32) | os::random();
+  _seed = os::javaTimeNanos(); // (((uint64_t)os::random()) << 32) | os::random();
 
   // Many of the following fields are effectively final - immutable
   // Note that nascent threads can't use the Native Monitor-Mutex
