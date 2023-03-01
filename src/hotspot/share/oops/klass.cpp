@@ -559,15 +559,21 @@ static uint resize_table(uint table_size, uint num_of_secondaries) {
   assert(table_size < SecondarySupersTableMaxSize, "");
   uint new_size = 0;
   bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
+  bool aggressive_sizing        = (SecondarySupersTableSizingMode & 4) != 0;
   if (is_power_of_2_sizes_only) {
     if (table_size > 0) {
       new_size = MIN2(table_size * 2, SecondarySupersTableMaxSize);
     } else {
       if (num_of_secondaries >= SecondarySupersTableMinSize) {
-        bool aggressive_sizing = (SecondarySupersTableSizingMode & 4) == 1;
-        int delta = (is_power_of_2(num_of_secondaries) ? 0 : 1) + (aggressive_sizing ? 1 : 0);
+        int delta = (is_power_of_2(num_of_secondaries) ? 0 : 1) + (aggressive_sizing ? 1 : 0) + (UseNewCode ? 1 : 0);
         new_size = 1 << (log2i(num_of_secondaries) + delta);
       }
+    }
+  } else if (UseNewCode) {
+    if (table_size > 0) {
+      new_size = MIN2(table_size + 2, SecondarySupersTableMaxSize); // add 1 extra slot at a time
+    } else {
+      new_size = 2 * num_of_secondaries;
     }
   } else {
     if (table_size > 0) {
@@ -576,7 +582,7 @@ static uint resize_table(uint table_size, uint num_of_secondaries) {
       if (num_of_secondaries >= SecondarySupersTableMinSize) {
         bool is_partial = (num_of_secondaries % SecondarySupersTableChunkSize) > 0;
         uint num_of_slots = (num_of_secondaries / SecondarySupersTableChunkSize) + (is_partial ? 1 : 0);
-        new_size = num_of_slots * SecondarySupersTableChunkSize;
+        new_size = num_of_slots * SecondarySupersTableChunkSize * (aggressive_sizing ? 2 : 1);
       }
     }
   }
@@ -656,9 +662,9 @@ static void print_table(outputStream* st, uintptr_t seed, GrowableArray<Klass*>*
   uint tail_size = tail->length();
   uint num_of_secondaries = (UseNewCode ? (table_size / 2) : table_size) + tail_size;
 
-  double coeff1; // = 0.0f;
-  double coeff2;
-  double coeff3;
+  double pcoeff1, ncoeff1; // = 0.0f;
+  double pcoeff2, ncoeff2;
+  double pcoeff3, ncoeff3;
   double coeff_size;
 
   GrowableArray<uint>* conflicts = new GrowableArray<uint>(table_size, table_size, 0);
@@ -692,8 +698,8 @@ static void print_table(outputStream* st, uintptr_t seed, GrowableArray<Klass*>*
         empty_cnt += (table->at(i) == nullptr ? 1 : 0);
       }
       st->print_cr(" empty=%d conflicts=%d size=%d", empty_cnt, primary_cnt, table_size / 2);
-      coeff2 = (1.0f * primary_cnt) / (table_size / 2);
-      coeff1 = 1.0f - coeff2;
+      ncoeff2 = (2.0f * primary_cnt) / table_size;
+      ncoeff1 = 1.0f - ncoeff2;
       coeff_size = empty_cnt;
     }
     if (verbose) {
@@ -716,11 +722,11 @@ static void print_table(outputStream* st, uintptr_t seed, GrowableArray<Klass*>*
       }
       st->print_cr(" empty=%d conflicts=%d size=%d", empty_cnt, secondary_cnt, table_size / 2);
       if (UseNewCode) {
-        coeff3 = coeff2; // empty
-        coeff2 = 0.0f;
+        ncoeff3 = ncoeff2; // empty
+        ncoeff2 = 0.0f;
       } else {
-        coeff3 = (1.0f * secondary_cnt) / (table_size / 2);
-        coeff2 = coeff2 * (1.0f - coeff3);
+        ncoeff2 = ncoeff2 * (1.0f - ((2.0f * secondary_cnt) / table_size));
+        ncoeff3 = 1.0f - ncoeff1 - ncoeff2;
       }
       coeff_size += empty_cnt;
     }
@@ -744,9 +750,13 @@ static void print_table(outputStream* st, uintptr_t seed, GrowableArray<Klass*>*
       print_entry(st, i, s, seed, table_size);
     }
   }
-  st->print("------------------------------------------");
-  double weight = coeff1 + (coeff2 * 2) + (coeff3 * ((tail_size / 2) + (UseNewCode ? 1 : 2))) /*+ coeff_size*/;
-  st->print_cr("weight=%f coeff1=%f coeff2=%f coeff3=%f coeff_size=%f", weight, coeff1, coeff2, coeff3, coeff_size);
+  st->print_cr("------------------------------------------");
+//  double pweight = pcoeff1 + (pcoeff2 * 2) + (pcoeff3 * ((tail_size / 2) + (UseNewCode ? 1 : 2))) /*+ coeff_size*/;
+//  st->print_cr("positive: pweight=%f pcoeff1=%f pcoeff2=%f pcoeff3=%f coeff_size=%f", pweight, pcoeff1, pcoeff2, pcoeff3, coeff_size);
+  double nweight = ncoeff1 + (ncoeff2 * 2) + (ncoeff3 * (tail_size + (UseNewCode ? 1 : 2))) /*+ coeff_size*/;
+  st->print_cr("negative: nweight=%f ncoeff1=%f ncoeff2=%f ncoeff3=%f coeff_size=%f sum=%f",
+               nweight, ncoeff1, ncoeff2, ncoeff3, coeff_size,
+               ncoeff1 + ncoeff2 + ncoeff3);
 }
 
 void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* primaries, GrowableArray<Klass*>* secondaries, TRAPS) {

@@ -1529,6 +1529,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   cbz(temp_reg /*seed*/, L_linear_scan);
 
   bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
+  uint mod_rounding_mode        = (SecondarySupersTableSizingMode & 8) == 0;
 
 //  mov(rscratch2, 0); // h2 = 0
   ldr(r5 /*temp2_reg*/, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
@@ -1550,12 +1551,11 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   if (is_power_of_2_sizes_only) {
     andr(rscratch1, rscratch2, count); // idx1 = (h2 & mask)
   } else {
-    uint rounding_mode = (SecondarySupersTableSizingMode & 8);
-    if (rounding_mode == 0) {
+    if (mod_rounding_mode) {
       udiv(rscratch1, rscratch2, count);
       Assembler::msub(rscratch1, rscratch1, count, rscratch2);
     } else {
-      assert(rounding_mode == 8, "");
+//      assert(false, "NYI");
       uint count_shift = log2i_exact(SecondarySupersTableMaxSize) + 1;
       uint count_mask = ((SecondarySupersTableMaxSize << 1) - 1);
       ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
@@ -1602,13 +1602,11 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   if (is_power_of_2_sizes_only) {
     andr(rscratch2, rscratch2, count);
   } else {
-    uint rounding_mode = (SecondarySupersTableSizingMode & 8);
-
-    if (rounding_mode == 0) {
+    if (mod_rounding_mode) {
       udiv(rscratch1, rscratch2, count);
       Assembler::msub(rscratch2, rscratch1, count, rscratch2);
     } else {
-      assert(rounding_mode == 8, "");
+//      assert(false, "NYI");
       uint count_shift = log2i_exact(SecondarySupersTableMaxSize) + 1;
       uint count_mask = ((SecondarySupersTableMaxSize << 1) - 1);
       ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
