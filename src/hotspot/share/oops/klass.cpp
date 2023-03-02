@@ -444,8 +444,20 @@ static inline uintptr_t size_shift() {
   return log2i_exact(SecondarySupersTableMaxSize) + 1;
 }
 
-static uint seed2size(uintptr_t seed) {
-  return seed & size_mask();
+static uint seed2size(uintptr_t seed) { return (seed >> 0 * size_shift()) & size_mask(); }
+static uint seed2mask(uintptr_t seed) { return (seed >> 1 * size_shift()) & size_mask(); }
+
+
+static inline uintptr_t compose_seed(uintptr_t h, uint table_size) {
+  assert(table_size > 0, "");
+  uintptr_t  seed_mask = ~right_n_bits(2 * size_shift());
+  uintptr_t table_mask = (round_up_power_of_2(table_size) - 1);
+
+  uintptr_t seed = (h & seed_mask) | (table_mask << size_shift()) | table_size;
+
+  assert(seed2size(seed) == table_size, "");
+  assert(seed2mask(seed) == (round_up_power_of_2(table_size) - 1), "");
+  return seed;
 }
 
 static uint compute_table_index(uintptr_t seed, uintptr_t h, bool is_primary, uint table_size) {
@@ -453,9 +465,9 @@ static uint compute_table_index(uintptr_t seed, uintptr_t h, bool is_primary, ui
     bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
     bool mod_rounding_mode        = (SecondarySupersTableSizingMode & 8) == 0;
 
-    assert((seed & size_mask()) == table_size, "");
-    assert(((seed >> size_shift()) & size_mask()) == (round_up_power_of_2(table_size) - 1), "");
     assert(is_power_of_2(table_size) || !is_power_of_2_sizes_only, "");
+    assert(seed2size(seed) == table_size, "");
+    assert(seed2mask(seed) == (round_up_power_of_2(table_size) - 1), "");
 
     uintptr_t shift = (is_primary ? 0 : 16);
     uintptr_t delta = (is_primary ? 0 : 1);
@@ -632,11 +644,7 @@ static bool is_done(uint table_size, uint num_of_conflicts, uint num_of_secondar
 static inline uintptr_t get_random_seed(Thread* t, uint table_size) {
   assert(table_size <= SecondarySupersTableMaxSize, "");
   if (table_size > 0) {
-    uintptr_t seed = (get_next_hash(t)                      << (2 * size_shift())) |
-                     ((round_up_power_of_2(table_size) - 1) << (    size_shift())) |
-                     (table_size                            << (               0));
-    assert((seed & size_mask()) == table_size, "");
-    assert(((seed >> size_shift()) & size_mask()) == (round_up_power_of_2(table_size) - 1), "");
+    uintptr_t seed = compose_seed(get_next_hash(t), table_size);
     return seed;
   }
   return 0;
@@ -779,6 +787,16 @@ void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* primaries, 
     uintptr_t              seed      = get_random_seed(THREAD, table_size);
     GrowableArray<Klass*>* table     = new GrowableArray<Klass*>(table_size, table_size, nullptr);
     GrowableArray<Klass*>* conflicts = new GrowableArray<Klass*>(num_of_secondaries);
+
+    // Try to inherit initial packing from some superclass.
+//    if (UseNewCode2 && attempt == 0 && table_size > 0) {
+//      assert(super() != nullptr, "");
+//      if (super() != vmClasses::Object_klass()) {
+//        seed = compose_seed(super()->secondary_supers_seed(), table_size);
+//      } else {
+//        // TODO: pick the seed from the class with the largest number of entries?
+//      }
+//    }
 
     if (pack_table(seed, table_size, best_score, primaries, secondaries,
                    table, conflicts)) {
