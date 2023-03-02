@@ -451,7 +451,7 @@ static uint seed2size(uintptr_t seed) {
 static uint compute_table_index(uintptr_t seed, uintptr_t h, bool is_primary, uint table_size) {
   if (table_size > 0) {
     bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
-    uint rounding_mode = (SecondarySupersTableSizingMode & 8);
+    bool mod_rounding_mode        = (SecondarySupersTableSizingMode & 8) == 0;
 
     assert((seed & size_mask()) == table_size, "");
     assert(((seed >> size_shift()) & size_mask()) == (round_up_power_of_2(table_size) - 1), "");
@@ -464,11 +464,10 @@ static uint compute_table_index(uintptr_t seed, uintptr_t h, bool is_primary, ui
       uintptr_t mask = table_size - 2;
       return (h2 & mask) + delta;
     } else {
-      if (rounding_mode == 0) {
+      if (mod_rounding_mode) {
         uintptr_t mask = -2;
         return ((h2 % table_size) & mask) + delta;
       } else {
-        assert(rounding_mode == 8, "");
         uintptr_t mask = round_up_power_of_2(table_size) - 2;
         uintptr_t h3 = (h2 & mask);
         if (h3 >= table_size) {
