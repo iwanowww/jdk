@@ -454,7 +454,7 @@ static uint compute_table_index(uintptr_t seed, uintptr_t h, bool is_primary, ui
     uint rounding_mode = (SecondarySupersTableSizingMode & 8);
 
     assert((seed & size_mask()) == table_size, "");
-    assert(((seed >> size_shift()) & size_mask()) == round_up_power_of_2(table_size), "");
+    assert(((seed >> size_shift()) & size_mask()) == (round_up_power_of_2(table_size) - 1), "");
     assert(is_power_of_2(table_size) || !is_power_of_2_sizes_only, "");
 
     uintptr_t shift = (is_primary ? 0 : 16);
@@ -471,7 +471,7 @@ static uint compute_table_index(uintptr_t seed, uintptr_t h, bool is_primary, ui
         assert(rounding_mode == 8, "");
         uintptr_t mask = round_up_power_of_2(table_size) - 2;
         uintptr_t h3 = (h2 & mask);
-        if (h3 > table_size) {
+        if (h3 >= table_size) {
           h3 = h3 - table_size;
         }
         return h3 + delta;
@@ -633,11 +633,11 @@ static bool is_done(uint table_size, uint num_of_conflicts, uint num_of_secondar
 static inline uintptr_t get_random_seed(Thread* t, uint table_size) {
   assert(table_size <= SecondarySupersTableMaxSize, "");
   if (table_size > 0) {
-    uintptr_t seed = (get_next_hash(t)                << (2 * size_shift())) |
-                     (round_up_power_of_2(table_size) << (    size_shift())) |
-                     (table_size                      << (               0));
+    uintptr_t seed = (get_next_hash(t)                      << (2 * size_shift())) |
+                     ((round_up_power_of_2(table_size) - 1) << (    size_shift())) |
+                     (table_size                            << (               0));
     assert((seed & size_mask()) == table_size, "");
-    assert(((seed >> size_shift()) & size_mask()) == round_up_power_of_2(table_size), "");
+    assert(((seed >> size_shift()) & size_mask()) == (round_up_power_of_2(table_size) - 1), "");
     return seed;
   }
   return 0;
@@ -727,8 +727,8 @@ static void print_table(outputStream* st, uintptr_t seed, GrowableArray<Klass*>*
       } else {
         ncoeff2 = ncoeff2 * (1.0f - ((2.0f * secondary_cnt) / table_size));
         ncoeff3 = 1.0f - ncoeff1 - ncoeff2;
+        coeff_size += empty_cnt;
       }
-      coeff_size += empty_cnt;
     }
     if (verbose && !UseNewCode) {
       for (uint i = 1; i < table_size; i += 2) {
