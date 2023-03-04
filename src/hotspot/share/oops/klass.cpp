@@ -636,8 +636,8 @@ static bool is_done(uint table_size, uint num_of_conflicts, uint num_of_secondar
 static inline uintptr_t get_random_seed(Thread* t, uint table_size) {
   assert(table_size <= SecondarySupersTableMaxSize, "");
   if (table_size > 0) {
-    uintptr_t seed = compose_seed(get_next_hash(t), table_size);
-    return seed;
+    uintptr_t seed = get_next_hash(t);
+    return compose_seed(seed, table_size);
   }
   return 0;
 }
@@ -756,24 +756,28 @@ static void print_table(outputStream* st, uintptr_t seed, GrowableArray<Klass*>*
         print_entry(st, i, s, seed, table_size);
       }
     }
-    st->print("------------- SECONDARY ------------------");
-    {
-      uint secondary_cnt = 0;
-      uint empty_cnt = 0;
-      for (uint i = 1; i < table_size; i += 2) {
-        bool has_conflict = (conflicts->at(i) > 0);
-        secondary_cnt += (has_conflict ? 1 : 0);
-        empty_cnt += (table->at(i) == nullptr ? 1 : 0);
+    if (UseNewCode) {
+      // Secondary table is empty
+    } else {
+      st->print("------------- SECONDARY ------------------");
+      {
+        uint secondary_cnt = 0;
+        uint empty_cnt = 0;
+        for (uint i = 1; i < table_size; i += 2) {
+          bool has_conflict = (conflicts->at(i) > 0);
+          secondary_cnt += (has_conflict ? 1 : 0);
+          empty_cnt += (table->at(i) == nullptr ? 1 : 0);
+        }
+        st->print_cr(" empty=%d conflicts=%d size=%d", empty_cnt, secondary_cnt, table_size / 2);
       }
-      st->print_cr(" empty=%d conflicts=%d size=%d", empty_cnt, secondary_cnt, table_size / 2);
-    }
-    if (verbose && !UseNewCode) {
-      for (uint i = 1; i < table_size; i += 2) {
-        bool has_conflict = (conflicts->at(i) > 0);
-        st->print("%s", (has_conflict ? " * " : "   "));
-        Klass* s = table->at(i);
-        assert(!has_conflict || s != nullptr, "");
-        print_entry(st, i, s, seed, table_size);
+      if (verbose) {
+        for (uint i = 1; i < table_size; i += 2) {
+          bool has_conflict = (conflicts->at(i) > 0);
+          st->print("%s", (has_conflict ? " * " : "   "));
+          Klass* s = table->at(i);
+          assert(!has_conflict || s != nullptr, "");
+          print_entry(st, i, s, seed, table_size);
+        }
       }
     }
   }
@@ -796,6 +800,34 @@ static void print_table(outputStream* st, uintptr_t seed, GrowableArray<Klass*>*
   }
 }
 
+static uint nz_count(Array<Klass*>* arr) {
+  uint cnt = 0;
+  for (int i = 0; i < arr->length(); i++) {
+    if (arr->at(i) != nullptr || arr->at(i) != vmClasses::Object_klass()) {
+      ++cnt;
+    }
+  }
+  assert(cnt <= (uint)arr->length(), "");
+  return cnt;
+}
+
+static uintptr_t initial_seed(Klass* k, GrowableArray<Klass*>* secondaries, uint table_size) {
+  if (table_size > 0) {
+    Klass* super = k->java_super();
+    uintptr_t seed = super->secondary_supers_seed();
+    uint  best_cnt = nz_count(super->secondary_supers());
+
+    for (int i = 0; i < secondaries->length(); i++) {
+      Klass* k1 = secondaries->at(i);
+      if (k1->secondary_supers_table_size() > 0 && nz_count(k1->secondary_supers()) > best_cnt) {
+        seed = k1->secondary_supers_seed();
+      }
+    }
+    return compose_seed(seed, table_size);
+  }
+  return 0;
+}
+
 void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* primaries, GrowableArray<Klass*>* secondaries, TRAPS) {
   ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
 
@@ -814,19 +846,12 @@ void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* primaries, 
   for (uint attempt = 0; attempt < SecondarySupersMaxAttempts; attempt++, total_attempts++) {
     ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
 
-    uintptr_t              seed  = get_random_seed(THREAD, table_size);
+    // Try to inherit initial packing from some superclass.
+    uintptr_t seed  = (attempt == 0 ? initial_seed(this, secondaries, table_size)
+                                    : get_random_seed(THREAD, table_size));
+
     GrowableArray<Klass*>* table = new GrowableArray<Klass*>(table_size, table_size, nullptr);
     GrowableArray<Klass*>* tail  = new GrowableArray<Klass*>(num_of_secondaries);
-
-    // Try to inherit initial packing from some superclass.
-//    if (UseNewCode2 && attempt == 0 && table_size > 0) {
-//      assert(super() != nullptr, "");
-//      if (super() != vmClasses::Object_klass()) {
-//        seed = compose_seed(super()->secondary_supers_seed(), table_size);
-//      } else {
-//        // TODO: pick the seed from the class with the largest number of entries?
-//      }
-//    }
 
     pack_table(seed, table_size, primaries, secondaries,
                table, tail); // results
