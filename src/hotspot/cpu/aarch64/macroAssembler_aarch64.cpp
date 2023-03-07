@@ -1555,20 +1555,18 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
       udiv(rscratch1, rscratch2, count);
       Assembler::msub(rscratch1, rscratch1, count, rscratch2);
     } else {
-//      assert(false, "NYI");
       uint count_shift = log2i_exact(SecondarySupersTableMaxSize) + 1;
       uint count_mask = ((SecondarySupersTableMaxSize << 1) - 1);
       ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
       lsr(rscratch1, rscratch1, count_shift);
-      andr(rscratch1, rscratch1, count_mask);
+      andr(rscratch1, rscratch1, count_mask); // extract the mask
 
       andr(rscratch1, rscratch2, rscratch1); // apply the mask
 
-      Label L_tmp;
-      cmp(rscratch1, count);
-      br(LT, L_tmp);
+      // clamp the index into the range
       sub(rscratch1, rscratch1, count);
-      bind(L_tmp);
+      cmp(rscratch1, zr);
+      csneg(rscratch1, rscratch1, rscratch1, Condition::MI);
     }
     andr(rscratch1, rscratch1, 0xFFFFFFFE);
   }
@@ -1615,11 +1613,9 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
 
       andr(rscratch2, rscratch2, rscratch1); // apply the mask
 
-      Label L_tmp;
-      cmp(rscratch2, count);
-      br(LT, L_tmp);
-      sub(rscratch2, rscratch2, count);
-      bind(L_tmp);
+      sub(rscratch1, rscratch1, count);
+      cmp(rscratch1, zr);
+      csneg(rscratch1, rscratch1, rscratch1, Condition::MI);
     }
     andr(rscratch2, rscratch2, 0xFFFFFFFE);
   }

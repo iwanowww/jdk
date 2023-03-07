@@ -480,12 +480,10 @@ static uint compute_table_index(uintptr_t seed, uintptr_t h, bool is_primary, ui
         uintptr_t mask = -2;
         return ((h2 % table_size) & mask) + delta;
       } else {
-        uintptr_t mask = round_up_power_of_2(table_size) - 2;
-        uintptr_t h3 = (h2 & mask);
-        if (h3 >= table_size) {
-          h3 = h3 - table_size;
-        }
-        return h3 + delta;
+        uintptr_t mask = round_up_power_of_2(table_size) - 1;
+        uint h3 = (h2 & mask);
+        uint h4 = uabs(h3 - table_size);
+        return (h4 & ~0x01) + delta;
       }
     }
   } else {
