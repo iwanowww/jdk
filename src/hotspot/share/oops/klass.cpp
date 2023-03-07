@@ -573,10 +573,20 @@ static uint resize_table(uint table_size, uint num_of_secondaries) {
       }
     }
   } else if (UseNewCode) {
+    uint num_of_secondaries2 = num_of_secondaries + (num_of_secondaries & 1);
+
+    //    if (table_size > 0) {
+//      new_size = MIN2(table_size + 2, MIN2(2 * num_of_secondaries2, SecondarySupersTableMaxSize)); // add 1 extra slot at a time
+//    } else {
+//      new_size = num_of_secondaries2;
+//    }
+
     if (table_size > 0) {
-      new_size = MIN2(table_size + 2, SecondarySupersTableMaxSize); // add 1 extra slot at a time
+      new_size = MAX2(table_size - 2, MAX2(num_of_secondaries2, SecondarySupersTableMinSize)); // remove 1 extra slot at a time
     } else {
-      new_size = 2 * num_of_secondaries;
+      if (num_of_secondaries >= SecondarySupersTableMinSize) {
+        new_size = num_of_secondaries2 + MIN2(num_of_secondaries2, (uint) 10 * 2);
+      }
     }
   } else {
     if (table_size > 0) {
@@ -591,7 +601,8 @@ static uint resize_table(uint table_size, uint num_of_secondaries) {
   }
   new_size = MIN2(new_size, SecondarySupersTableMaxSize);
 
-  assert(table_size < new_size || table_size == 0, "");
+  assert(table_size < new_size || table_size == 0 || UseNewCode, "");
+  assert((table_size & 1) == 0, "");
   return new_size;
 }
 
@@ -620,7 +631,7 @@ Array<Klass*>* Klass::create_secondary_supers_table(uintptr_t seed,
 }
 
 static bool is_done(uint table_size, uint num_of_conflicts, uint num_of_secondaries) {
-  if (num_of_conflicts == 0 && !StressSecondarySupers) {
+  if (!UseNewCode && num_of_conflicts == 0 && !StressSecondarySupers) {
     return true; // found a perfect match
   }
   if (table_size == 0) {
@@ -628,6 +639,9 @@ static bool is_done(uint table_size, uint num_of_conflicts, uint num_of_secondar
     return true; // empty table: nothing more to do
   }
   if (table_size + num_of_conflicts == num_of_secondaries) {
+    return true; // table is full
+  }
+  if (UseNewCode && (table_size / 2) + num_of_conflicts == num_of_secondaries) {
     return true; // table is full
   }
   return false;
@@ -640,6 +654,28 @@ static inline uintptr_t get_random_seed(Thread* t, uint table_size) {
     return compose_seed(seed, table_size);
   }
   return 0;
+}
+
+static uint nz_count(Array<Klass*>* arr) {
+  uint cnt = 0;
+  for (int i = 0; i < arr->length(); i++) {
+    if (arr->at(i) != nullptr && arr->at(i) != vmClasses::Object_klass()) {
+      ++cnt;
+    }
+  }
+  assert(cnt <= (uint)arr->length(), "");
+  return cnt;
+}
+
+static uint nz_count(GrowableArray<Klass*>* arr) {
+  uint cnt = 0;
+  for (int i = 0; i < arr->length(); i++) {
+    if (arr->at(i) != nullptr && arr->at(i) != vmClasses::Object_klass()) {
+      ++cnt;
+    }
+  }
+  assert(cnt <= (uint)arr->length(), "");
+  return cnt;
 }
 
 static void print_entry(outputStream* st, int idx, Klass* k, uintptr_t seed, uint table_size) {
@@ -711,7 +747,7 @@ static double compute_weight2(GrowableArray<Klass*>* table, GrowableArray<uint>*
   return (1.0 - (2.0 * secondary_cnt) / table->length());
 }
 
-static double compute_weight(uintptr_t seed, GrowableArray<Klass*>* table, GrowableArray<Klass*>* tail, outputStream* st = nullptr) {
+static double compute_weight(uintptr_t seed, GrowableArray<Klass*>* table, GrowableArray<Klass*>* tail) {
   double ncoeff1 = 0.0, ncoeff2 = 0.0;
 
   if (table->length() > 0) {
@@ -721,7 +757,20 @@ static double compute_weight(uintptr_t seed, GrowableArray<Klass*>* table, Growa
   }
   double ncoeff3 = 1.0 - ncoeff1 - ncoeff2;
   assert(ncoeff1 >= 0.0 && ncoeff2 >= 0.0 && ncoeff3 >= 0.0, "");
-  return ncoeff1 + (ncoeff2 * 2) + (ncoeff3 * (tail->length() + (UseNewCode ? 1 : 2))) /*+ coeff_size*/;
+  if (UseNewCode) {
+    uint table_size = (table->length() / 2);
+    uint table_nz = nz_count(table);
+    uint num_of_elements = table_nz + tail->length();
+    if (table_size > 0) {
+      double packing_density = (1.0 * table_nz) / table_size; // 0...1.0
+      double packed = (1.0 * table_size) / num_of_elements;  // 0.5...1.0
+      return 1.0 / (4.0 * packing_density + 1.0 * packed);
+    }
+    double coeff_size = (2.0 - (nz_count(table) + 1.0) / (table_size + 1.0)) / (table_size + 1.0);
+    return 1.0 * coeff_size; // (ncoeff1 + ncoeff3 * 2 + coeff_size;
+  } else {
+    return ncoeff1 + (ncoeff2 * 2) + (ncoeff3 * (1 /*tail->length()*/ + 2));
+  }
 }
 
 static void print_table(outputStream* st, uintptr_t seed, GrowableArray<Klass*>* table, GrowableArray<Klass*>* tail, bool verbose) {
@@ -794,21 +843,10 @@ static void print_table(outputStream* st, uintptr_t seed, GrowableArray<Klass*>*
   st->print_cr("------------------------------------------");
   {
     double ncoeff3 = 1.0 - ncoeff1 - ncoeff2;
-    double nweight = ncoeff1 + (ncoeff2 * 2) + (ncoeff3 * (tail_size + (UseNewCode ? 1 : 2)));
+    double nweight = compute_weight(seed, table, tail);
     st->print_cr("negative: nweight=%f ncoeff1=%f ncoeff2=%f ncoeff3=%f sum=%f",
                  nweight, ncoeff1, ncoeff2, ncoeff3, ncoeff1 + ncoeff2 + ncoeff3);
   }
-}
-
-static uint nz_count(Array<Klass*>* arr) {
-  uint cnt = 0;
-  for (int i = 0; i < arr->length(); i++) {
-    if (arr->at(i) != nullptr || arr->at(i) != vmClasses::Object_klass()) {
-      ++cnt;
-    }
-  }
-  assert(cnt <= (uint)arr->length(), "");
-  return cnt;
 }
 
 static uintptr_t initial_seed(Klass* k, GrowableArray<Klass*>* secondaries, uint table_size) {
@@ -842,12 +880,21 @@ void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* primaries, 
   GrowableArray<Klass*>* best_table = new GrowableArray<Klass*>(SecondarySupersTableMaxSize, SecondarySupersTableMaxSize, nullptr);
   GrowableArray<Klass*>* best_tail  = new GrowableArray<Klass*>(num_of_secondaries);
 
+  bool allow_resizing = (SecondarySupersTableSizingMode & 2) != 0;
+
   uint total_attempts = 0;
-  for (uint attempt = 0; attempt < SecondarySupersMaxAttempts; attempt++, total_attempts++) {
+  for (uint attempt = 1; attempt < SecondarySupersMaxAttempts; attempt++, total_attempts++) {
     ResourceMark rm(THREAD);  // need to reclaim GrowableArrays allocated below
 
+    if (attempt == 1) {
+      if (TraceSecondarySupers) {
+        tty->print_cr("#%d: secondary_supers_table: %s: total=%d table_size=%d best_table=%d best_tail=%d best_score=%f best_seed=" UINTX_FORMAT_X_0,
+                      total_attempts, name()->as_C_string(), num_of_secondaries, table_size, best_table->length(), best_tail->length(), best_score, best_seed);
+      }
+    }
+
     // Try to inherit initial packing from some superclass.
-    uintptr_t seed  = (attempt == 0 ? initial_seed(this, secondaries, table_size)
+    uintptr_t seed  = (attempt == 1 ? initial_seed(this, secondaries, table_size)
                                     : get_random_seed(THREAD, table_size));
 
     GrowableArray<Klass*>* table = new GrowableArray<Klass*>(table_size, table_size, nullptr);
@@ -877,11 +924,13 @@ void Klass::initialize_secondary_supers_table(GrowableArray<Klass*>* primaries, 
         break;
       }
     }
-
-    bool allow_resizing = (SecondarySupersTableSizingMode & 2) != 0;
-    if (allow_resizing && attempt == (SecondarySupersMaxAttempts - 1) && table_size < SecondarySupersTableMaxSize) {
-      table_size = resize_table(table_size, num_of_secondaries);
-      attempt = 0; // restart packing with a new size
+    if (allow_resizing && attempt == (SecondarySupersMaxAttempts - 1)) {
+      uint num_of_secondaries2 = num_of_secondaries + (num_of_secondaries & 1);
+      if (( UseNewCode && table_size > num_of_secondaries2) ||
+          (!UseNewCode && table_size < SecondarySupersTableMaxSize)) {
+        table_size = resize_table(table_size, num_of_secondaries); // try bigger size
+        attempt = 0; // restart packing with a new size
+      }
     }
   }
   assert(num_of_secondaries <= (uint) best_table->length() + (uint) best_tail->length(), "");
