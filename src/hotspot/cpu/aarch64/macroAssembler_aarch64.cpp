@@ -1561,6 +1561,23 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
       lsr(rscratch1, rscratch1, count_shift);
       andr(rscratch1, rscratch1, count_mask); // extract the mask
 
+      // Compute the mask: mask = round_up_power_of_2(count) - 1
+//      Label L_mask;
+//      // is_power_of_2(count)?
+//      sub(rscratch1, count, 1);
+//      andr(rscratch2, rscratch1, count);
+//      cmp(rscratch2, zr);
+//      br(EQ, L_mask);
+//
+//      // (1 << (64 - CLZ(count)))
+//      clz(rscratch1, count);
+//      sub(rscratch1, rscratch1, 64);
+//      neg(rscratch1, rscratch1);
+//      lslv(rscratch1, /*1*/, rscratch1);
+//
+//      bind(L_mask); // is_power_of_2(mask) == true
+//      sub(rscratch1, rscratch1, 1);
+
       andr(rscratch1, rscratch2, rscratch1); // apply the mask
 
       // clamp the index into the range
@@ -1604,7 +1621,6 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
       udiv(rscratch1, rscratch2, count);
       Assembler::msub(rscratch2, rscratch1, count, rscratch2);
     } else {
-//      assert(false, "NYI");
       uint count_shift = log2i_exact(SecondarySupersTableMaxSize) + 1;
       uint count_mask = ((SecondarySupersTableMaxSize << 1) - 1);
       ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
