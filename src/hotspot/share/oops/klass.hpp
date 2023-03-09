@@ -228,8 +228,8 @@ protected:
                                                           Array<InstanceKlass*>* transitive_interfaces);
   GrowableArray<Klass*>* compute_primary_supers(int num_extra_slots, GrowableArray<Klass*>* secondaries);
 
-  Array<Klass*>* create_secondary_supers_table(uintptr_t seed,
-                                               GrowableArray<Klass*>* table,
+  Array<Klass*>* create_secondary_supers_table(uintptr_t seed1, GrowableArray<Klass*>* primary_table,
+                                               uintptr_t seed2, GrowableArray<Klass*>* secondary_table,
                                                GrowableArray<Klass*>* conflicts, TRAPS);
 
   // java_super is the Java-level super type as specified by Class.getSuperClass.
@@ -740,12 +740,7 @@ protected:
   void verify() { verify_on(tty); }
   void dump_on(outputStream* st, bool verbose);
 
-  uint index(uintptr_t seed, uint table_size, bool is_primary);
-
-  uint index1(uintptr_t seed, uint table_size);
-  uint index2(uintptr_t seed, uint table_size);
-
-  static uint index_helper(uintptr_t seed, uintptr_t h, bool is_primary, uint table_size);
+  uint index(uintptr_t seed, uint table_size);
 
 #ifndef PRODUCT
   bool verify_vtable_index(int index);

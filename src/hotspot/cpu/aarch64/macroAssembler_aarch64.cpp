@@ -1499,8 +1499,11 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
                                                    Register super_klass,
                                                    Register temp_reg,
                                                    Register temp2_reg,
+                                                   //Register temp3_reg,
                                                    Label* L_success,
                                                    Label* L_failure) {
+  assert_different_registers(sub_klass, super_klass, temp_reg, temp2_reg/*, temp3_reg*/);
+
   BLOCK_COMMENT("secondary_supers_table {");
 
   Label L_fallthrough, L_linear_scan, Ltmp1, Ltmp2;
@@ -1531,76 +1534,66 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
   uint mod_rounding_mode        = (SecondarySupersTableSizingMode & 8) == 0;
 
-//  mov(rscratch2, 0); // h2 = 0
-  ldr(r5 /*temp2_reg*/, Address(super_klass, in_bytes(Klass::hash_code_offset()))); // hash_code
-  mixer322_337954d5(rscratch2, temp_reg, temp2_reg, rscratch1); // h2 = rscratch2
+  ldr(temp2_reg /*hash_code*/, Address(super_klass, in_bytes(Klass::hash_code_offset())));
+  mixer322_337954d5(rscratch2 /*h2*/, temp_reg /*seed*/, temp2_reg /*hash_code*/, rscratch1 /*tmp*/);
 
   const Register count      = temp_reg;
-  const Register table_base = r5;
+  const Register table_base = temp2_reg;
 
   ldr(rscratch1,  Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
   lea(table_base, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
 
   ldr(count, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
   andr(count, count, ((SecondarySupersTableMaxSize << 1) - 1));
-  if (is_power_of_2_sizes_only) {
-    // table_mask = table_size - 2
-    sub(count, count, 2);
-  }
 
   if (is_power_of_2_sizes_only) {
-    andr(rscratch1, rscratch2, count); // idx1 = (h2 & mask)
+    // idx = (h2 & (table_size - 1))
+    sub(rscratch1, count, 1);
+    andr(rscratch1, rscratch2, rscratch1);
+  } else if (mod_rounding_mode) {
+    udiv(rscratch1, rscratch2, count);
+    Assembler::msub(rscratch1, rscratch1, count, rscratch2);
   } else {
-    if (mod_rounding_mode) {
-      udiv(rscratch1, rscratch2, count);
-      Assembler::msub(rscratch1, rscratch1, count, rscratch2);
-    } else {
-      uint count_shift = log2i_exact(SecondarySupersTableMaxSize) + 1;
-      uint count_mask = ((SecondarySupersTableMaxSize << 1) - 1);
-      ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
-      lsr(rscratch1, rscratch1, count_shift);
-      andr(rscratch1, rscratch1, count_mask); // extract the mask
+    uint count_shift = log2i_exact(SecondarySupersTableMaxSize) + 1;
+    uint count_mask = ((SecondarySupersTableMaxSize << 1) - 1);
 
-      // Compute the mask: mask = round_up_power_of_2(count) - 1
-//      Label L_mask;
-//      // is_power_of_2(count)?
-//      sub(rscratch1, count, 1);
-//      andr(rscratch2, rscratch1, count);
-//      cmp(rscratch2, zr);
-//      br(EQ, L_mask);
+    ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
+    lsr(rscratch1, rscratch1, count_shift);
+    andr(rscratch1, rscratch1, count_mask); // extract the mask
+
+    // Compute the mask: mask = round_up_power_of_2(count) - 1
+//    Label L_mask;
+//    // is_power_of_2(count)?
+//    sub(rscratch1, count, 1);
+//    andr(rscratch2, rscratch1, count);
+//    cmp(rscratch2, zr);
+//    br(EQ, L_mask);
 //
-//      // (1 << (64 - CLZ(count)))
-//      clz(rscratch1, count);
-//      sub(rscratch1, rscratch1, 64);
-//      neg(rscratch1, rscratch1);
-//      lslv(rscratch1, /*1*/, rscratch1);
+//    // (1 << (64 - CLZ(count)))
+//    clz(rscratch1, count);
+//    sub(rscratch1, rscratch1, 64);
+//    neg(rscratch1, rscratch1);
+//    lslv(rscratch1, /*1*/, rscratch1);
 //
-//      bind(L_mask); // is_power_of_2(mask) == true
-//      sub(rscratch1, rscratch1, 1);
+//    bind(L_mask); // is_power_of_2(mask) == true
+//    sub(rscratch1, rscratch1, 1);
 
-      andr(rscratch1, rscratch2, rscratch1); // apply the mask
+    andr(rscratch1, rscratch2, rscratch1); // apply the mask
 
-      // clamp the index into the range
-      sub(rscratch1, rscratch1, count);
-      cmp(rscratch1, zr);
-      csneg(rscratch1, rscratch1, rscratch1, Condition::MI);
-    }
-    andr(rscratch1, rscratch1, 0xFFFFFFFE);
+    // clamp the index into the range
+    sub(rscratch2, count, 1);
+    sub(rscratch1, rscratch1, rscratch2);
+    cmp(rscratch1, zr);
+    csneg(rscratch1, rscratch1, rscratch1, Condition::PL);
   }
 
   if (VerifySecondarySupers) {
     BLOCK_COMMENT("verify index1 {");
     Label L_tmp1;
-    if (is_power_of_2_sizes_only) {
-      add(count, count, 2);
-    }
     cmp(rscratch1, count);
     br(LT, L_tmp1);
     stop("wrong index1");
     bind(L_tmp1);
-    if (is_power_of_2_sizes_only) {
-      sub(count, count, 2);
-    }
     BLOCK_COMMENT("} verify index1");
   }
 
@@ -1612,78 +1605,6 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   cmp(rscratch1, super_klass);  // if (probe1 == k)
   br(EQ, L_success_local);
 
-  // idx2 = (h2 >> 16) & mask
-  lsr(rscratch2, rscratch2, 16);
-  if (is_power_of_2_sizes_only) {
-    andr(rscratch2, rscratch2, count);
-  } else {
-    if (mod_rounding_mode) {
-      udiv(rscratch1, rscratch2, count);
-      Assembler::msub(rscratch2, rscratch1, count, rscratch2);
-    } else {
-      uint count_shift = log2i_exact(SecondarySupersTableMaxSize) + 1;
-      uint count_mask = ((SecondarySupersTableMaxSize << 1) - 1);
-      ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
-      lsr(rscratch1, rscratch1, count_shift);
-      andr(rscratch1, rscratch1, count_mask);
-
-      andr(rscratch2, rscratch2, rscratch1); // apply the mask
-
-      sub(rscratch1, rscratch1, count);
-      cmp(rscratch1, zr);
-      csneg(rscratch1, rscratch1, rscratch1, Condition::MI);
-    }
-    andr(rscratch2, rscratch2, 0xFFFFFFFE);
-  }
-  add(rscratch2, rscratch2, 1);
-
-  if (VerifySecondarySupers) {
-    BLOCK_COMMENT("verify index2 {");
-    Label L_tmp1;
-    if (is_power_of_2_sizes_only) {
-      add(count, count, 2);
-    }
-    cmp(rscratch2, count);
-    br(LT, L_tmp1);
-    stop("wrong index2");
-    bind(L_tmp1);
-    if (is_power_of_2_sizes_only) {
-      sub(count, count, 2);
-    }
-    BLOCK_COMMENT("} verify index2");
-  }
-
-  // probe2 = sstable->at(idx2);
-  ldr(rscratch2, Address(table_base, rscratch2, Address::lsl(LogBytesPerWord))); // probe2
-
-  if (UseNewCode) {
-    // secondary part of the table is empty
-  } else {
-    cmp(rscratch2, zr);
-    br(EQ, L_failure_local);
-  }
-
-  // if (probe2 == k)  return true;
-  cmp(rscratch2, super_klass);
-  br(EQ, L_success_local);
-
-//    assert(table_base == r5, "");
-//    mov(r5, (address)vmClasses::Object_klass());
-//    if (is_power_of_2_sizes_only) {
-//      // if (probe1 == Object.klass)  return false;
-//      cmp(rscratch1, r5);
-//      br(EQ, L_failure_local);
-//    } else {
-//      // no fast negative check: probe1 is destroyed
-//    }
-//    // if (probe2 == Object.klass)  return false;
-//    cmp(rscratch2, r5);
-//    br(EQ, L_failure_local);
-
-  if (is_power_of_2_sizes_only) {
-    add(count, count, 2); // restore count: table_size = table_mask + 2
-  }
-
   // TODO: signal about conflicts?
   // may help to avoid iterating over the tail, but the tail is intended to be small anyway
 
@@ -1693,6 +1614,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
 
   // NB! r5/table_base should hold non-zero value when exiting on failure.
   ldr(table_base, Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
+
 //  ldrw(count,      Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
   andr(count, count, ((SecondarySupersTableMaxSize << 1) - 1));
 
