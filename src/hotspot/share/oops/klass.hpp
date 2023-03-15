@@ -140,7 +140,6 @@ class Klass : public Metadata {
   // Array of all secondary supertypes
   Array<Klass*>* _secondary_supers;
   uint64_t   _secondary_supers_seed; // seed2+size2 | seed1+size1
-  uint64_t   _hash_code;
 
   // Ordered list of all primary supertypes
   Klass*      _primary_supers[_primary_super_limit];
@@ -240,7 +239,7 @@ protected:
   juint    super_check_offset() const  { return _super_check_offset; }
   void set_super_check_offset(juint o) { _super_check_offset = o; }
 
-  uintptr_t hash_code() const  { return _hash_code; }
+  uint32_t hash_code() const  { return (uint32_t)(uintptr_t)this; }
 
   Array<Klass*>* secondary_supers() const { return _secondary_supers; }
   void set_secondary_supers(Array<Klass*>* k, uint32_t seed1 = 0, uint32_t seed2 = 0);
@@ -397,7 +396,6 @@ protected:
   // Compiler support
   static ByteSize super_offset()                 { return in_ByteSize(offset_of(Klass, _super)); }
   static ByteSize super_check_offset_offset()    { return in_ByteSize(offset_of(Klass, _super_check_offset)); }
-  static ByteSize hash_code_offset()             { return in_ByteSize(offset_of(Klass, _hash_code)); }
   static ByteSize primary_supers_offset()        { return in_ByteSize(offset_of(Klass, _primary_supers)); }
   static ByteSize secondary_super_cache_offset() { return in_ByteSize(offset_of(Klass, _secondary_super_cache)); }
   static ByteSize secondary_supers_offset()      { return in_ByteSize(offset_of(Klass, _secondary_supers)); }
@@ -752,6 +750,7 @@ protected:
   static uintptr_t size_shift();
   static uint seed2size(uint32_t seed);
   static uint seed2mask(uint32_t seed);
+  static uint seed2hash(uint32_t seed);
   static uintptr_t compose_seed(uintptr_t h, uint table_size);
   static uint32_t compose_seed32(uint32_t h32, uint table_size);
 };

@@ -1597,10 +1597,10 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
                                                    Register temp1_reg,
                                                    Register temp2_reg,
                                                    const Register table_seed, // temp3_reg,
-                                                   const Register super_hash, // temp4_reg,
+                                                   const Register temp4_reg,
                                                    Label* L_success,
                                                    Label* L_failure) {
-  assert_different_registers(sub_klass, super_klass, temp1_reg, temp2_reg, table_seed /*temp3_reg*/, super_hash /*temp4_reg*/, rscratch1, rscratch2);
+  assert_different_registers(sub_klass, super_klass, temp1_reg, temp2_reg, table_seed /*temp3_reg*/, temp4_reg, rscratch1, rscratch2);
 
   BLOCK_COMMENT("secondary_supers_table {");
 
@@ -1636,13 +1636,11 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   cbz(table_seed,  L_failure_seed); // is secondary supers empty? seed1 == 0 && seed2 == 0
   cbzw(table_seed, L_linear_scan);   // is table empty? seed1 == 0 (&& seed2 != 0)
 
-  ldrw(super_hash, Address(super_klass, in_bytes(Klass::hash_code_offset())));
-
-  mixer32(rscratch2 /*h32*/, table_seed, super_hash,
+  mixer32(rscratch2 /*h32*/, table_seed, super_klass,
           rscratch1 /*tmp1*/, temp1_reg /*tmp2*/, temp2_reg /*tmp3*/);
 
   if (UseNewCode4) {
-    movw(super_hash, rscratch2); // save the hash value
+    movw(temp4_reg, rscratch2); // save the hash value
   }
 
   ldr(rscratch1,  Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
@@ -1678,11 +1676,11 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   // table_base, super_hash, table_seed2
 
   if (UseNewCode4) {
-    movw(rscratch2, super_hash); // restore hash value
+    movw(rscratch2, temp4_reg); // restore hash value
   } else {
     // NB! kills super_hash
-    mixer32(rscratch2 /*h32*/, temp1_reg, super_hash,
-            rscratch1 /*tmp1*/, temp1_reg /*tmp2*/, super_hash); // NB! destroyed
+    mixer32(rscratch2 /*h32*/, temp1_reg, super_klass,
+            rscratch1 /*tmp1*/, temp1_reg /*tmp2*/, temp4_reg);
   }
   lsr(rscratch1, table_seed, 32); // seed => seed2
   andw(temp1_reg /*count*/, rscratch1, ((SecondarySupersTableMaxSize << 1) - 1)); // seed2 => count

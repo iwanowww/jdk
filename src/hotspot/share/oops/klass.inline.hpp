@@ -90,6 +90,10 @@ inline uint Klass::seed2mask(uint32_t seed) {
   return (seed >> 1 * size_shift()) & size_mask();
 }
 
+inline uint Klass::seed2hash(uint32_t seed) {
+  return (seed >> 2 * size_shift());
+}
+
 inline uintptr_t Klass::compose_seed(uintptr_t h, uint table_size) {
   assert(table_size > 0, "");
   uintptr_t  seed_mask = ~right_n_bits(2 * size_shift());

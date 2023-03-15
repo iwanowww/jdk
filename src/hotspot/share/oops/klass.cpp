@@ -373,8 +373,6 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
 #endif
   }
 
-  _hash_code = get_next_hash(THREAD);
-
   if (secondary_supers() == nullptr) {
     initialize_secondary_supers(transitive_interfaces, CHECK);
   }
@@ -637,7 +635,7 @@ static void print_entry(outputStream* st, int idx, Klass* k,
   if (k == nullptr) {
     st->print("NULL");
   } else {
-    st->print(UINTX_FORMAT_X_0 " %-40s h=" UINTX_FORMAT_X_0,
+    st->print(UINTX_FORMAT_X_0 " %-40s h=" UINT32_FORMAT_X_0,
               (uintptr_t)k, k->external_name(), k->hash_code());
     if (table1 != nullptr && table1->length() > 0) {
       uint idx1 = k->index(seed1, table1->length());
@@ -993,13 +991,25 @@ void Klass::dump_on(outputStream* st, bool verbose) {
   ResourceMark rm;
   uint64_t seed = secondary_supers_seed();
 
+  uint32_t primary_seed = (uint32_t) (seed >> 0);
+  int      primary_hash = seed2hash(primary_seed);
+  int      primary_size = seed2size(primary_seed);
+  int      primary_mask = seed2mask(primary_seed);
+
+  uint32_t secondary_seed = (uint32_t) (seed >> 32);
+  int      secondary_hash = seed2hash(secondary_seed);
+  int      secondary_size = seed2size(secondary_seed);
+  int      secondary_mask = seed2mask(secondary_seed);
+
   st->print_cr("================= TABLE ==================");
-  st->print_cr("--- %s seed=" UINT64_FORMAT_X_0 " ---",
-               external_name(), seed);
+  st->print("--- %s seed=" UINT64_FORMAT_X_0, external_name(), seed);
+  st->print(" = " UINT32_FORMAT_X_0 "|" UINT32_FORMAT_X_0, primary_seed, secondary_seed);
+
+  st->print(" = " UINT16_FORMAT_X_0 "|" UINT8_FORMAT_X_0 "|" UINT8_FORMAT_X_0, (uint16_t)primary_hash, (uint8_t)primary_mask, (uint8_t)primary_size);
+  st->print(" | " UINT16_FORMAT_X_0 "|" UINT8_FORMAT_X_0 "|" UINT8_FORMAT_X_0, (uint16_t)secondary_hash, (uint8_t)secondary_mask, (uint8_t)secondary_size);
+  st->print_raw_cr(" ---");
   st->print_cr("------------------------------------------");
   if (secondary_supers() != nullptr) {
-    uint32_t primary_seed = (uint32_t) seed;
-    int      primary_size = seed2size(primary_seed);
     int      primary_base = 0;
     GrowableArray<Klass*>* primary_table = new GrowableArray<Klass*>(primary_size, primary_size, nullptr);
     for (int i = 0; i < primary_size; i++) {
@@ -1007,8 +1017,6 @@ void Klass::dump_on(outputStream* st, bool verbose) {
       primary_table->at_put(i, s);
     }
 
-    uint32_t secondary_seed = (uint32_t) (seed >> 32);
-    int      secondary_size = seed2size(secondary_seed);
     int      secondary_base = primary_base + primary_size;
     GrowableArray<Klass*>* secondary_table = new GrowableArray<Klass*>(secondary_size, secondary_size, nullptr);
     for (int i = 0; i < secondary_size; i++) {
