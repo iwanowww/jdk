@@ -400,7 +400,13 @@ size_t lcm(size_t a, size_t b) {
     return size_t(result);
 }
 
-void mul64to128(uint64_t& hi, uint64_t& lo, uint64_t op1, uint64_t op2) {
+void fullmul32(uint32_t& hi, uint32_t& lo, uint32_t op1, uint32_t op2) {
+  uint64_t x64 = op1, y64 = op2, xy64 = x64 * y64;
+  hi = (uint32_t)(xy64 >> 32);
+  lo = (uint32_t)(xy64 >>  0);
+}
+
+void fullmul64(uint64_t& hi, uint64_t& lo, uint64_t op1, uint64_t op2) {
   __int128 x128 = op1, y128 = op2, xy128 = x128 * y128;
   hi = (uint64_t)(xy128 >> 64);
   lo = (uint64_t)(xy128 >>  0);
@@ -414,6 +420,11 @@ void mul64to128(uint64_t& hi, uint64_t& lo, uint64_t op1, uint64_t op2) {
 //
 //  hi = upper;
 //  lo = (cross << 32) | (lo_lo & 0xFFFFFFFF);
+}
+
+uint32_t ror32(uint32_t x, uint32_t distance) {
+  distance = distance & 0x1F;
+  return (x >> distance) | (x << (32 - distance));
 }
 
 uint64_t ror64(uint64_t x, uint64_t distance) {

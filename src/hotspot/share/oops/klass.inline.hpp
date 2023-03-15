@@ -72,4 +72,45 @@ inline ByteSize Klass::vtable_start_offset() {
   return in_ByteSize(InstanceKlass::header_size() * wordSize);
 }
 
+inline uintptr_t Klass::size_mask() {
+  assert(is_power_of_2(SecondarySupersTableMaxSize), "");
+  return ((SecondarySupersTableMaxSize << 1) - 1);
+}
+
+inline uintptr_t Klass::size_shift() {
+  assert(is_power_of_2(SecondarySupersTableMaxSize), "");
+  return log2i_exact(SecondarySupersTableMaxSize) + 1;
+}
+
+inline uint Klass::seed2size(uint32_t seed) {
+  return (seed >> 0 * size_shift()) & size_mask();
+}
+
+inline uint Klass::seed2mask(uint32_t seed) {
+  return (seed >> 1 * size_shift()) & size_mask();
+}
+
+inline uintptr_t Klass::compose_seed(uintptr_t h, uint table_size) {
+  assert(table_size > 0, "");
+  uintptr_t  seed_mask = ~right_n_bits(2 * size_shift());
+  uintptr_t table_mask = (round_up_power_of_2(table_size) - 1);
+
+  uintptr_t seed = (h & seed_mask) | (table_mask << size_shift()) | table_size;
+
+  assert(seed2size(seed) == table_size, "");
+  assert(seed2mask(seed) == (round_up_power_of_2(table_size) - 1), "");
+  return seed;
+}
+
+inline uint32_t Klass::compose_seed32(uint32_t h32, uint table_size) {
+  assert(table_size > 0 || (h32 == 0 || h32 == 0xFFFFFFFF), "");
+  uint32_t  seed_mask = ~right_n_bits(2 * size_shift());
+  uint32_t table_mask = (table_size > 0 ? (round_up_power_of_2(table_size) - 1) : 0);
+
+  uint32_t seed = (h32 & seed_mask) | (table_mask << size_shift()) | table_size;
+
+  assert(seed2size(seed) == table_size, "");
+  assert(seed2mask(seed) == (table_size > 0 ? (round_up_power_of_2(table_size) - 1) : 0), "");
+  return seed;
+}
 #endif // SHARE_OOPS_KLASS_INLINE_HPP

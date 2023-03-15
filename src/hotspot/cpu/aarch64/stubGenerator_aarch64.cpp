@@ -1742,9 +1742,9 @@ class StubGenerator: public StubCodeGenerator {
 
     Label L_miss;
 
-    __ check_klass_subtype_fast_path(sub_klass, super_klass, noreg,        &L_success, &L_miss, NULL,
+    __ check_klass_subtype_fast_path(sub_klass, super_klass, noreg,                      &L_success, &L_miss, NULL,
                                      super_check_offset);
-    __ check_klass_subtype_slow_path(sub_klass, super_klass, noreg, noreg, &L_success, NULL);
+    __ check_klass_subtype_slow_path(sub_klass, super_klass, noreg, noreg, noreg, noreg, &L_success, NULL);
 
     // Fall through on failure!
     __ BIND(L_miss);
@@ -6923,7 +6923,7 @@ class StubGenerator: public StubCodeGenerator {
     __ enter();
 
     Label miss;
-    __ lookup_secondary_supers_table(r4, r0, r2, r5,
+    __ lookup_secondary_supers_table(r4, r0, r2, r5, r6, r7,
                                      NULL, &miss);
     __ mov(r5, zr);
     __ bind(miss);

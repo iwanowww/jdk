@@ -139,8 +139,8 @@ class Klass : public Metadata {
   Klass*      _secondary_super_cache;
   // Array of all secondary supertypes
   Array<Klass*>* _secondary_supers;
-  uintptr_t   _secondary_supers_seed; // seed + size
-  uintptr_t   _hash_code;
+  uint64_t   _secondary_supers_seed; // seed2+size2 | seed1+size1
+  uint64_t   _hash_code;
 
   // Ordered list of all primary supertypes
   Klass*      _primary_supers[_primary_super_limit];
@@ -222,14 +222,16 @@ protected:
   void initialize_secondary_supers(Array<InstanceKlass*>* transitive_interfaces, TRAPS);
   void initialize_secondary_supers_table(GrowableArray<Klass*>* primaries,
                                          GrowableArray<Klass*>* secondaries, TRAPS);
+  void initialize_secondary_supers_table(uint32_t primary_seed, GrowableArray<Klass*>* primary_table,
+                                         GrowableArray<Klass*>* secondaries, int mode, TRAPS);
 
   // klass-specific helper for initializing _secondary_supers
   virtual GrowableArray<Klass*>* compute_secondary_supers(int num_extra_slots,
                                                           Array<InstanceKlass*>* transitive_interfaces);
   GrowableArray<Klass*>* compute_primary_supers(int num_extra_slots, GrowableArray<Klass*>* secondaries);
 
-  Array<Klass*>* create_secondary_supers_table(uintptr_t seed1, GrowableArray<Klass*>* primary_table,
-                                               uintptr_t seed2, GrowableArray<Klass*>* secondary_table,
+  Array<Klass*>* create_secondary_supers_table(uint32_t seed1, GrowableArray<Klass*>* primary_table,
+                                               uint32_t seed2, GrowableArray<Klass*>* secondary_table,
                                                GrowableArray<Klass*>* conflicts, TRAPS);
 
   // java_super is the Java-level super type as specified by Class.getSuperClass.
@@ -241,14 +243,9 @@ protected:
   uintptr_t hash_code() const  { return _hash_code; }
 
   Array<Klass*>* secondary_supers() const { return _secondary_supers; }
-  void set_secondary_supers(Array<Klass*>* k, uintptr_t seed = 0) {
-    assert(seed == 0 || UseSecondarySupersTable, "");
-    _secondary_supers = k;
-    _secondary_supers_seed = seed;
-    assert(secondary_supers_table_size() != 0 || seed == 0, "");
-  }
+  void set_secondary_supers(Array<Klass*>* k, uint32_t seed1 = 0, uint32_t seed2 = 0);
 
-  uintptr_t      secondary_supers_seed()       const { return _secondary_supers_seed; }
+  uint64_t       secondary_supers_seed()       const { return _secondary_supers_seed; }
   uint           secondary_supers_table_size() const {
     assert(is_power_of_2(SecondarySupersTableMaxSize), "");
     uintptr_t size_mask = (SecondarySupersTableMaxSize << 1) - 1;
@@ -740,7 +737,7 @@ protected:
   void verify() { verify_on(tty); }
   void dump_on(outputStream* st, bool verbose);
 
-  uint index(uintptr_t seed, uint table_size);
+  uint index(uint32_t seed, uint table_size);
 
 #ifndef PRODUCT
   bool verify_vtable_index(int index);
@@ -750,6 +747,13 @@ protected:
 
   // for error reporting
   static bool is_valid(Klass* k);
+
+  static uintptr_t size_mask();
+  static uintptr_t size_shift();
+  static uint seed2size(uint32_t seed);
+  static uint seed2mask(uint32_t seed);
+  static uintptr_t compose_seed(uintptr_t h, uint table_size);
+  static uint32_t compose_seed32(uint32_t h32, uint table_size);
 };
 
 #endif // SHARE_OOPS_KLASS_HPP

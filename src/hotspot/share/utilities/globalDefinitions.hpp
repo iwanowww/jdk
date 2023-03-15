@@ -830,7 +830,10 @@ inline jlong min_signed_integer(BasicType bt) {
 // least common multiple
 extern size_t lcm(size_t a, size_t b);
 
-extern void mul64to128(uint64_t& hi, uint64_t& lo, uint64_t op1, uint64_t op2);
+extern void fullmul32(uint32_t& hi, uint32_t& lo, uint32_t op1, uint32_t op2);
+extern void fullmul64(uint64_t& hi, uint64_t& lo, uint64_t op1, uint64_t op2);
+
+extern uint32_t ror32(uint32_t x, uint32_t distance);
 extern uint64_t ror64(uint64_t x, uint64_t distance);
 
 

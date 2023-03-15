@@ -964,20 +964,27 @@ public:
                                      Register super_klass,
                                      Register temp_reg,
                                      Register temp2_reg,
+                                     Register temp3_reg,
+                                     Register temp4_reg,
                                      Label* L_success,
                                      Label* L_failure,
                                      bool set_cond_codes = false);
 
   void lookup_secondary_supers_table(Register sub_klass,
                                      Register super_klass,
-                                     Register temp_reg,
+                                     Register temp1_reg,
                                      Register temp2_reg,
+                                     Register temp3_reg,
+                                     Register temp4_reg,
                                      Label* L_success,
                                      Label* L_failure);
 
-  void mixer322_337954d5(Register dst, Register x, Register y, Register tmp);
+  void mixer32(Register dst, Register x, Register y, Register tmp1, Register tmp2, Register tmp3);
+  void mixer64(Register dst, Register x, Register y, Register tmp);
 
-  // Simplified, combined version, good for typical uses.
+  void hash2index(Register dst, Register hash, Register count, Register seed);
+
+    // Simplified, combined version, good for typical uses.
   // Falls through on failure.
   void check_klass_subtype(Register sub_klass,
                            Register super_klass,

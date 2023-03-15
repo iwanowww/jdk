@@ -139,6 +139,14 @@ public:
     return of(r1, r2, r3) + r4;
   }
 
+  static AbstractRegSet of(RegImpl r1, RegImpl r2, RegImpl r3, RegImpl r4, RegImpl r5) {
+    return of(r1, r2, r3, r4) + r5;
+  }
+
+  static AbstractRegSet of(RegImpl r1, RegImpl r2, RegImpl r3, RegImpl r4, RegImpl r5, RegImpl r6) {
+    return of(r1, r2, r3, r4, r5) + r6;
+  }
+
   static AbstractRegSet range(RegImpl start, RegImpl end) {
     int start_enc = start->encoding();
     int   end_enc = end->encoding();

@@ -1223,8 +1223,8 @@ void MacroAssembler::check_klass_subtype(Register sub_klass,
                            Register temp_reg,
                            Label& L_success) {
   Label L_failure;
-  check_klass_subtype_fast_path(sub_klass, super_klass, temp_reg,        &L_success, &L_failure, NULL);
-  check_klass_subtype_slow_path(sub_klass, super_klass, temp_reg, noreg, &L_success, NULL);
+  check_klass_subtype_fast_path(sub_klass, super_klass, temp_reg,                      &L_success, &L_failure, NULL);
+  check_klass_subtype_slow_path(sub_klass, super_klass, temp_reg, noreg, noreg, noreg, &L_success, NULL);
   bind(L_failure);
 }
 
@@ -1364,6 +1364,8 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
                                                    Register super_klass,
                                                    Register temp_reg,
                                                    Register temp2_reg,
+                                                   Register temp3_reg,
+                                                   Register temp4_reg,
                                                    Label* L_success,
                                                    Label* L_failure,
                                                    bool set_cond_codes) {
@@ -1371,7 +1373,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   if (temp2_reg != noreg) {
     assert_different_registers(sub_klass, super_klass, temp_reg, temp2_reg, rscratch1, rscratch2);
   }
-#define IS_A_TEMP(reg) ((reg) == temp_reg || (reg) == temp2_reg)
+#define IS_A_TEMP(reg) ((reg) == temp_reg || (reg) == temp2_reg || (reg) == temp3_reg || (reg) == temp4_reg)
 
   Label L_fallthrough;
   if (L_success == NULL)   { L_success = &L_fallthrough; }
@@ -1398,6 +1400,14 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   }
   if (sub_klass != r4 && use_stub && !IS_A_TEMP(r4)) {
     pushed_registers += r4;
+  }
+  if (UseSecondarySupersTable) {
+    if (!IS_A_TEMP(r6)) {
+      pushed_registers += r6;
+    }
+    if (!IS_A_TEMP(r7)) {
+      pushed_registers += r7;
+    }
   }
 
   push(pushed_registers, sp);
@@ -1430,7 +1440,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
       if (pushed_registers.bits() != 0) {
         Label L_failure_local;
 
-        lookup_secondary_supers_table(sub_klass, r0, r2, r5, NULL, &L_failure_local);
+        lookup_secondary_supers_table(sub_klass, r0, r2, r5, r6, r7, NULL, &L_failure_local);
 
         // bind(L_success_local); // fall-through
         pop(pushed_registers, sp);
@@ -1442,7 +1452,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
           b(*L_failure);
         }
       } else {
-        lookup_secondary_supers_table(sub_klass, r0, r2, r5,
+        lookup_secondary_supers_table(sub_klass, r0, r2, r5, r6, r7,
                                       (L_success != &L_fallthrough ? L_success : NULL),
                                       (L_failure != &L_fallthrough ? L_failure : NULL));
       }
@@ -1495,18 +1505,106 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   BLOCK_COMMENT("} check_klass_subtype_slow_path");
 }
 
+/*
+-  ldr(count, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
+-  andr(count, count, ((SecondarySupersTableMaxSize << 1) - 1));
++  andw(count, table_seed, ((SecondarySupersTableMaxSize << 1) - 1));
+
+-  if (is_power_of_2_sizes_only) {
+-    // idx = (h2 & (table_size - 1))
+-    sub(rscratch1, count, 1);
+-    andr(rscratch1, rscratch2, rscratch1);
+-  } else if (mod_rounding_mode) {
+-    udiv(rscratch1, rscratch2, count);
+-    Assembler::msub(rscratch1, rscratch1, count, rscratch2);
+-  } else {
+-    uint count_shift = log2i_exact(SecondarySupersTableMaxSize) + 1;
+-    uint count_mask = ((SecondarySupersTableMaxSize << 1) - 1);
+-
+-    ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
+-    lsr(rscratch1, rscratch1, count_shift);
+-    andr(rscratch1, rscratch1, count_mask); // extract the mask
+-
+-    // Compute the mask: mask = round_up_power_of_2(count) - 1
+-//    Label L_mask;
+-//    // is_power_of_2(count)?
+-//    sub(rscratch1, count, 1);
+-//    andr(rscratch2, rscratch1, count);
+-//    cmp(rscratch2, zr);
+-//    br(EQ, L_mask);
+-//
+-//    // (1 << (64 - CLZ(count)))
+-//    clz(rscratch1, count);
+-//    sub(rscratch1, rscratch1, 64);
+-//    neg(rscratch1, rscratch1);
+-//    lslv(rscratch1, 1, rscratch1);
+-//
+-//    bind(L_mask); // is_power_of_2(mask) == true
+-//    sub(rscratch1, rscratch1, 1);
+-
+-    andr(rscratch1, rscratch2, rscratch1); // apply the mask
+-
+-    // clamp the index into the range
+-    sub(rscratch2, count, 1);
+-    sub(rscratch1, rscratch1, rscratch2);
+-    cmp(rscratch1, zr);
+-    csneg(rscratch1, rscratch1, rscratch1, Condition::PL);
+-  }
+ */
+void MacroAssembler::hash2index(Register dst, Register hash, Register count, Register seed) {
+  bool is_power_of_2_sizes_only = false; // (SecondarySupersTableSizingMode & 1) == 0;
+  uint mod_rounding_mode        = (SecondarySupersTableSizingMode & 8) != 0;
+
+  if (is_power_of_2_sizes_only) {
+    // idx = (h2 & (table_size - 1))
+    subw(dst, count, 1);
+    andw(dst, hash, dst);
+  } else if (mod_rounding_mode) {
+    udivw(dst, hash, count);
+    Assembler::msubw(dst, dst, count, hash);
+  } else {
+    uint count_shift = log2i_exact(SecondarySupersTableMaxSize) + 1;
+    uint count_mask  = ((SecondarySupersTableMaxSize << 1) - 1);
+
+    // seed2mask
+    lsrw(dst, seed, count_shift);
+    andw(dst, dst, count_mask); // extract the mask
+
+    andw(dst, hash, dst); // apply the mask; [0..mask)
+
+    // clamp the index into the range
+    subw(dst, dst, count);
+    addw(dst, dst, 1);
+    // TODO: alternative is xor(idx, idx >> 32)
+    cmpw(dst, zr);
+    csnegw(dst, dst, dst, Condition::PL);
+  }
+
+  if (VerifySecondarySupers) {
+    BLOCK_COMMENT("verify index {");
+    Label L_tmp1;
+    cmp(dst, count);
+    br(LT, L_tmp1);
+    stop("wrong index");
+    bind(L_tmp1);
+    BLOCK_COMMENT("} verify index");
+  }
+}
+
+
 void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
                                                    Register super_klass,
-                                                   Register temp_reg,
+                                                   Register temp1_reg,
                                                    Register temp2_reg,
-                                                   //Register temp3_reg,
+                                                   const Register table_seed, // temp3_reg,
+                                                   const Register super_hash, // temp4_reg,
                                                    Label* L_success,
                                                    Label* L_failure) {
-  assert_different_registers(sub_klass, super_klass, temp_reg, temp2_reg/*, temp3_reg*/);
+  assert_different_registers(sub_klass, super_klass, temp1_reg, temp2_reg, table_seed /*temp3_reg*/, super_hash /*temp4_reg*/, rscratch1, rscratch2);
 
   BLOCK_COMMENT("secondary_supers_table {");
 
-  Label L_fallthrough, L_linear_scan, Ltmp1, Ltmp2;
+  Label L_fallthrough, L_linear_scan, L_linear_scan_tail, Ltmp1, Ltmp2;
 
   if (L_success == NULL) {
     L_success = &L_fallthrough;
@@ -1517,7 +1615,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
 
   Label& L_success_local = (VerifySecondarySupers ? Ltmp1 : *L_success);
   Label& L_failure_local = (VerifySecondarySupers ? Ltmp2 : *L_failure);
-
+  Label L_failure_seed;
 #ifndef PRODUCT
   BLOCK_COMMENT("SharedRuntime::_partial_subtype_ctr {");
   mov(rscratch2, (address)&SharedRuntime::_partial_subtype_ctr);
@@ -1528,106 +1626,131 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   BLOCK_COMMENT("} SharedRuntime::_partial_subtype_ctr");
 #endif //PRODUCT
 
-  ldr(temp_reg /*seed*/, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
-  cbz(temp_reg /*seed*/, L_linear_scan);
+//  const Register count      = temp1_reg;
+//  const Register table_base = temp2_reg;
+//  const Register table_seed = temp3_reg;
+//  const Register super_hash = temp4_reg;
 
-  bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) == 0;
-  uint mod_rounding_mode        = (SecondarySupersTableSizingMode & 8) == 0;
 
-  ldr(temp2_reg /*hash_code*/, Address(super_klass, in_bytes(Klass::hash_code_offset())));
-  mixer322_337954d5(rscratch2 /*h2*/, temp_reg /*seed*/, temp2_reg /*hash_code*/, rscratch1 /*tmp*/);
+  ldr(table_seed, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
+  cbz(table_seed,  L_failure_seed); // is secondary supers empty? seed1 == 0 && seed2 == 0
+  cbzw(table_seed, L_linear_scan);   // is table empty? seed1 == 0 (&& seed2 != 0)
 
-  const Register count      = temp_reg;
-  const Register table_base = temp2_reg;
+  ldrw(super_hash, Address(super_klass, in_bytes(Klass::hash_code_offset())));
+
+  mixer32(rscratch2 /*h32*/, table_seed, super_hash,
+          rscratch1 /*tmp1*/, temp1_reg /*tmp2*/, temp2_reg /*tmp3*/);
+
+  if (UseNewCode4) {
+    movw(super_hash, rscratch2); // save the hash value
+  }
 
   ldr(rscratch1,  Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
-  lea(table_base, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
+  lea(temp2_reg /*table_base*/, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
 
-  ldr(count, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
-  andr(count, count, ((SecondarySupersTableMaxSize << 1) - 1));
+  andw(temp1_reg /*count*/, table_seed, ((SecondarySupersTableMaxSize << 1) - 1));
 
-  if (is_power_of_2_sizes_only) {
-    // idx = (h2 & (table_size - 1))
-    sub(rscratch1, count, 1);
-    andr(rscratch1, rscratch2, rscratch1);
-  } else if (mod_rounding_mode) {
-    udiv(rscratch1, rscratch2, count);
-    Assembler::msub(rscratch1, rscratch1, count, rscratch2);
-  } else {
-    uint count_shift = log2i_exact(SecondarySupersTableMaxSize) + 1;
-    uint count_mask = ((SecondarySupersTableMaxSize << 1) - 1);
+  hash2index(rscratch1, rscratch2 /*hash*/, temp1_reg /*count*/, table_seed);
 
-    ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
-    lsr(rscratch1, rscratch1, count_shift);
-    andr(rscratch1, rscratch1, count_mask); // extract the mask
+  ldr(rscratch1, Address(temp2_reg /*table_base*/, rscratch1, Address::lsl(LogBytesPerWord))); // probe1
 
-    // Compute the mask: mask = round_up_power_of_2(count) - 1
-//    Label L_mask;
-//    // is_power_of_2(count)?
-//    sub(rscratch1, count, 1);
-//    andr(rscratch2, rscratch1, count);
-//    cmp(rscratch2, zr);
-//    br(EQ, L_mask);
-//
-//    // (1 << (64 - CLZ(count)))
-//    clz(rscratch1, count);
-//    sub(rscratch1, rscratch1, 64);
-//    neg(rscratch1, rscratch1);
-//    lslv(rscratch1, /*1*/, rscratch1);
-//
-//    bind(L_mask); // is_power_of_2(mask) == true
-//    sub(rscratch1, rscratch1, 1);
+  andr(rscratch2, rscratch1, 0xFFFFFFFFFFFFFFFE); // remove the tag
 
-    andr(rscratch1, rscratch2, rscratch1); // apply the mask
-
-    // clamp the index into the range
-    sub(rscratch2, count, 1);
-    sub(rscratch1, rscratch1, rscratch2);
-    cmp(rscratch1, zr);
-    csneg(rscratch1, rscratch1, rscratch1, Condition::PL);
-  }
-
-  if (VerifySecondarySupers) {
-    BLOCK_COMMENT("verify index1 {");
-    Label L_tmp1;
-    cmp(rscratch1, count);
-    br(LT, L_tmp1);
-    stop("wrong index1");
-    bind(L_tmp1);
-    BLOCK_COMMENT("} verify index1");
-  }
-
-  ldr(rscratch1, Address(table_base, rscratch1, Address::lsl(LogBytesPerWord))); // probe1
-
-  cmp(rscratch1, zr);
-  br(EQ, L_failure_local);
-
-  cmp(rscratch1, super_klass);  // if (probe1 == k)
+  cmp(rscratch2, super_klass);  // if (probe1 == k)
   br(EQ, L_success_local);
+
+//  cmp(rscratch2, zr/*rscratch1*/); // check the tag
+//  br(EQ, L_failure_local); // no reason to when the is not set
 
   // TODO: signal about conflicts?
   // may help to avoid iterating over the tail, but the tail is intended to be small anyway
+
+  // Check the second table.
+
+  lea(temp2_reg /*table_base*/, Address(temp2_reg /*table_base*/, temp1_reg /*count*/, Address::lsl(LogBytesPerWord)));
+
+  lsr(temp1_reg, table_seed, 32); // extract seed2
+
+//  cmp(temp1_reg, zr);
+//  br(EQ, L_linear_scan);
+  cbzw(temp1_reg, L_linear_scan);
+
+  // table_base, super_hash, table_seed2
+
+  if (UseNewCode4) {
+    movw(rscratch2, super_hash); // restore hash value
+  } else {
+    // NB! kills super_hash
+    mixer32(rscratch2 /*h32*/, temp1_reg, super_hash,
+            rscratch1 /*tmp1*/, temp1_reg /*tmp2*/, super_hash); // NB! destroyed
+  }
+  lsr(rscratch1, table_seed, 32); // seed => seed2
+  andw(temp1_reg /*count*/, rscratch1, ((SecondarySupersTableMaxSize << 1) - 1)); // seed2 => count
+  hash2index(rscratch1, rscratch2 /*hash*/, temp1_reg /*count*/, rscratch1);
+
+  ldr(rscratch1, Address(temp2_reg /*table_base*/, rscratch1, Address::lsl(LogBytesPerWord))); // probe2
+
+  andr(rscratch2, rscratch1, 0xFFFFFFFFFFFFFFFE); // remove the tag
+
+  cmp(rscratch2, super_klass);  // if (probe1 == k)
+  br(EQ, L_success_local);
+
+//  cmp(rscratch2, zr/*rscratch1*/); // check the tag
+//  br(EQ, L_failure_local); // no reason to when the is not set
+
+  BLOCK_COMMENT("post table lookup {");
+
+  lea(temp2_reg /*table_base*/, Address(temp2_reg /*table_base*/, temp1_reg /*count*/, Address::lsl(LogBytesPerWord)));
+
+  ldr(rscratch1, Address(sub_klass, Klass::secondary_supers_offset()));
+  ldrw(temp1_reg /*count*/, Address(rscratch1, Array<Klass*>::length_offset_in_bytes()));
+
+  andw(rscratch1, table_seed, ((SecondarySupersTableMaxSize << 1) - 1));
+  subw(temp1_reg /*count*/, temp1_reg /*count*/, rscratch1);
+
+  lsr(rscratch1, table_seed, 32);
+  andw(rscratch1, rscratch1, ((SecondarySupersTableMaxSize << 1) - 1));
+  subw(temp1_reg /*count*/, temp1_reg /*count*/, rscratch1);
+
+  b(L_linear_scan_tail);
+
+  BLOCK_COMMENT("} post table lookup");
+
+  // Fail-fast check on seed failed. Need to set the return value properly.
+  bind(L_failure_seed);
+  mov(temp2_reg, super_klass);
+  b(*L_failure);
 
   BLOCK_COMMENT("linear {");
 
   bind(L_linear_scan);
 
+  /*
   // NB! r5/table_base should hold non-zero value when exiting on failure.
+  ldr(rscratch1,  Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
+  ldrw(rscratch1, Address(rscratch1, Array<Klass*>::length_offset_in_bytes()));
+
   ldr(table_base, Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
 
-//  ldrw(count,      Address(sub_klass, in_bytes(Klass::secondary_supers_table_size_offset())));
-  andr(count, count, ((SecondarySupersTableMaxSize << 1) - 1));
+  bind(L_linear_scan_tail);
 
-  ldrw(rscratch2, Address(table_base, Array<Klass*>::length_offset_in_bytes()));
-  cbzw(rscratch2, L_failure_local);  // left == 0?  r5 != 0!
+  cbzw(rscratch2, L_failure_local);  // left == 0?
 
   subw(rscratch2, rscratch2, count); // length - count
   cbzw(rscratch2, L_failure_local);  // left == 0?  r5 != 0!
 
-  lea(table_base, Address(table_base, Array<Klass*>::base_offset_in_bytes()));
-  lea(table_base, Address(table_base, count, Address::lsl(LogBytesPerWord)));
-
   repne_scan(table_base, super_klass, rscratch2, rscratch1);
+
+  */
+  ldr(temp2_reg /*table_base*/, Address(sub_klass, Klass::secondary_supers_offset()));
+  ldrw(temp1_reg /*count*/, Address(temp2_reg /*table_base*/, Array<Klass*>::length_offset_in_bytes()));
+  add(temp2_reg /*table_base*/, temp2_reg /*table_base*/, Array<Klass*>::base_offset_in_bytes());
+
+  // temp2_reg = table_base
+  bind(L_linear_scan_tail);
+
+  cmp(sp, zr); // Clear Z flag; SP is never zero
+  repne_scan(temp2_reg /*table_base*/, super_klass, temp1_reg /*count*/, rscratch1);
 
   { // Dispatch to fall-through path
     if (&L_failure_local != &L_fallthrough) {
@@ -1660,14 +1783,14 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
     // We will consult the secondary-super array.
     ldr(temp2_reg, Address(sub_klass, Klass::secondary_supers_offset()));
     // Load the array length.
-    ldrw(temp_reg, Address(temp2_reg, Array<Klass*>::length_offset_in_bytes()));
+    ldrw(temp1_reg, Address(temp2_reg, Array<Klass*>::length_offset_in_bytes()));
     // Skip to start of data.
     add(temp2_reg, temp2_reg, Array<Klass*>::base_offset_in_bytes());
 
     cmp(sp, zr); // Clear Z flag; SP is never zero
     // Scan R2 words at [R5] for an occurrence of R0.
     // Set NZ/Z based on last compare.
-    repne_scan(temp2_reg, super_klass, temp_reg, rscratch1);
+    repne_scan(temp2_reg, super_klass, temp1_reg, rscratch1);
 
     br(Assembler::NE, L_f1);
 
@@ -1693,10 +1816,42 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   BLOCK_COMMENT("} secondary_supers_table");
 }
 
-void MacroAssembler::mixer322_337954d5(Register dst, Register x, Register y, Register tmp) {
+void MacroAssembler::mixer32(Register dst, Register x, Register y, Register tmp1, Register tmp2, Register tmp3) {
+  assert_different_registers(dst, x, y);
+  assert_different_registers(dst, tmp1, tmp2, tmp3);
+  assert_different_registers(x, tmp3);
+
+  BLOCK_COMMENT("mixer32 {");
+
+  const Register M = dst;
+  mov_immediate32(M, 0x337954D5);
+
+  eorw(tmp3 /*H0*/, x, y);           // H0 = x ^ y
+  eorw(tmp1, x, 0xAAAAAAAA);         // L0 = x ^ A
+  mulw(tmp2 /*P0*/, tmp3 /*H0*/, M); // P0 = H0 * M
+
+  // tmp1 = L0, tmp2 = P0
+
+  mul(tmp3 /*U0/V0*/, tmp1 /*L0*/, M);          // U0/V0 = L0 * M
+  eorw(tmp1 /*P1*/, tmp3 /*V0*/, M);            // P1 = V0 ^ M
+  lsr(tmp3, tmp3, 32);                          // U0
+  eorw(tmp2 /*L1*/, tmp2 /*P0*/, tmp3 /*U0*/);  // L1 = P0 ^ U0
+  rorvw(tmp1 /*Q1*/, tmp1 /*P1*/, tmp2 /*L1*/); // Q1 = ror(P1, L1)
+
+  // tmp1 = Q1, tmp2 = L1
+
+  mul(tmp3 /*U1/V1*/, tmp2 /*L1*/, M);         // U1/V1 = L1 * M
+  lsr(tmp2, tmp3, 32);                         // U1
+  eorw(tmp1 /*L2*/, tmp1 /*Q1*/, tmp2 /*U1*/); // L2 = Q1 ^ U1
+  eorw(dst, tmp3 /*V1*/, tmp1 /*L2*/);         // V1 ^ L2
+
+  BLOCK_COMMENT("} mixer32");
+}
+
+void MacroAssembler::mixer64(Register dst, Register x, Register y, Register tmp) {
   assert_different_registers(dst, x, y, tmp);
 
-  BLOCK_COMMENT("mixer322_337954d5 {");
+  BLOCK_COMMENT("mixer64 {");
 
   const Register M = dst;
   mov_immediate64(M, 0x8ADAE89C337954D5);
@@ -1726,7 +1881,7 @@ void MacroAssembler::mixer322_337954d5(Register dst, Register x, Register y, Reg
   mul(tmp /*V1*/, y /*L1*/, M);   // V1 = L1 * M
   eor(dst, tmp /*V1*/, x /*L2*/); // V1 ^ L2
 
-  BLOCK_COMMENT("} mixer322_337954d5");
+  BLOCK_COMMENT("} mixer64");
 }
 
 void MacroAssembler::clinit_barrier(Register klass, Register scratch, Label* L_fast_path, Label* L_slow_path) {
