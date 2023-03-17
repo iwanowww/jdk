@@ -67,9 +67,10 @@ ObjArrayKlass* ObjArrayKlass::allocate_objArray_klass(ClassLoaderData* loader_da
       bool supers_exist = super_klass != nullptr;
       // Also, see if the element has secondary supertypes.
       // We need an array type for each.
-      const Array<Klass*>* element_supers = element_klass->secondary_supers();
-      for( int i = element_supers->length()-1; i >= 0; i-- ) {
-        Klass* elem_super = element_supers->at(i);
+      //const Array<Klass*>* element_supers = element_klass->secondary_supers();
+      int num_of_element_supers = element_klass->secondary_supers()->length();
+      for( int i = num_of_element_supers - 1; i >= 0; i-- ) {
+        Klass* elem_super = element_klass->secondary_supers_at(i);
         if (elem_super != NULL && elem_super->array_klass_or_null() == nullptr) {
           supers_exist = false;
           break;
@@ -81,8 +82,8 @@ ObjArrayKlass* ObjArrayKlass::allocate_objArray_klass(ClassLoaderData* loader_da
         {
           MutexUnlocker mu(MultiArray_lock);
           super_klass = element_super->array_klass(CHECK_NULL);
-          for( int i = element_supers->length()-1; i >= 0; i-- ) {
-            Klass* elem_super = element_supers->at(i);
+          for( int i = num_of_element_supers - 1; i >= 0; i-- ) {
+            Klass* elem_super = element_klass->secondary_supers_at(i);
             if (elem_super != NULL) {
               elem_super->array_klass(CHECK_NULL);
             }
@@ -391,8 +392,8 @@ GrowableArray<Klass*>* ObjArrayKlass::compute_secondary_supers(int num_extra_slo
     secondaries->push(vmClasses::Cloneable_klass());
     secondaries->push(vmClasses::Serializable_klass());
     for (int i = 0; i < num_elem_supers; i++) {
-      Klass* elem_super = elem_supers->at(i);
-      if (elem_super != NULL && elem_super != vmClasses::Object_klass()) {
+      Klass* elem_super = element_klass()->secondary_supers_at(i);
+      if (elem_super != nullptr) {
         Klass* array_super = elem_super->array_klass_or_null();
         assert(array_super != nullptr, "must already have been created");
         secondaries->push(array_super);

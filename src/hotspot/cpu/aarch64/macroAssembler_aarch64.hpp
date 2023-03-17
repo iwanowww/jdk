@@ -1258,7 +1258,7 @@ public:
   void pop(Register dst);
 
   void repne_scan(Register addr, Register value, Register count,
-                  Register scratch);
+                  Register scratch, bool remove_tag);
   void repne_scanw(Register addr, Register value, Register count,
                    Register scratch);
 

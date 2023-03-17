@@ -239,10 +239,23 @@ protected:
   juint    super_check_offset() const  { return _super_check_offset; }
   void set_super_check_offset(juint o) { _super_check_offset = o; }
 
-  uint32_t hash_code() const  { return (uint32_t)(uintptr_t)this; }
+  uint32_t hash_code() const  {
+    assert(klass2tag(this) == 0, "");
+    return (uint32_t)(uintptr_t)this;
+  }
 
   Array<Klass*>* secondary_supers() const { return _secondary_supers; }
   void set_secondary_supers(Array<Klass*>* k, uint32_t seed1 = 0, uint32_t seed2 = 0);
+
+  Klass* secondary_supers_at(int i) const {
+    Klass* k = secondary_supers()->at(i);
+    return remove_tag(k);
+  }
+
+  uint8_t secondary_supers_tag_at(int i) const {
+    Klass* k = secondary_supers()->at(i);
+    return klass2tag(k);
+  }
 
   uint64_t       secondary_supers_seed()       const { return _secondary_supers_seed; }
   uint           secondary_supers_table_size() const {
@@ -745,6 +758,17 @@ protected:
 
   // for error reporting
   static bool is_valid(Klass* k);
+
+  static const uintptr_t tag_mask = 0x3;
+
+  static const uint8_t tag_00 = 0x0;
+  static const uint8_t tag_01 = 0x1;
+  static const uint8_t tag_10 = 0x2;
+  static const uint8_t tag_11 = 0x3;
+
+  static uint8_t klass2tag(const Klass* k);
+  static Klass* add_tag(const Klass* k, uint8_t tag);
+  static Klass* remove_tag(const Klass* k);
 
   static uintptr_t size_mask();
   static uintptr_t size_shift();

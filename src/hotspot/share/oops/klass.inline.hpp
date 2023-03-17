@@ -94,6 +94,20 @@ inline uint Klass::seed2hash(uint32_t seed) {
   return (seed >> 2 * size_shift());
 }
 
+inline Klass* Klass::add_tag(const Klass* k, uint8_t tag) {
+  assert((tag & ~tag_mask) == 0, "");
+  assert(klass2tag(k) == 0, "already tagged");
+  return (Klass*)((intptr_t(k) & ~tag_mask) | (tag & tag_mask));
+}
+
+inline Klass* Klass::remove_tag(const Klass* k) {
+  return (Klass*)(intptr_t(k) & ~tag_mask);
+}
+
+inline uint8_t Klass::klass2tag(const Klass* k)  {
+  return (uint8_t)(intptr_t(k) & tag_mask);
+}
+
 inline uintptr_t Klass::compose_seed(uintptr_t h, uint table_size) {
   assert(table_size > 0, "");
   uintptr_t  seed_mask = ~right_n_bits(2 * size_shift());
