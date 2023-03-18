@@ -152,7 +152,7 @@ bool Klass::search_secondary_supers_table(Klass* k) const {
   uint    linear_base_idx = secondary_base_idx + secondary_table_size;
 
   if (primary_table_size > 0) {
-    bool is_power_of_2_sizes_only = false; // (SecondarySupersTableSizingMode & 1) == 0;
+    bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) != 0;
     assert(is_power_of_2(primary_table_size) || !is_power_of_2_sizes_only, "");
 
     uint32_t primary_seed = (uint32_t)secondary_supers_seed();
@@ -523,21 +523,13 @@ static void pack_table(uint32_t seed,
 static uint resize_table(uint table_size, uint num_of_secondaries) {
   assert(table_size < SecondarySupersTableMaxSize, "");
   uint new_size = 0;
-  bool is_power_of_2_sizes_only = false; // (SecondarySupersTableSizingMode & 1) == 0;
-  bool aggressive_sizing        = false; // (SecondarySupersTableSizingMode & 4) != 0;
+  bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) != 0;
   if (is_power_of_2_sizes_only) {
     if (table_size > 0) {
-      new_size = MIN2(table_size * 2, SecondarySupersTableMaxSize);
+      new_size = MIN2(table_size / 2, SecondarySupersTableMaxSize);
     } else {
       if (num_of_secondaries >= SecondarySupersTableMinSize) {
-        if (aggressive_sizing) {
-          new_size = round_up_power_of_2(num_of_secondaries);
-          if (new_size == num_of_secondaries) {
-            new_size = new_size * 2;
-          }
-        } else {
-          new_size = round_down_power_of_2(num_of_secondaries);
-        }
+        new_size = round_down_power_of_2(num_of_secondaries);
       }
     }
   } else {
@@ -773,7 +765,7 @@ static uintptr_t initial_seed(Klass* k, GrowableArray<Klass*>* secondaries, uint
 }
 
 uint Klass::index(uint32_t seed, uint table_size) {
-  bool is_power_of_2_sizes_only = false; // (SecondarySupersTableSizingMode & 1) == 0;
+  bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) != 0;
   bool mod_rounding_mode = (SecondarySupersTableSizingMode & 8) != 0;
 
   assert(table_size > 0, "");
@@ -790,9 +782,8 @@ uint Klass::index(uint32_t seed, uint table_size) {
     return (h2 % table_size);
   } else {
     uint mask = round_up_power_of_2(table_size) - 1;
-    uint offset = (table_size - 1);
-    uint h3 = h2 & mask;
-    uint h4 = uabs(h3 - offset);
+    uint h3 = (h2 & mask) - table_size;
+    uint h4 = h3 ^ (int(h3) >> 31);
     return h4;
   }
 }
@@ -808,10 +799,13 @@ void Klass::initialize_secondary_supers_table(uint32_t primary_seed, GrowableArr
   GrowableArray<Klass*>* best_table = new GrowableArray<Klass*>(SecondarySupersTableMaxSize);
   GrowableArray<Klass*>* best_tail  = new GrowableArray<Klass*>(num_of_secondaries);
 
-  uint table_size = (mode == 0 ? resize_table(0, num_of_secondaries)
-                               : num_of_secondaries);
-
+  bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) != 0;
   bool allow_resizing = true; // (SecondarySupersTableSizingMode & 2) != 0;
+
+  uint table_size = (mode == 0 ? resize_table(0, num_of_secondaries)
+                               : (is_power_of_2_sizes_only ? round_up_power_of_2(num_of_secondaries)
+                                                           : num_of_secondaries));
+
 
   uint total_attempts = 0;
   bool is_in_progress = true;

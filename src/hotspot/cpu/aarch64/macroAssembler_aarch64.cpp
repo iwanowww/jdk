@@ -1553,16 +1553,16 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 -  }
  */
 void MacroAssembler::hash2index(Register dst, Register hash, Register count, Register seed) {
-  bool is_power_of_2_sizes_only = false; // (SecondarySupersTableSizingMode & 1) == 0;
+  bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) != 0;
   uint mod_rounding_mode        = (SecondarySupersTableSizingMode & 8) != 0;
 
-  if (is_power_of_2_sizes_only) {
+  if (is_power_of_2_sizes_only && !mod_rounding_mode) {
     // idx = (h2 & (table_size - 1))
     subw(dst, count, 1);
     andw(dst, hash, dst);
   } else if (mod_rounding_mode) {
     udivw(dst, hash, count);
-    Assembler::msubw(dst, dst, count, hash);
+    msubw(dst, dst, count, hash);
   } else {
     uint count_shift = log2i_exact(SecondarySupersTableMaxSize) + 1;
     uint count_mask  = ((SecondarySupersTableMaxSize << 1) - 1);
@@ -1573,12 +1573,10 @@ void MacroAssembler::hash2index(Register dst, Register hash, Register count, Reg
 
     andw(dst, hash, dst); // apply the mask; [0..mask)
 
-    // clamp the index into the range
+    // clamp the index into [0..table_size) range
     subw(dst, dst, count);
-    addw(dst, dst, 1);
-    // TODO: alternative is xor(idx, idx >> 32)
-    cmpw(dst, zr);
-    csnegw(dst, dst, dst, Condition::PL);
+    asrw(hash, dst, 31);
+    eorw(dst, dst, hash);
   }
 
   if (VerifySecondarySupers) {
