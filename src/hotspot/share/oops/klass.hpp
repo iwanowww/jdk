@@ -222,7 +222,7 @@ protected:
   void initialize_secondary_supers_table(GrowableArray<Klass*>* primaries,
                                          GrowableArray<Klass*>* secondaries, TRAPS);
   void initialize_secondary_supers_table(uint32_t primary_seed, GrowableArray<Klass*>* primary_table,
-                                         GrowableArray<Klass*>* secondaries, int mode, TRAPS);
+                                         GrowableArray<Klass*>* secondaries, TRAPS);
 
   // klass-specific helper for initializing _secondary_supers
   virtual GrowableArray<Klass*>* compute_secondary_supers(int num_extra_slots,

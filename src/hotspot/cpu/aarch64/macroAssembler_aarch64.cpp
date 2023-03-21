@@ -1421,7 +1421,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     mov(r4, sub_klass);
   }
 
-  if (UseSecondarySupersTable && (!UseNewCode3 || Thread::current()->is_Compiler_thread())) {
+  if (UseSecondarySupersTable /*&& (!UseNewCode3 || Thread::current()->is_Compiler_thread())*/) {
     if (use_stub) {
       assert(StubRoutines::secondary_supers() != NULL, "");
       far_call(StubRoutines::secondary_supers()); // r5 == 0: success
@@ -1506,52 +1506,6 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   BLOCK_COMMENT("} check_klass_subtype_slow_path");
 }
 
-/*
--  ldr(count, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
--  andr(count, count, ((SecondarySupersTableMaxSize << 1) - 1));
-+  andw(count, table_seed, ((SecondarySupersTableMaxSize << 1) - 1));
-
--  if (is_power_of_2_sizes_only) {
--    // idx = (h2 & (table_size - 1))
--    sub(rscratch1, count, 1);
--    andr(rscratch1, rscratch2, rscratch1);
--  } else if (mod_rounding_mode) {
--    udiv(rscratch1, rscratch2, count);
--    Assembler::msub(rscratch1, rscratch1, count, rscratch2);
--  } else {
--    uint count_shift = log2i_exact(SecondarySupersTableMaxSize) + 1;
--    uint count_mask = ((SecondarySupersTableMaxSize << 1) - 1);
--
--    ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
--    lsr(rscratch1, rscratch1, count_shift);
--    andr(rscratch1, rscratch1, count_mask); // extract the mask
--
--    // Compute the mask: mask = round_up_power_of_2(count) - 1
--//    Label L_mask;
--//    // is_power_of_2(count)?
--//    sub(rscratch1, count, 1);
--//    andr(rscratch2, rscratch1, count);
--//    cmp(rscratch2, zr);
--//    br(EQ, L_mask);
--//
--//    // (1 << (64 - CLZ(count)))
--//    clz(rscratch1, count);
--//    sub(rscratch1, rscratch1, 64);
--//    neg(rscratch1, rscratch1);
--//    lslv(rscratch1, 1, rscratch1);
--//
--//    bind(L_mask); // is_power_of_2(mask) == true
--//    sub(rscratch1, rscratch1, 1);
--
--    andr(rscratch1, rscratch2, rscratch1); // apply the mask
--
--    // clamp the index into the range
--    sub(rscratch2, count, 1);
--    sub(rscratch1, rscratch1, rscratch2);
--    cmp(rscratch1, zr);
--    csneg(rscratch1, rscratch1, rscratch1, Condition::PL);
--  }
- */
 void MacroAssembler::hash2index(Register dst, Register hash, Register count, Register seed) {
   bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) != 0;
   uint mod_rounding_mode        = (SecondarySupersTableSizingMode & 8) != 0;
@@ -1632,8 +1586,24 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   cbz(table_seed,  L_failure_seed0); // is secondary supers empty? seed1 == 0 && seed2 == 0
   cbzw(table_seed, L_linear_scan);   // is table empty? seed1 == 0 (&& seed2 != 0)
 
-  mixer32(rscratch2 /*h32*/, table_seed, super_klass,
-          rscratch1 /*tmp1*/, count /*tmp2*/, temp4_reg /*tmp3*/);
+  if (UseNewCode3 || VerifySecondarySupers) {
+    mixer32x2(v0/*h32x2*/, table_seed, super_klass, v1, v2, v3, v4, v5);
+    if (!VerifySecondarySupers) {
+      mov(rscratch2, v0, S, 0);
+    }
+  }
+  if (!UseNewCode3 || VerifySecondarySupers) {
+    mixer32(rscratch2 /*h32*/, table_seed, super_klass,
+            rscratch1 /*tmp1*/, count /*tmp2*/, temp4_reg /*tmp3*/);
+  }
+  if (VerifySecondarySupers) {
+    Label L;
+    mov(rscratch1, v0, S, 0);
+    cmpw(rscratch2, rscratch1);
+    br(EQ, L);
+    stop("mismatch1");
+    bind(L);
+  }
 
   if (UseNewCode4) {
 //    movw(temp4_reg, rscratch2); // save the hash value
@@ -1671,11 +1641,25 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   // table_base, super_hash, table_seed2
 
   if (!UseNewCode4) {
-    push(RegSet::of(temp4_reg), sp); // store the tag
-    mixer32(rscratch2 /*h32*/, rscratch1, super_klass,
-            rscratch1 /*tmp1*/, count /*tmp2*/, temp4_reg);
-    pop(RegSet::of(temp4_reg), sp); // restore the tag
+    if (UseNewCode3) {
+      mov(rscratch2, v0, S, 2);
+    }
+    if (!UseNewCode3 || VerifySecondarySupers) {
+      push(RegSet::of(temp4_reg), sp); // store the tag
+      mixer32(rscratch2 /*h32*/, rscratch1, super_klass,
+              rscratch1 /*tmp1*/, count /*tmp2*/, temp4_reg);
+      pop(RegSet::of(temp4_reg), sp); // restore the tag
+    }
+    if (VerifySecondarySupers) {
+      Label L;
+      mov(rscratch1, v0, S, 2);
+      cmpw(rscratch2, rscratch1);
+      br(EQ, L);
+      stop("mismatch2");
+      bind(L);
+    }
   }
+
   lsr(rscratch1, table_seed, 32); // seed => seed2
   andw(count, rscratch1, ((SecondarySupersTableMaxSize << 1) - 1)); // seed2 => count
   hash2index(rscratch1, rscratch2 /*hash*/, count, rscratch1);
@@ -1824,6 +1808,21 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   BLOCK_COMMENT("} secondary_supers_table");
 }
 
+/*
+  const uint32_t M  = 0x337954D5;
+  const uint32_t A  = 0xAAAAAAAA; // REPAA
+  const uint32_t H0 = (x ^ y), L0 = (x ^ A);
+
+  uint32_t U0, V0; fullmul32(U0, V0, L0, M);
+  const uint32_t Q0 = (H0 * M);
+  const uint32_t L1 = (Q0 ^ U0);
+
+  uint32_t U1, V1; fullmul32(U1, V1, L1, M);
+  const uint32_t P1 = (V0 ^ M);
+  const uint32_t Q1 = ror32(P1, L1);
+  const uint32_t L2 = (Q1 ^ U1);
+  return V1 ^ L2;
+ */
 void MacroAssembler::mixer32(Register dst, Register x, Register y, Register tmp1, Register tmp2, Register tmp3) {
   assert_different_registers(dst, x, y);
   assert_different_registers(dst, tmp1, tmp2, tmp3);
@@ -1854,6 +1853,145 @@ void MacroAssembler::mixer32(Register dst, Register x, Register y, Register tmp1
   eorw(dst, tmp3 /*V1*/, tmp1 /*L2*/);         // V1 ^ L2
 
   BLOCK_COMMENT("} mixer32");
+}
+
+void MacroAssembler::mixer32x2(FloatRegister dst, Register x, Register y, // Register rscratch1,
+                               FloatRegister tmp1, FloatRegister tmp2, FloatRegister tmp3, FloatRegister tmp4, FloatRegister tmp5) {
+  assert_different_registers(x, y);
+  assert_different_registers(dst, tmp1, tmp2, tmp3);
+
+  BLOCK_COMMENT("mixer32x2 {");
+
+  const FloatRegister M = dst;
+
+  mov_immediate32(rscratch1, 0x337954D5);
+  dup(M, T2D, rscratch1);
+
+  mov(tmp1, D, 0, x); // x = 2I = seed1 | seed2
+  uxtl(tmp1, T2D, tmp1, T2S);  // 2I => 2L
+
+  dup(tmp2, T2S, y);
+  uxtl(tmp2, T2D, tmp2, T2S); // 2I => 2L
+
+  eor(tmp2 /*H0*/, T16B, tmp1, tmp2);        // H0 = x ^ y
+
+  mov_immediate32(rscratch1, 0xAAAAAAAA);
+  dup(tmp3, T2D, rscratch1);
+  eor(tmp1, T16B, tmp1, tmp3);               // L0 = x ^ A
+
+  // dst = M  tmp1 = L0  tmp2 = H0
+
+  mulv(tmp2 /*Q0*/, T4S, tmp2 /*H0*/, M); // Q0 = H0 * M
+
+  // dst = M  tmp1 = L0, tmp2 = Q0
+
+  // U0|V0 = L0 * M
+  umov(rscratch1, tmp1 /*L0*/, S, 0);
+  umov(rscratch2, M, S, 0);
+  mul(rscratch1, rscratch1, rscratch2);
+  lsr(rscratch2, rscratch1, 32);
+  mov(tmp1, S, 0, rscratch1); // V0
+  mov(tmp3, S, 0, rscratch2); // U0
+
+  umov(rscratch1, tmp1 /*L0*/, S, 2);
+  umov(rscratch2, M, S, 2);
+  mul(rscratch1, rscratch1, rscratch2);
+  lsr(rscratch2, rscratch1, 32);
+  mov(tmp1, S, 2, rscratch1); // V0
+  mov(tmp3, S, 2, rscratch2); // U0
+
+  // dst = M  tmp1 = V0  tmp2 = Q0  tmp3 = U0
+
+  eor(tmp2 /*L1*/, T16B, tmp2 /*Q0*/, tmp3 /*U0*/);  // L1 = Q0 ^ U0
+
+  // dst = M  tmp1 = V0  tmp2 = L1
+
+  eor(tmp1 /*P1*/, T16B, tmp1 /*V0*/, M);    // P1 = V0 ^ M
+
+  // dst = M  tmp1 = P1  tmp2 = L1
+
+  BLOCK_COMMENT("U1|V1 = L1 * M {");
+  umov(rscratch1, tmp2 /*L1*/, S, 0);
+  umov(rscratch2, M, S, 0);
+  mul(rscratch1, rscratch1, rscratch2);
+  lsr(rscratch2, rscratch1, 32);
+  mov(dst, S, 0, rscratch1); // V1
+  mov(tmp3, S, 0, rscratch2); // U1
+
+  umov(rscratch1, tmp2 /*L1*/, S, 2);
+  umov(rscratch2, M, S, 2);
+  mul(rscratch1, rscratch1, rscratch2);
+  lsr(rscratch2, rscratch1, 32);
+  mov(dst, S, 2, rscratch1); // V1
+  mov(tmp3, S, 2, rscratch2); // U1
+  BLOCK_COMMENT("} U1|V1");
+
+  // dst = V1  tmp1 = P1  tmp2 = L1  tmp3 = U1
+
+  // Q1 = ror(P1, L1) = (P1 >>> L1) | (P1 << -L1)
+
+  /*
+   * movi  v16.4s, #0x1f;  movi	v17.4s, #0x1;  movi	v18.4s, #0x4
+   * add v19.4s, v17.4s, v16.4s  // X + 0x1f|
+   * and v16.16b, v18.16b, v16.16b // Y & |0x1f|
+   * sub v18.4s, v19.4s, v16.4s
+   * sshl v18.4s, v17.4s, v18.4s
+   * neg v19.16b, v16.16b
+   * ushl  v19.4s, v17.4s, v19.4s
+   * orr v16.16b, v18.16b, v19.16b
+   *
+   *
+   */
+  if (VerifySecondarySupers) {
+    umov(rscratch1, tmp1 /*P1*/, S, 0);
+    umov(rscratch2, tmp2 /*L1*/, S, 0);
+    rorvw(rscratch1, rscratch1, rscratch2);
+    push(RegSet::of(rscratch1), sp); // Q1[0]
+
+    umov(rscratch1, tmp1 /*P1*/, S, 2);
+    umov(rscratch2, tmp2 /*L1*/, S, 2);
+    rorvw(rscratch1, rscratch1, rscratch2);
+    push(RegSet::of(rscratch1), sp); // Q1[2]
+  }
+
+  BLOCK_COMMENT("Q1 = ror(P1, L1) {");
+  movi(tmp4, T4S, 0x1F);
+  movi(tmp5, T4S, 0x1F + 0x1);
+  andr(tmp4, T16B, tmp2 /*L1*/, tmp4 /*0x1F*/);
+
+  subv(tmp5, T4S, tmp5, tmp4);
+  sshl(tmp5, T4S, tmp1 /*P1*/, tmp5);
+
+  negr(tmp4, T16B, tmp4);
+  ushl(tmp4, T4S, tmp1 /*P1*/, tmp4);
+
+  orr(tmp1 /*Q1*/, T16B, tmp5, tmp4);
+  BLOCK_COMMENT("} Q1");
+
+  if (VerifySecondarySupers) {
+    Label L1, L2;
+    pop(RegSet::of(rscratch1), sp); // Q1[2]
+    mov(rscratch2, tmp1 /*Q1*/, S, 2);
+    cmp(rscratch1, rscratch2);
+    br(EQ, L1);
+    stop("incorrect Q1[2]");
+    bind(L1);
+    pop(RegSet::of(rscratch1), sp); // Q1[0]
+    mov(rscratch2, tmp1 /*Q1*/, S, 0);
+    cmp(rscratch1, rscratch2);
+    br(EQ, L2);
+    stop("incorrect Q1[0]");
+    bind(L2);
+  }
+  // dst = V1  tmp1 = Q1  tmp3 = U1
+
+  eor(tmp1 /*L2*/, T16B, tmp1 /*Q1*/, tmp3 /*U1*/); // L2 = Q1 ^ U1
+
+  // dst = V1  tmp1 = L2
+
+  eor(dst, T16B, dst /*V1*/, tmp1 /*L2*/);          // V1 ^ L2
+
+  BLOCK_COMMENT("} mixer32x2");
 }
 
 void MacroAssembler::mixer64(Register dst, Register x, Register y, Register tmp) {
