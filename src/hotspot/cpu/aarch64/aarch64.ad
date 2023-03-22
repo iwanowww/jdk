@@ -674,6 +674,11 @@ reg_class method_reg(
     R12, R12_H
 );
 
+// Class for 64 bit register r15
+reg_class r15_reg(
+    R15, R15_H
+);
+
 // Class for heapbase register
 reg_class heapbase_reg(
     R27, R27_H
@@ -3615,7 +3620,8 @@ encode %{
     __ br ((Assembler::Condition)$cmp$$cmpcode, *L);
   %}
 
-  enc_class aarch64_enc_partial_subtype_check(iRegP sub, iRegP super, iRegP temp, iRegP result, iRegP temp3, iRegP temp4)
+  enc_class aarch64_enc_partial_subtype_check(iRegP sub, iRegP super, iRegP temp, iRegP result,
+                                              iRegP temp3, iRegP temp4, iRegP temp5)
   %{
      Register sub_reg = as_Register($sub$$reg);
      Register super_reg = as_Register($super$$reg);
@@ -3623,11 +3629,12 @@ encode %{
      Register result_reg = as_Register($result$$reg);
      Register temp3_reg = as_Register($temp3$$reg);
      Register temp4_reg = as_Register($temp4$$reg);
+     Register temp5_reg = as_Register($temp5$$reg);
 
      Label miss;
      C2_MacroAssembler _masm(&cbuf);
      __ check_klass_subtype_slow_path(sub_reg, super_reg, temp_reg, result_reg,
-                                      temp3_reg, temp4_reg,
+                                      temp3_reg, temp4_reg, temp5_reg,
                                       NULL, &miss,
                                       /*set_cond_codes:*/ true);
      if ($primary) {
@@ -5050,6 +5057,18 @@ operand iRegP_R7()
 operand iRegP_R10()
 %{
   constraint(ALLOC_IN_RC(r10_reg));
+  match(RegP);
+  // match(iRegP);
+  match(iRegPNoSp);
+  op_cost(0);
+  format %{ %}
+  interface(REG_INTER);
+%}
+
+// Pointer 64 bit Register R10 only
+operand iRegP_R15()
+%{
+  constraint(ALLOC_IN_RC(r15_reg));
   match(RegP);
   // match(iRegP);
   match(iRegPNoSp);
@@ -16820,15 +16839,16 @@ instruct ShouldNotReachHere() %{
 // gen_subtype_check()).  Return NZ for a miss or zero for a hit.  The
 // encoding ALSO sets flags.
 
-instruct partialSubtypeCheck(iRegP_R4 sub, iRegP_R0 super, iRegP_R2 temp, iRegP_R5 result, iRegP_R6 temp3, iRegP_R7 temp4, rFlagsReg cr)
+instruct partialSubtypeCheck(iRegP_R4 sub, iRegP_R0 super, iRegP_R2 temp, iRegP_R5 result,
+                             iRegP_R6 temp3, iRegP_R7 temp4, iRegP_R15 temp5, rFlagsReg cr)
 %{
   match(Set result (PartialSubtypeCheck sub super));
-  effect(KILL cr, KILL temp, KILL temp3, KILL temp4);
+  effect(KILL cr, KILL temp, KILL temp3, KILL temp4, KILL temp5);
 
   ins_cost(1100);  // slightly larger than the next version
   format %{ "partialSubtypeCheck $result, $sub, $super" %}
 
-  ins_encode(aarch64_enc_partial_subtype_check(sub, super, temp, result, temp3, temp4));
+  ins_encode(aarch64_enc_partial_subtype_check(sub, super, temp, result, temp3, temp4, temp5));
 
   opcode(0x1); // Force zero of result reg on hit
 
@@ -16836,16 +16856,16 @@ instruct partialSubtypeCheck(iRegP_R4 sub, iRegP_R0 super, iRegP_R2 temp, iRegP_
 %}
 
 instruct partialSubtypeCheckVsZero(iRegP_R4 sub, iRegP_R0 super,
-                                   iRegP_R2 temp, iRegP_R5 result, iRegP_R6 temp3, iRegP_R7 temp4,
+                                   iRegP_R2 temp, iRegP_R5 result, iRegP_R6 temp3, iRegP_R7 temp4, iRegP_R15 temp5,
                                    immP0 zero, rFlagsReg cr)
 %{
   match(Set cr (CmpP (PartialSubtypeCheck sub super) zero));
-  effect(KILL temp, KILL result, KILL temp3, KILL temp4);
+  effect(KILL temp, KILL result, KILL temp3, KILL temp4, KILL temp5);
 
   ins_cost(1100);  // slightly larger than the next version
   format %{ "partialSubtypeCheck $result, $sub, $super == 0" %}
 
-  ins_encode(aarch64_enc_partial_subtype_check(sub, super, temp, result, temp3, temp4));
+  ins_encode(aarch64_enc_partial_subtype_check(sub, super, temp, result, temp3, temp4, temp5));
 
   opcode(0x0); // Don't zero result reg on hit
 

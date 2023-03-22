@@ -1223,8 +1223,8 @@ void MacroAssembler::check_klass_subtype(Register sub_klass,
                            Register temp_reg,
                            Label& L_success) {
   Label L_failure;
-  check_klass_subtype_fast_path(sub_klass, super_klass, temp_reg,                      &L_success, &L_failure, NULL);
-  check_klass_subtype_slow_path(sub_klass, super_klass, temp_reg, noreg, noreg, noreg, &L_success, NULL);
+  check_klass_subtype_fast_path(sub_klass, super_klass, temp_reg,                             &L_success, &L_failure, NULL);
+  check_klass_subtype_slow_path(sub_klass, super_klass, temp_reg, noreg, noreg, noreg, noreg, &L_success, NULL);
   bind(L_failure);
 }
 
@@ -1338,7 +1338,16 @@ void MacroAssembler::repne_scan(Register addr, Register value, Register count,
   cbz(count, Lexit);
   bind(Lloop);
   ldr(scratch, post(addr, wordSize));
-  andr(scratch, scratch, ~Klass::tag_mask);
+  if (remove_tag) {
+    andr(scratch, scratch, ~Klass::tag_mask);
+  } else if (VerifySecondarySupers) {
+    Label Lpass;
+    andr(rscratch2, scratch, ~Klass::tag_mask);
+    cmp(rscratch2, scratch);
+    br(EQ, Lpass);
+    stop("mismatch: tag present");
+    bind(Lpass);
+  }
   cmp(value, scratch);
   br(EQ, Lexit);
   sub(count, count, 1);
@@ -1367,6 +1376,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
                                                    Register temp2_reg,
                                                    Register temp3_reg,
                                                    Register temp4_reg,
+                                                   Register temp5_reg,
                                                    Label* L_success,
                                                    Label* L_failure,
                                                    bool set_cond_codes) {
@@ -1374,7 +1384,11 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   if (temp2_reg != noreg) {
     assert_different_registers(sub_klass, super_klass, temp_reg, temp2_reg, rscratch1, rscratch2);
   }
-#define IS_A_TEMP(reg) ((reg) == temp_reg || (reg) == temp2_reg || (reg) == temp3_reg || (reg) == temp4_reg)
+#define IS_A_TEMP(reg) ((reg) ==  temp_reg || \
+                        (reg) == temp2_reg || \
+                        (reg) == temp3_reg || \
+                        (reg) == temp4_reg || \
+                        (reg) == temp5_reg)
 
   Label L_fallthrough;
   if (L_success == NULL)   { L_success = &L_fallthrough; }
@@ -1409,6 +1423,9 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     if (!IS_A_TEMP(r7)) {
       pushed_registers += r7;
     }
+    if (!IS_A_TEMP(r15)) {
+      pushed_registers += r15;
+    }
   }
 
   push(pushed_registers, sp);
@@ -1421,13 +1438,35 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     mov(r4, sub_klass);
   }
 
-  if (UseSecondarySupersTable /*&& (!UseNewCode3 || Thread::current()->is_Compiler_thread())*/) {
+  if (UseSecondarySupersTable && (!UseNewCode3 || Thread::current()->is_Compiler_thread())) {
     if (use_stub) {
       assert(StubRoutines::secondary_supers() != NULL, "");
-      far_call(StubRoutines::secondary_supers()); // r5 == 0: success
 
+      Label L_failure_seed0, L_linear_search, L_result;
+
+      ldr(r6, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
+      cbz(r6,  L_failure_seed0); // is secondary supers empty? seed1 == 0 && seed2 == 0
+      cbzw(r6, L_linear_search);   // is table empty? seed1 == 0 (&& seed2 != 0)
+
+      far_call(StubRoutines::secondary_supers());
+      cmp(r5, zr); // r5 == 0: success
+      b(L_result);
+
+      bind(L_failure_seed0);
+      mov(r5, sp);
+      cmp(sp, zr);
+      b(L_result);
+
+      bind(L_linear_search);
+      ldr(r5, Address(sub_klass, Klass::secondary_supers_offset()));
+      ldrw(r2, Address(r5, Array<Klass *>::length_offset_in_bytes()));
+      add(r5, r5, Array<Klass *>::base_offset_in_bytes());
+
+      cmp(sp, zr); // Clear Z flag; SP is never zero
+      repne_scan(r5, r0, r2, rscratch1, false /*remove_tag*/);
+
+      bind(L_result);
       pop(pushed_registers, sp);
-      cmp(r5, zr);
       if (L_failure != &L_fallthrough) {
         br(Assembler::NE, *L_failure);
         if (L_success != &L_fallthrough) {
@@ -1441,7 +1480,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
       if (pushed_registers.bits() != 0) {
         Label L_failure_local;
 
-        lookup_secondary_supers_table(sub_klass, r0, r2, r5, r6, r7, NULL, &L_failure_local);
+        lookup_secondary_supers_table(sub_klass, r0, r2, r5, r6, r7, r15, NULL, &L_failure_local);
 
         // bind(L_success_local); // fall-through
         pop(pushed_registers, sp);
@@ -1453,7 +1492,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
           b(*L_failure);
         }
       } else {
-        lookup_secondary_supers_table(sub_klass, r0, r2, r5, r6, r7,
+        lookup_secondary_supers_table(sub_klass, r0, r2, r5, r6, r7, r15,
                                       (L_success != &L_fallthrough ? L_success : NULL),
                                       (L_failure != &L_fallthrough ? L_failure : NULL));
       }
@@ -1483,7 +1522,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
     cmp(sp, zr); // Clear Z flag; SP is never zero
     // Scan R2 words at [R5] for an occurrence of R0.
     // Set NZ/Z based on last compare.
-    repne_scan(r5, r0, r2, rscratch1, false);
+    repne_scan(r5, r0, r2, rscratch1, true);
 
     // Unspill the temp. registers:
     pop(pushed_registers, sp);
@@ -1506,7 +1545,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
   BLOCK_COMMENT("} check_klass_subtype_slow_path");
 }
 
-void MacroAssembler::hash2index(Register dst, Register hash, Register count, Register seed) {
+void MacroAssembler::hash2index(Register dst, Register hash, Register count, Register seed, Register tmp) {
   bool is_power_of_2_sizes_only = (SecondarySupersTableSizingMode & 1) != 0;
   uint mod_rounding_mode        = (SecondarySupersTableSizingMode & 8) != 0;
 
@@ -1522,15 +1561,15 @@ void MacroAssembler::hash2index(Register dst, Register hash, Register count, Reg
     uint count_mask  = ((SecondarySupersTableMaxSize << 1) - 1);
 
     // seed2mask
-    lsrw(dst, seed, count_shift);
-    andw(dst, dst, count_mask); // extract the mask
+    lsrw(tmp, seed, count_shift);
+    andw(tmp, tmp, count_mask); // extract the mask
 
-    andw(dst, hash, dst); // apply the mask; [0..mask)
+    andw(dst, hash, tmp); // apply the mask; [0..mask)
 
     // clamp the index into [0..table_size) range
     subw(dst, dst, count);
-    asrw(hash, dst, 31);
-    eorw(dst, dst, hash);
+    asrw(tmp, dst, 31);
+    eorw(dst, dst, tmp);
   }
 
   if (VerifySecondarySupers) {
@@ -1544,23 +1583,39 @@ void MacroAssembler::hash2index(Register dst, Register hash, Register count, Reg
   }
 }
 
+typedef Klass* (*secondary_supers_t)(Klass* /*x0*/, Klass* /*x1*/, Klass* /*x2*/, Klass* /*x3*/, Klass* /*x4*/,
+                                     Klass* /*x5*/, uint64_t /*x6*/);
 
+void debug_helper(Klass* sub, Klass* super, const char* msg) {
+  super->print();
+  sub->dump_on(tty, true);
+  bool is_sub1 = sub->search_secondary_supers_linear(super);
+  bool is_sub2 = sub->search_secondary_supers_table(super);
+  tty->print_cr("linear=%d table=%d", is_sub1, is_sub2);
+
+  CAST_TO_FN_PTR(secondary_supers_t, StubRoutines::secondary_supers())(
+      super /*x0*/, nullptr, nullptr, nullptr, sub /*x4*/, nullptr, sub->secondary_supers_seed() /*x6*/);
+
+  fatal("%s", msg);
+}
+
+// r4, r0, r2, r5, r6, r7, r15,
 void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
                                                    Register super_klass,
                                                    const Register count,      // temp1_reg
                                                    const Register table_base, // temp2_reg,
                                                    const Register table_seed, // temp3_reg,
                                                    const Register temp4_reg,
+                                                   const Register temp5_reg,
                                                    Label* L_success,
-                                                   Label* L_failure) {
-  assert_different_registers(sub_klass, super_klass, count /*temp1_reg*/, table_base /*temp2_reg*/, table_seed /*temp3_reg*/, temp4_reg, rscratch1, rscratch2);
+                                                   Label* L_failure,
+                                                   bool load_table_seed) {
+  assert_different_registers(sub_klass, super_klass, count /*temp1_reg*/, table_base /*temp2_reg*/,
+                             table_seed /*temp3_reg*/, temp4_reg, temp5_reg, rscratch1, rscratch2);
 
   BLOCK_COMMENT("secondary_supers_table {");
 
-  Label L_fallthrough;
-  Label L_linear_scan, L_linear_scan_tail, L_linear_scan_post, L_linear_scan_post1;
-  Label L_success_local1;
-  Label Ltmp1, Ltmp2;
+  Label L_fallthrough, L_failure_seed0, L_linear_scan, L_linear_scan_tail, L_linear_scan_post, Ltmp1, Ltmp2;
 
   if (L_success == NULL) {
     L_success = &L_fallthrough;
@@ -1571,7 +1626,6 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
 
   Label& L_success_local = (VerifySecondarySupers ? Ltmp1 : *L_success);
   Label& L_failure_local = (VerifySecondarySupers ? Ltmp2 : *L_failure);
-  Label L_failure_seed0;
 #ifndef PRODUCT
   BLOCK_COMMENT("SharedRuntime::_partial_subtype_ctr {");
   mov(rscratch2, (address)&SharedRuntime::_partial_subtype_ctr);
@@ -1582,158 +1636,120 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   BLOCK_COMMENT("} SharedRuntime::_partial_subtype_ctr");
 #endif //PRODUCT
 
-  ldr(table_seed, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
-  cbz(table_seed,  L_failure_seed0); // is secondary supers empty? seed1 == 0 && seed2 == 0
-  cbzw(table_seed, L_linear_scan);   // is table empty? seed1 == 0 (&& seed2 != 0)
+  if (load_table_seed) {
+    ldr(table_seed, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
+    cbz(table_seed,  L_failure_seed0); // is secondary supers empty? seed1 == 0 && seed2 == 0
+    cbzw(table_seed, L_linear_scan);   // is table empty? seed1 == 0 (&& seed2 != 0)
+  } else if (VerifySecondarySupers) {
+    Label Lpass1;
+    ldr(rscratch1, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset())));
+    cmp(rscratch1, table_seed);
+    br(EQ, Lpass1);
+    stop("mismatch: table_seed");
+    bind(Lpass1);
 
-  if (UseNewCode3 || VerifySecondarySupers) {
-    mixer32x2(v0/*h32x2*/, table_seed, super_klass, v1, v2, v3, v4, v5);
-    if (!VerifySecondarySupers) {
-      mov(rscratch2, v0, S, 0);
-    }
-  }
-  if (!UseNewCode3 || VerifySecondarySupers) {
-    mixer32(rscratch2 /*h32*/, table_seed, super_klass,
-            rscratch1 /*tmp1*/, count /*tmp2*/, temp4_reg /*tmp3*/);
-  }
-  if (VerifySecondarySupers) {
-    Label L;
-    mov(rscratch1, v0, S, 0);
-    cmpw(rscratch2, rscratch1);
-    br(EQ, L);
-    stop("mismatch1");
-    bind(L);
+    Label Lpass2;
+    cbnz(table_seed, Lpass2); // is secondary supers empty? seed1 == 0 && seed2 == 0
+    stop("mismatch: seed=0");
+    bind(Lpass2);
+
+    Label Lpass3;
+    cbnzw(table_seed, Lpass3);   // is table empty? seed1 == 0 (&& seed2 != 0)
+    stop("mismatch: seed1=0");
+    bind(Lpass3);
   }
 
-  if (UseNewCode4) {
-//    movw(temp4_reg, rscratch2); // save the hash value
-    push(RegSet::of(rscratch2), sp); // save the hash value
-  }
+  // Check the first table.
 
   ldr(rscratch1,  Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
   lea(table_base /*table_base*/, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
 
-  andw(count, table_seed, ((SecondarySupersTableMaxSize << 1) - 1));
+  mixer32(temp5_reg /*h32*/, table_seed, super_klass,
+          rscratch1 /*tmp1*/, count /*tmp2*/, temp4_reg /*tmp3*/);
 
-  hash2index(rscratch1, rscratch2 /*hash*/, count, table_seed);
+  andw(count, table_seed, ((SecondarySupersTableMaxSize << 1) - 1));
+  hash2index(rscratch1, temp5_reg /*hash*/, count, table_seed /*seed1*/, rscratch2 /*tmp*/);
 
   ldr(rscratch1, Address(table_base, rscratch1, Address::lsl(LogBytesPerWord))); // probe1
+  andr(temp4_reg, rscratch1, Klass::tag_mask);  // extract the tag
+  andr(rscratch1, rscratch1, ~Klass::tag_mask); // remove the tag
 
-  andr(rscratch2, rscratch1, ~Klass::tag_mask); // remove the tag
-
-  cmp(rscratch2, super_klass);  // if (probe1 == k)
-  br(EQ, (UseNewCode4 ? L_success_local1 : L_success_local));
-  if (UseNewCode4) {
-    pop(RegSet::of(rscratch2), sp); // restore the hash value
-  }
+  cmp(rscratch1, super_klass);  // if (probe1 == k)
+  br(EQ, L_success_local);
 
   // Check for conflicts before proceeding.
-  andr(temp4_reg, rscratch1, Klass::tag_mask); // extract the tag
   cbz(temp4_reg, L_failure_local); // check for tag_00
-
-  lea(table_base, Address(table_base, count, Address::lsl(LogBytesPerWord)));
-
-  lsr(rscratch1, table_seed, 32); // extract seed2
-  cbzw(rscratch1, L_linear_scan_post1);
 
   // Check the second table.
 
-  // table_base, super_hash, table_seed2
+  lsr(table_seed, table_seed, 32); // extract seed2
+  cbzw(table_seed, L_linear_scan_post);
+
+  lea(table_base, Address(table_base, count, Address::lsl(LogBytesPerWord))); // adjust base pointer
 
   if (!UseNewCode4) {
-    if (UseNewCode3) {
-      mov(rscratch2, v0, S, 2);
-    }
-    if (!UseNewCode3 || VerifySecondarySupers) {
-      push(RegSet::of(temp4_reg), sp); // store the tag
-      mixer32(rscratch2 /*h32*/, rscratch1, super_klass,
-              rscratch1 /*tmp1*/, count /*tmp2*/, temp4_reg);
-      pop(RegSet::of(temp4_reg), sp); // restore the tag
-    }
-    if (VerifySecondarySupers) {
-      Label L;
-      mov(rscratch1, v0, S, 2);
-      cmpw(rscratch2, rscratch1);
-      br(EQ, L);
-      stop("mismatch2");
-      bind(L);
-    }
+    mixer32(temp5_reg /*h32*/, table_seed, super_klass,
+            rscratch1 /*tmp1*/, count /*tmp2*/, rscratch2 /*tmp3*/);
   }
-
-  lsr(rscratch1, table_seed, 32); // seed => seed2
-  andw(count, rscratch1, ((SecondarySupersTableMaxSize << 1) - 1)); // seed2 => count
-  hash2index(rscratch1, rscratch2 /*hash*/, count, rscratch1);
+  andw(count, table_seed, ((SecondarySupersTableMaxSize << 1) - 1)); // seed2 => count
+  hash2index(rscratch1, temp5_reg /*hash*/, count, table_seed /*seed2*/, rscratch2);
 
   ldr(rscratch1, Address(table_base, rscratch1, Address::lsl(LogBytesPerWord))); // probe2
+  andr(temp4_reg, rscratch1, temp4_reg); // accumulate tags
+  andr(rscratch1, rscratch1, ~Klass::tag_mask); // remove the tag
 
-  andr(rscratch2, rscratch1, ~Klass::tag_mask); // remove the tag
-
-  cmp(rscratch2, super_klass);  // if (probe1 == k)
+  cmp(rscratch1, super_klass);  // if (probe1 == k)
   br(EQ, L_success_local);
-
-  andr(rscratch2, rscratch1, Klass::tag_mask); // extract the tag
-  cmp(rscratch2, Klass::tag_11); // check primary tag for tag_11
-  br(NE, L_failure_local);
-
-  cmp(temp4_reg, Klass::tag_11); // check secondary tag for tag_11
-  br(NE, L_failure_local);
-
-  lea(table_base, Address(table_base, count, Address::lsl(LogBytesPerWord)));
-
-  BLOCK_COMMENT("post table lookup {");
 
   // table_base (points at the tail), count (either 1st or 2nd)
   bind(L_linear_scan_post); // table_seed, table_base, count, sub_klass, super_klass
 
+  cmp(temp4_reg, Klass::tag_11); // check primary & secondary tag for tag_11
+  br(NE, L_failure_local);
+
+  BLOCK_COMMENT("post table lookup {");
+
+  lea(table_base, Address(table_base, count, Address::lsl(LogBytesPerWord))); // adjust base pointer
+
   ldr(rscratch1, Address(sub_klass, Klass::secondary_supers_offset()));
-  ldrw(count, Address(rscratch1, Array<Klass*>::length_offset_in_bytes()));
+  ldrw(rscratch2, Address(rscratch1, Array<Klass*>::length_offset_in_bytes()));
+  lea(rscratch1, Address(rscratch1, Array<Klass*>::base_offset_in_bytes()));
 
-  andw(rscratch1, table_seed, ((SecondarySupersTableMaxSize << 1) - 1));
-  subw(count, count, rscratch1);
+  sub(rscratch1, table_base, rscratch1);
+  lsr(rscratch1, rscratch1, 3);
+  subw(count, rscratch2, rscratch1);
 
-  lsr(rscratch1, table_seed, 32);
-  andw(rscratch1, rscratch1, ((SecondarySupersTableMaxSize << 1) - 1));
-  subw(count, count, rscratch1);
+  if (VerifySecondarySupers) {
+    ldr(table_seed, Address(sub_klass, in_bytes(Klass::secondary_supers_seed_offset()))); // restore table_seed
+
+    andw(rscratch1, table_seed, ((SecondarySupersTableMaxSize << 1) - 1)); // extract size1
+    subw(rscratch2, rscratch2, rscratch1);
+
+    lsr(rscratch1, table_seed, 32); // extract seed2
+    andw(rscratch1, rscratch1, ((SecondarySupersTableMaxSize << 1) - 1)); // extract size2
+    subw(rscratch2, rscratch2, rscratch1);
+
+    Label Lpass;
+    cmp(count, rscratch2);
+    br(EQ, Lpass);
+    stop("mismatch: count");
+    bind(Lpass);
+  }
 
   b(L_linear_scan_tail);
 
   BLOCK_COMMENT("} post table lookup");
 
-  // Fail-fast check on seed failed. Need to set the return value properly.
-  bind(L_failure_seed0);
-  mov(table_base, super_klass);
-  b(L_failure_local);
-
-  // table_base (adjusted), count (1st)
-  bind(L_linear_scan_post1);
-  cmp(temp4_reg, Klass::tag_11); // check for tag_11
-  br(EQ, L_linear_scan_post); // conflict detected, need to check the tail
-  b(L_failure_local);
-
-  if (UseNewCode4) {
-    bind(L_success_local1);
-    pop(RegSet::of(rscratch2), sp); // restore the hash value
-    b(L_success_local);
+  if (load_table_seed) {
+    // Fail-fast check on seed failed. Need to set the return value properly.
+    bind(L_failure_seed0);
+    mov(table_base, super_klass);
+    b(L_failure_local);
   }
-
   BLOCK_COMMENT("linear {");
 
   bind(L_linear_scan);
 
-  /*
-  // NB! r5/table_base should hold non-zero value when exiting on failure.
-  ldr(rscratch1,  Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
-  ldrw(rscratch1, Address(rscratch1, Array<Klass*>::length_offset_in_bytes()));
-
-  ldr(table_base, Address(sub_klass, in_bytes(Klass::secondary_supers_offset())));
-
-  bind(L_linear_scan_tail);
-
-  cbzw(rscratch2, L_failure_local);  // left == 0?
-
-  subw(rscratch2, rscratch2, count); // length - count
-  cbzw(rscratch2, L_failure_local);  // left == 0?  r5 != 0!
-  */
   ldr(table_base, Address(sub_klass, Klass::secondary_supers_offset()));
   ldrw(count, Address(table_base, Array<Klass*>::length_offset_in_bytes()));
   lea(table_base, Address(table_base, Array<Klass*>::base_offset_in_bytes()));
@@ -1741,7 +1757,6 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
   // temp2_reg = table_base
   bind(L_linear_scan_tail);
 
-  cmp(sp, zr); // Clear Z flag; SP is never zero
   repne_scan(table_base, super_klass, count, rscratch1, false);
 
   { // Dispatch to fall-through path
@@ -1798,6 +1813,10 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
 
     bind(L_verify_failure);
 
+    mov(r1, super_klass /*r0*/);
+    mov(r0, sub_klass /*r4*/);
+    mov(r2, (address)("mismatch"));
+    rt_call(CAST_FROM_FN_PTR(address, debug_helper), rscratch1);
     stop("mismatch");
 
     BLOCK_COMMENT("} verify");

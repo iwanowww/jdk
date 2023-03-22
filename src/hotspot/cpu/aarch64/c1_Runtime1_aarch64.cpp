@@ -820,6 +820,8 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
           r5_off, r5_off_hi,
           r6_off, r6_off_hi,
           r7_off, r7_off_hi,
+          r15_off, r15_off_hi,
+          xzr_off, xzr_off_hi,
           sup_k_off, sup_k_off_hi,
           klass_off, klass_off_hi,
           framesize,
@@ -827,7 +829,7 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         };
 
         __ set_info("slow_subtype_check", dont_gc_arguments);
-        __ push(RegSet::of(r0, r2, r4, r5, r6, r7), sp);
+        __ push(RegSet::of(r0, r2, r4, r5, r6, r7, r15), sp);
 
         // This is called by pushing args and not with C abi
         // __ ldr(r4, Address(sp, (klass_off) * VMRegImpl::stack_slot_size)); // subclass
@@ -836,17 +838,17 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         __ ldp(r4, r0, Address(sp, (sup_k_off) * VMRegImpl::stack_slot_size));
 
         Label miss;
-        __ lookup_secondary_supers_table(r4, r0, r2, r5, r6, r7, NULL, &miss);
+        __ lookup_secondary_supers_table(r4, r0, r2, r5, r6, r7, r15, NULL, &miss);
 
         // fallthrough on success:
         __ mov(rscratch1, 1);
         __ str(rscratch1, Address(sp, (result_off) * VMRegImpl::stack_slot_size)); // result
-        __ pop(RegSet::of(r0, r2, r4, r5, r6, r7), sp);
+        __ pop(RegSet::of(r0, r2, r4, r5, r6, r7, r15), sp);
         __ ret(lr);
 
         __ bind(miss);
         __ str(zr, Address(sp, (result_off) * VMRegImpl::stack_slot_size)); // result
-        __ pop(RegSet::of(r0, r2, r4, r5, r6, r7), sp);
+        __ pop(RegSet::of(r0, r2, r4, r5, r6, r7, r15), sp);
         __ ret(lr);
       }
       break;

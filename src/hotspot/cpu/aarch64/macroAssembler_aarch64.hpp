@@ -966,6 +966,7 @@ public:
                                      Register temp2_reg,
                                      Register temp3_reg,
                                      Register temp4_reg,
+                                     Register temp5_reg,
                                      Label* L_success,
                                      Label* L_failure,
                                      bool set_cond_codes = false);
@@ -976,8 +977,10 @@ public:
                                      Register temp2_reg,
                                      Register temp3_reg,
                                      Register temp4_reg,
+                                     Register temp5_reg,
                                      Label* L_success,
-                                     Label* L_failure);
+                                     Label* L_failure,
+                                     bool load_table_seed = true);
 
   void mixer32(Register dst, Register x, Register y, Register tmp1, Register tmp2, Register tmp3);
   void mixer64(Register dst, Register x, Register y, Register tmp);
@@ -985,7 +988,7 @@ public:
   void mixer32x2(FloatRegister dst, Register x, Register y,
                  FloatRegister tmp1, FloatRegister tmp2, FloatRegister tmp3, FloatRegister tmp4, FloatRegister tmp5);
 
-  void hash2index(Register dst, Register hash, Register count, Register seed);
+  void hash2index(Register dst, Register hash, Register count, Register seed, Register tmp);
 
     // Simplified, combined version, good for typical uses.
   // Falls through on failure.
