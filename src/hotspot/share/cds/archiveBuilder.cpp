@@ -528,7 +528,11 @@ ArchiveBuilder::FollowMode ArchiveBuilder::get_follow_mode(MetaspaceClosure::Ref
     return point_to_it;
   } else if (ref->msotype() == MetaspaceObj::MethodDataType ||
              ref->msotype() == MetaspaceObj::MethodCountersType) {
-    return set_to_null;
+    if (UseNewCode) {
+      return make_a_copy;
+    } else {
+      return set_to_null;
+    }
   } else {
     if (ref->msotype() == MetaspaceObj::ClassType) {
       Klass* klass = (Klass*)ref->obj();

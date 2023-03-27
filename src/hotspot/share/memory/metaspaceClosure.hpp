@@ -128,7 +128,7 @@ public:
     virtual ~Ref() {}
 
     address obj() const {
-      return *addr();
+      return address(intptr_t(*addr()) & ~0x3); // FIXME: just in case it is tagged
     }
 
     address* addr() const {
@@ -160,6 +160,32 @@ private:
 
   public:
     MSORef(T** mpp, Writability w) : Ref(w), _mpp(mpp) {}
+
+    virtual bool is_read_only_by_default() const { return T::is_read_only_by_default(); }
+    virtual bool not_null()                const { return dereference() != nullptr; }
+    virtual int size()                     const { return dereference()->size(); }
+    virtual MetaspaceObj::Type msotype()   const { return dereference()->type(); }
+
+    virtual void metaspace_pointers_do(MetaspaceClosure *it) const {
+      dereference()->metaspace_pointers_do(it);
+    }
+    virtual void metaspace_pointers_do_at(MetaspaceClosure *it, address new_loc) const {
+      ((T*)new_loc)->metaspace_pointers_do(it);
+    }
+  };
+
+  template <class T> class TaggedMSORef : public Ref {
+    T** _mpp;
+    T* dereference() const {
+      return (T*)(intptr_t(*_mpp) & ~0x3);
+    }
+  protected:
+    virtual void** mpp() const {
+      return (void**)_mpp;
+    }
+
+  public:
+    TaggedMSORef(T** mpp, Writability w) : Ref(w), _mpp(mpp) {}
 
     virtual bool is_read_only_by_default() const { return T::is_read_only_by_default(); }
     virtual bool not_null()                const { return dereference() != nullptr; }
@@ -339,6 +365,12 @@ public:
   void push(Array<T*>** mpp, Writability w = _default) {
     static_assert(std::is_base_of<MetaspaceObj, T>::value, "Do not push Arrays of arbitrary pointer types");
     push_with_ref<MSOPointerArrayRef<T>>(mpp, w);
+  }
+
+  template <typename T>
+  void push_tagged(T** mpp, Writability w = _default) {
+    static_assert(std::is_base_of<MetaspaceObj, T>::value, "Do not push pointers of arbitrary types");
+    push_with_ref<TaggedMSORef<T>>(mpp, w);
   }
 
 #if 0

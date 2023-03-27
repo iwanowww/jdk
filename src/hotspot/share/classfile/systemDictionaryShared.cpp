@@ -60,6 +60,7 @@
 #include "memory/universe.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/klass.inline.hpp"
+#include "oops/methodData.hpp"
 #include "oops/objArrayKlass.hpp"
 #include "oops/objArrayOop.inline.hpp"
 #include "oops/oop.inline.hpp"
@@ -1356,6 +1357,17 @@ public:
     ResourceMark rm;
     _st->print_cr("%4d: %s %s", _index++, record->_klass->external_name(),
         class_loader_name_for_shared(record->_klass));
+    Array<Method*>* methods = record->_klass->methods();
+    for (int i = 0; i < methods->length(); i++) {
+      Method* m = methods->at(i);
+      _st->print("    %4d: " PTR_FORMAT " ", i, p2i(m->method_data()));
+      m->print_external_name(_st);
+      _st->cr();
+      if (m->method_data() != nullptr) {
+        m->method_data()->print_data_on(tty);
+      }
+    }
+    record->_klass;
   }
   int index() const { return _index; }
 };

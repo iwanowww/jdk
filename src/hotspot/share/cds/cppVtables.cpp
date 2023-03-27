@@ -60,6 +60,7 @@
   f(InstanceRefKlass) \
   f(InstanceStackChunkKlass) \
   f(Method) \
+  f(MethodData) \
   f(ObjArrayKlass) \
   f(TypeArrayKlass)
 
@@ -255,10 +256,6 @@ intptr_t* CppVtables::get_archived_vtable(MetaspaceObj::Type msotype, address ob
   case MetaspaceObj::MethodCountersType:
   case MetaspaceObj::RecordComponentType:
     // These have no vtables.
-    break;
-  case MetaspaceObj::MethodDataType:
-    // We don't archive MethodData <-- should have been removed in removed_unsharable_info
-    ShouldNotReachHere();
     break;
   default:
     for (kind = 0; kind < _num_cloned_vtable_kinds; kind ++) {
