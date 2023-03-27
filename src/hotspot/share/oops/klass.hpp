@@ -233,7 +233,14 @@ protected:
                                                uint32_t seed2, GrowableArray<Klass*>* secondary_table,
                                                GrowableArray<Klass*>* conflicts, TRAPS);
 
-  // java_super is the Java-level super type as specified by Class.getSuperClass.
+  uint bfs(uint32_t seed1, GrowableArray<Klass*>* table1,
+           uint32_t seed2, GrowableArray<Klass*>* table2,
+           GrowableArray<Klass*>* tail, TRAPS);
+  uint dfs(uint32_t seed1, GrowableArray<Klass*>* table1,
+           uint32_t seed2, GrowableArray<Klass*>* table2,
+           GrowableArray<Klass*>* tail, TRAPS);
+
+    // java_super is the Java-level super type as specified by Class.getSuperClass.
   virtual InstanceKlass* java_super() const  { return nullptr; }
 
   juint    super_check_offset() const  { return _super_check_offset; }
@@ -748,7 +755,7 @@ protected:
   void verify() { verify_on(tty); }
   void dump_on(outputStream* st, bool verbose);
 
-  uint index(uint32_t seed, uint table_size);
+  uint index(uint32_t seed, uint table_size, bool is_primary);
 
 #ifndef PRODUCT
   bool verify_vtable_index(int index);

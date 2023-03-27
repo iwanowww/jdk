@@ -1687,10 +1687,13 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
 
   lea(table_base, Address(table_base, count, Address::lsl(LogBytesPerWord))); // adjust base pointer
 
-  if (!UseNewCode4) {
+  if (UseNewCode || UseNewCode4) {
+    // Reuse the hash from the previous pass.
+  } else {
     mixer32(temp5_reg /*h32*/, table_seed, super_klass,
             rscratch1 /*tmp1*/, count /*tmp2*/, rscratch2 /*tmp3*/);
   }
+  lsr(temp5_reg, temp5_reg, 16); // hash2 >> 16 vs hash1 >> 0
   andw(count, table_seed, ((SecondarySupersTableMaxSize << 1) - 1)); // seed2 => count
   hash2index(rscratch1, temp5_reg /*hash*/, count, table_seed /*seed2*/, rscratch2);
 
