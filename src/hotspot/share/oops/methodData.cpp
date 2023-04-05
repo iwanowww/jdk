@@ -1720,7 +1720,7 @@ bool MethodData::profile_parameters_for_method(const methodHandle& m) {
 }
 
 void MethodData::metaspace_pointers_do(MetaspaceClosure* it) {
-  log_trace(cds)("Iter(MethodData): %p", this);
+  log_trace(cds)("Iter(MethodData): %p for %p %s", this, _method, _method->name_and_sig_as_C_string());
   it->push(&_method);
   if (_parameters_type_data_di != no_parameters) {
     parameters_type_data()->metaspace_pointers_do(it);

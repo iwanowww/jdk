@@ -32,6 +32,7 @@
 #include "oops/instanceMirrorKlass.hpp"
 #include "oops/instanceRefKlass.hpp"
 #include "oops/instanceStackChunkKlass.hpp"
+#include "oops/methodCounters.hpp"
 #include "oops/methodData.hpp"
 #include "oops/objArrayKlass.hpp"
 #include "oops/typeArrayKlass.hpp"
@@ -61,6 +62,7 @@
   f(InstanceStackChunkKlass) \
   f(Method) \
   f(MethodData) \
+  f(MethodCounters) \
   f(ObjArrayKlass) \
   f(TypeArrayKlass)
 
@@ -253,7 +255,6 @@ intptr_t* CppVtables::get_archived_vtable(MetaspaceObj::Type msotype, address ob
   case MetaspaceObj::ConstMethodType:
   case MetaspaceObj::ConstantPoolCacheType:
   case MetaspaceObj::AnnotationsType:
-  case MetaspaceObj::MethodCountersType:
   case MetaspaceObj::RecordComponentType:
     // These have no vtables.
     break;

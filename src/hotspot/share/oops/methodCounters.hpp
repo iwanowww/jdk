@@ -53,6 +53,10 @@ class MethodCounters : public Metadata {
 
   MethodCounters(const methodHandle& mh);
  public:
+  MethodCounters() {
+    assert(DumpSharedSpaces || UseSharedSpaces, "only for CDS");
+  }
+
   virtual bool is_methodCounters() const { return true; }
 
   static MethodCounters* allocate_no_exception(const methodHandle& mh);
@@ -130,7 +134,10 @@ class MethodCounters : public Metadata {
   }
 
   virtual const char* internal_name() const { return "{method counters}"; }
-  virtual void print_value_on(outputStream* st) const;
 
+  // Printing
+  void print_on      (outputStream* st) const;
+  void print_value_on(outputStream* st) const;
+  void print_data_on(outputStream* st) const;
 };
 #endif // SHARE_OOPS_METHODCOUNTERS_HPP

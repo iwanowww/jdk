@@ -95,6 +95,10 @@
            "(2) always map at preferred address, and if unsuccessful, "     \
            "do not map the archive")                                        \
            range(0, 2)                                                      \
+                                                                            \
+  product(int, DumpMethodData, 0, DIAGNOSTIC,                               \
+          "Dump MDO")                                                       \
+           range(0, 2)                                                      \
 // end of CDS_FLAGS
 
 DECLARE_FLAGS(CDS_FLAGS)
