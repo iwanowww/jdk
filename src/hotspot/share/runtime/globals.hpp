@@ -743,9 +743,6 @@ const int ObjectAlignmentInBytes = 8;
   product(bool, UseSecondarySupersTable, false, DIAGNOSTIC,                 \
           "")                                                               \
                                                                             \
-  product(uint, SecondarySuperMode, 2, DIAGNOSTIC,                          \
-          "")                                                               \
-                                                                            \
   product(uint, SecondarySupersMaxAttempts, 100, DIAGNOSTIC,                \
           "")                                                               \
                                                                             \
@@ -758,17 +755,17 @@ const int ObjectAlignmentInBytes = 8;
   product(uint, SecondarySupersTableSizingMode, 0, DIAGNOSTIC,              \
           "")                                                               \
                                                                             \
-  product(uint, SecondarySupersTableChunkSize, 4, DIAGNOSTIC,               \
-          "")                                                               \
-                                                                            \
   product(bool, UseSecondarySupersStub, true, DIAGNOSTIC,                   \
           "")                                                               \
+                                                                            \
+  product(bool, UseSingleSeed, false, DIAGNOSTIC,                           \
+          "Share seed between primary and secondary tables")                \
                                                                             \
   product(bool, TraceSecondarySupers, false, DIAGNOSTIC,                    \
           "")                                                               \
                                                                             \
   product(bool, StressSecondarySupers, false, DIAGNOSTIC,                   \
-          "")                                                               \
+          "TODO: stress collisions during table construction")              \
                                                                             \
   product(bool, VerifySecondarySupers, false, DIAGNOSTIC,                   \
           "")                                                               \

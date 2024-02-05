@@ -165,7 +165,7 @@ bool Klass::search_secondary_supers_table(Klass* k) const {
       return false;
     }
     if (secondary_table_size > 0) {
-      uint secondary_idx = k->index(UseNewCode4 ? primary_seed : secondary_seed, secondary_table_size, false);
+      uint secondary_idx = k->index(UseSingleSeed ? primary_seed : secondary_seed, secondary_table_size, false);
       Klass* secondary_probe = secondary_supers_at(secondary_base_idx + secondary_idx);
       if (secondary_probe == k) {
         return true; // match
@@ -481,7 +481,7 @@ static void put_element(bool is_primary,
                         GrowableArray<Klass*>* secondary_list,
                         uint table_size, uint elem_count) {
   assert(elem != nullptr, "");
-  assert(Klass::seed2size(seed) == table_size || UseNewCode4, "");
+  assert(Klass::seed2size(seed) == table_size || UseSingleSeed, "");
   assert(!table->contains(elem), "duplicate");
 
   int empty_slots = secondary_list->length() + table_size - elem_count;
@@ -727,7 +727,7 @@ static void print_table(outputStream* st,
     ncoeff1 = compute_weight1(table1, conflicts1);
   }
   if (table2 != nullptr && table2->length() > 0) {
-    if (UseNewCode4) {
+    if (UseSingleSeed) {
       seed2 = seed1;
     }
     st->print("-------------- SECONDARY ----------------- seed=" UINT32_FORMAT_X_0, seed2);
@@ -772,10 +772,10 @@ uint Klass::index(uint32_t seed, uint table_size, bool is_primary) {
 
   assert(table_size > 0, "");
   assert(is_power_of_2(table_size) || !is_power_of_2_sizes_only, "");
-  if (!UseNewCode4) {
-    assert(seed2size(seed) == table_size, "");
-    assert(seed2mask(seed) == (round_up_power_of_2(table_size) - 1), "");
-  }
+
+  assert(UseSingleSeed || seed2size(seed) == table_size, "");
+  assert(UseSingleSeed || seed2mask(seed) == (round_up_power_of_2(table_size) - 1), "");
+
   uint32_t h2 = get_hash32(seed, hash_code()) >> (is_primary ? 0 : 16);
   if (is_power_of_2_sizes_only) {
     uint mask = table_size - 1;
@@ -936,7 +936,7 @@ void Klass::initialize_secondary_supers_table(uint32_t primary_seed, GrowableArr
     GrowableArray<Klass*>* tail  = new GrowableArray<Klass*>(num_of_secondaries);
 
     uint32_t seed = get_random_seed(THREAD, table_size);
-    if (UseNewCode || UseNewCode4) {
+    if (UseNewCode || UseSingleSeed) {
       seed = primary_seed; // reuse the same hash code
     }
 
@@ -968,7 +968,7 @@ void Klass::initialize_secondary_supers_table(uint32_t primary_seed, GrowableArr
         break;
       }
     }
-    if (UseNewCode || UseNewCode4) {
+    if (UseNewCode || UseSingleSeed) {
       assert(best_seed == primary_seed, "");
       break;
     }
@@ -1065,7 +1065,7 @@ void Klass::initialize_secondary_supers_table(uint32_t primary_seed, GrowableArr
     }
     dfs(primary_seed, primary_table, best_seed, best_table, best_tail, THREAD);
   }
-  if (UseNewCode4) {
+  if (UseSingleSeed) {
     assert(best_seed == primary_seed, "");
     best_seed = compose_seed32(0, best_table->length());
   }
@@ -1185,20 +1185,22 @@ Array<Klass*>* Klass::create_secondary_supers_table(uint32_t seed1, GrowableArra
 
   ResourceMark rm;
   GrowableArray<uint>* conflicts1 = compute_conflicts(true, seed1, primary_table, tail);
-  GrowableArray<uint>* conflicts2 = compute_conflicts(false, (UseNewCode4 ? seed1 : seed2), secondary_table, tail);
+  GrowableArray<uint>* conflicts2 = compute_conflicts(false, (UseSingleSeed ? seed1 : seed2), secondary_table, tail);
 
   for (int j = 0; j < primary_table->length(); j++) {
     Klass* elem = primary_table->at(j);
     assert(klass2tag(elem) == 0, "");
     bool has_conflict = (conflicts1->at(j) > 0);
-    Klass* tagged = add_tag(elem, (elem != nullptr ? (has_conflict ? 3 : 1) : 0)); // primary tag: 11, 01, or 00
+    uint8_t primary_tag = (elem != nullptr ? (has_conflict ? tag_11 : tag_01) : tag_00);
+    Klass* tagged = add_tag(elem, primary_tag); // primary tag: 11, 01, or 00
     secondary_supers->at_put(primary_base_idx + j, tagged);
   }
   for (int j = 0; j < secondary_table->length(); j++) {
     Klass* elem = secondary_table->at(j);
     assert(klass2tag(elem) == 0, "");
     bool has_conflict = (conflicts2->at(j) > 0);
-    Klass* tagged = add_tag(elem, (elem != nullptr ? (has_conflict ? 3 : 2) : 0)); // secondary tag: 11, 10, or 00
+    uint8_t secondary_tag = (elem != nullptr ? (has_conflict ? tag_11 : tag_10) : tag_00);
+    Klass* tagged = add_tag(elem, secondary_tag); // secondary tag: 11, 10, or 00
     secondary_supers->at_put(secondary_base_idx + j, tagged);
   }
   for (int j = 0; j < tail->length(); j++) {
@@ -1739,7 +1741,7 @@ void Klass::verify_on(outputStream* st) {
       for (uint i = 0; i < secondary_table_size; i++) {
         Klass* k = secondary_supers_at(secondary_base_idx + i);
         if (k != nullptr) {
-          uint idx = k->index((UseNewCode4 ? primary_seed : secondary_seed), secondary_table_size, false);
+          uint idx = k->index((UseSingleSeed ? primary_seed : secondary_seed), secondary_table_size, false);
           guarantee(i == idx, "misplaced");
         }
       }
@@ -1758,7 +1760,7 @@ void Klass::verify_on(outputStream* st) {
         assert(k1 != k1_raw, "missing conflict tag");
       }
       if (secondary_table_size > 0) {
-        uint idx2 = secondary_base_idx + k->index((UseNewCode4 ? primary_seed : secondary_seed), secondary_table_size, false);
+        uint idx2 = secondary_base_idx + k->index((UseSingleSeed ? primary_seed : secondary_seed), secondary_table_size, false);
         Klass* k2_raw = secondary_supers()->at(idx2);
         Klass* k2     = secondary_supers_at(idx2);
         assert(k2 != nullptr, "");

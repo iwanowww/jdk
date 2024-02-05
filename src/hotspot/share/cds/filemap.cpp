@@ -288,7 +288,6 @@ void FileMapHeader::populate(FileMapInfo *info, size_t core_region_alignment,
   _use_full_module_graph = MetaspaceShared::use_full_module_graph();
 
   _secondary_supers_table = UseSecondarySupersTable;
-  _secondary_supers_table_mode = SecondarySuperMode;
   _secondary_supers_table_max_size = SecondarySupersTableMaxSize;
   _secondary_supers_table_sizing_mode = SecondarySupersTableSizingMode;
 
@@ -2736,12 +2735,11 @@ bool FileMapHeader::validate() {
     return false;
   }
 
-  log_info(cds)("Archive was created with UseSecondarySupersTable = %d, SecondarySuperMode = %d, "
+  log_info(cds)("Archive was created with UseSecondarySupersTable = %d, "
                 "SecondarySupersTableMaxSize = %d, SecondarySupersTableSizingMode = %d",
-                _secondary_supers_table, _secondary_supers_table_mode, _secondary_supers_table_max_size,
+                _secondary_supers_table, _secondary_supers_table_max_size,
                 _secondary_supers_table_sizing_mode);
   if (_secondary_supers_table             != UseSecondarySupersTable      ||
-      _secondary_supers_table_mode        != SecondarySuperMode           ||
       _secondary_supers_table_max_size    != SecondarySupersTableMaxSize  ||
       _secondary_supers_table_sizing_mode != SecondarySupersTableSizingMode) {
     FileMapInfo::fail_continue("Unable to use shared archive.\nThe saved state of UseSecondarySupersTable is "

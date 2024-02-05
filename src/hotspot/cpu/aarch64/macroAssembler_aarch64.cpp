@@ -1687,7 +1687,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register sub_klass,
 
   lea(table_base, Address(table_base, count, Address::lsl(LogBytesPerWord))); // adjust base pointer
 
-  if (UseNewCode || UseNewCode4) {
+  if (UseNewCode || UseSingleSeed) {
     // Reuse the hash from the previous pass.
   } else {
     mixer32(temp5_reg /*h32*/, table_seed, super_klass,
