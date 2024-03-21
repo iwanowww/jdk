@@ -86,7 +86,7 @@ void Klass::set_name(Symbol* n) {
     _name->increment_refcount();
   }
 
-  if (HashSecondarySupers) {
+  if (UseSecondarySupersTable) {
     elapsedTimer selftime;
     selftime.start();
 
@@ -283,7 +283,7 @@ void Klass::set_secondary_supers(Array<Klass*>* secondaries, uint64_t bitmap) {
 
 void Klass::set_secondary_supers(Array<Klass*>* secondaries) {
 #ifdef ASSERT
-  if (HashSecondarySupers && secondaries != nullptr) {
+  if (UseSecondarySupersTable && secondaries != nullptr) {
     uint64_t real_bitmap = hash_secondary_supers(secondaries, /*rewrite*/false);
     assert(_bitmap == real_bitmap, "must be");
   }
@@ -502,7 +502,7 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
       s2->at_put(j+fill_p, secondaries->at(j));  // add secondaries on the end.
     }
 
-    if (HashSecondarySupers) {
+    if (UseSecondarySupersTable) {
       _bitmap = hash_secondary_supers(s2, /*rewrite*/true);
     }
 

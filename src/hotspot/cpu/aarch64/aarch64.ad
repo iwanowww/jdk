@@ -16283,7 +16283,7 @@ instruct partialSubtypeCheckI(iRegP_R4 sub, immP super, vRegD vtemp, iRegP_R5 re
                               rFlagsReg cr)
 %{
   match(Set result (PartialSubtypeCheck sub super));
-  predicate(HashSecondarySupers);
+  predicate(UseSecondarySupersTable);
   effect(KILL cr, TEMP temp, TEMP temp2, TEMP temp3, TEMP temp4, TEMP vtemp);
 
   ins_cost(700);  // smaller than the next version

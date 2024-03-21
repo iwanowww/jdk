@@ -3994,7 +3994,7 @@ address StubGenerator::generate_upcall_stub_exception_handler() {
   return start;
 }
 
-// Used by HashSecondarySupers.
+// Used by UseSecondarySupersTable.
 address StubGenerator::generate_klass_subtype_fallback_stub() {
   StubCodeMark mark(this, "StubRoutines", "klass_subtype_fallback");
 

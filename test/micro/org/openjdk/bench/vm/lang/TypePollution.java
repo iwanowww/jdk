@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.*;
 
 /* A test to demonstrate type pollution. Run it with and without
- * -XX:-HashSecondarySupers -XX:-UseSecondarySuperCache to see the
+ * -XX:-UseSecondarySupersTable -XX:-UseSecondarySuperCache to see the
  * effect.
  *
  */
@@ -105,7 +105,7 @@ public class TypePollution {
 
     int probe = 99;
 
-    // Try this with and without -XX:-HashSecondarySupers
+    // Try this with and without -XX:-UseSecondarySupersTable
     @Benchmark
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public long parallelInstanceOfInterfaceSwitch() {
@@ -124,7 +124,7 @@ public class TypePollution {
         }
     }
 
-    // Try this with and without -XX:-HashSecondarySupers
+    // Try this with and without -XX:-UseSecondarySupersTable
     @Benchmark
     public int instanceOfInterfaceSwitch() {
         int dummy = 0;

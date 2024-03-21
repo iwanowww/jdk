@@ -5997,7 +5997,7 @@ void ClassFileParser::post_process_parsed_stream(const ClassFileStream* const st
   // This would be very convenient, and it would allow us to save the
   // secondary supers in hashed order, but some SA tests know the
   // order of secondary supers.
-  // if (HashSecondarySupers) {
+  // if (UseSecondarySupersTable) {
   //   // Put the transitive interfaces into hash order
   //   Klass::hash_secondary_supers(_transitive_interfaces, /*rewrite*/true);
   // }

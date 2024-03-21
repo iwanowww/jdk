@@ -1998,7 +1998,7 @@ const int ObjectAlignmentInBytes = 8;
   product(bool, UseSecondarySuperCache, true, DIAGNOSTIC,                   \
                 "Use secondary supers cache during subtype checks.")        \
                                                                             \
-  product(bool, HashSecondarySupers,  false, DIAGNOSTIC,                    \
+  product(bool, UseSecondarySupersTable, false, DIAGNOSTIC,                 \
                 "Use hash table to lookup secondary supers.")               \
                                                                             \
   product(bool, VerifySecondarySupers, false, DIAGNOSTIC,                   \

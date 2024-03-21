@@ -243,7 +243,7 @@ protected:
   template<typename T>
   static uint64_t hash_secondary_supers(Array<T*>* secondaries, bool rewrite);
 
-  // Hash coding used by HashSecondarySupers.
+  // Hash coding used by UseSecondarySupersTable.
   static constexpr int SEC_HASH_ENTRIES = 64;
   static constexpr int SEC_HASH_MASK = 64 - 1;
 

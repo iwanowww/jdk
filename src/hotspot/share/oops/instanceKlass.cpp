@@ -1439,7 +1439,7 @@ GrowableArray<Klass*>* InstanceKlass::compute_secondary_supers(int num_extra_slo
     // Redefine classes has to be careful not to delete this!
     // We need the cast because Array<Klass*> is NOT a supertype of Array<InstanceKlass*>,
     // (but it's safe to do here because we won't write into _secondary_supers from this point on).
-    if (! HashSecondarySupers) {
+    if (! UseSecondarySupersTable) {
       set_secondary_supers((Array<Klass*>*)(address)interfaces);
       return nullptr;
     } else if (num_extra_slots == 0 && interfaces->length() <= 1) {
@@ -3628,7 +3628,7 @@ void InstanceKlass::print_on(outputStream* st) const {
     }
   }
 
-  if (HashSecondarySupers) {
+  if (UseSecondarySupersTable) {
     st->print(BULLET"hash:              0x%x (slot=%d)", hash(), hash_slot()); st->cr();
     st->print(BULLET"bitmap:            0x%" PRIx64, _bitmap);
     st->cr();
