@@ -161,7 +161,9 @@ class Klass : public Metadata {
 
   // Bitmap and hash code used by hashed secondary supers.
   uint64_t _bitmap;
-  juint _hash;
+  uint8_t  _hash_slot;
+
+  static uint8_t compute_hash_slot(Symbol* s);
 
   int _vtable_len;              // vtable length. This field may be read very often when we
                                 // have lots of itable dispatches (e.g., lambdas and streams).
@@ -237,20 +239,18 @@ protected:
   Array<Klass*>* secondary_supers() const { return _secondary_supers; }
   void set_secondary_supers(Array<Klass*>* k);
   void set_secondary_supers(Array<Klass*>* k, uint64_t bitmap);
-  template<typename T>
-  inline static void hash_insert(T *sec, GrowableArray<T*>* secondaries,
-                                 uint64_t &bitmap, bool use_robin_hood);
-  template<typename T>
-  static uint64_t hash_secondary_supers(Array<T*>* secondaries, bool rewrite);
 
-  // Hash coding used by UseSecondarySupersTable.
-  static constexpr int SEC_HASH_ENTRIES = 64;
-  static constexpr int SEC_HASH_MASK = 64 - 1;
+  inline static void hash_insert(Klass* klass, GrowableArray<Klass*>* secondaries, uint64_t& bitmap);
+  static uint64_t hash_secondary_supers(Array<Klass*>* secondaries, bool rewrite);
 
-  static constexpr size_t hash_size_in_bits() { return (sizeof _hash) * 8; }
-  static constexpr int secondary_shift() { return (int)hash_size_in_bits() - 6; }
-  juint hash() const { return _hash; }
-  int hash_slot() const { return hash() >> secondary_shift(); }
+  static constexpr int SECONDARY_SUPERS_TABLE_SIZE = sizeof(_bitmap) * 8; // BitsPerLong?
+  static constexpr int SECONDARY_SUPERS_TABLE_MASK = SECONDARY_SUPERS_TABLE_SIZE - 1;
+
+  static constexpr uint64_t SECONDARY_SUPERS_BITMAP_EMPTY    = 0;
+  static constexpr uint64_t SECONDARY_SUPERS_BITMAP_FULL     = ~(uint64_t)0;
+
+  uint8_t hash_slot() const { return _hash_slot; }
+  uint8_t home_slot() const;
 
   // Return the element of the _super chain of the given depth.
   // If there is no such element, return either null or this.
@@ -418,7 +418,6 @@ protected:
   static ByteSize subklass_offset()              { return byte_offset_of(Klass, _subklass); }
   static ByteSize next_sibling_offset()          { return byte_offset_of(Klass, _next_sibling); }
 #endif
-  static ByteSize hash_offset()                  { return byte_offset_of(Klass, _hash); }
   static ByteSize bitmap_offset()                { return byte_offset_of(Klass, _bitmap); }
 
   // Unpacking layout_helper:

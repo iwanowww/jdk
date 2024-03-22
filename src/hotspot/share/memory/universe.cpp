@@ -133,7 +133,6 @@ OopHandle Universe::_virtual_machine_error_instance;
 OopHandle Universe::_reference_pending_list;
 
 Array<Klass*>* Universe::_the_array_interfaces_array = nullptr;
-uint64_t Universe::_the_array_interfaces_bitmap = 0;
 LatestMethodCache* Universe::_finalizer_register_cache = nullptr;
 LatestMethodCache* Universe::_loader_addClass_cache    = nullptr;
 LatestMethodCache* Universe::_throw_illegal_access_error_cache = nullptr;
@@ -147,6 +146,9 @@ Array<u2>* Universe::_the_empty_short_array           = nullptr;
 Array<Klass*>* Universe::_the_empty_klass_array     = nullptr;
 Array<InstanceKlass*>* Universe::_the_empty_instance_klass_array  = nullptr;
 Array<Method*>* Universe::_the_empty_method_array   = nullptr;
+
+uint64_t Universe::_the_array_interfaces_bitmap = 0;
+uint64_t Universe::_the_empty_klass_bitmap = 0;
 
 // These variables are guarded by FullGCALot_lock.
 debug_only(OopHandle Universe::_fullgc_alot_dummy_array;)
@@ -381,8 +383,8 @@ void Universe::genesis(TRAPS) {
     }
 
     if (UseSecondarySupersTable) {
-      Universe::_the_array_interfaces_bitmap
-        = Klass::hash_secondary_supers(_the_array_interfaces_array, /*rewrite*/false);
+      Universe::_the_array_interfaces_bitmap = Klass::hash_secondary_supers(_the_array_interfaces_array, /*rewrite*/false);
+      Universe::_the_empty_klass_bitmap      = Klass::hash_secondary_supers(_the_empty_klass_array,      /*rewrite*/false);
     }
 
     initialize_basic_type_klass(_fillerArrayKlassObj, CHECK);

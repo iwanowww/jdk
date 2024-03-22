@@ -1609,7 +1609,7 @@ static void debug_helper(Klass* sub, Klass* super, bool expected, bool result, c
 }
 
 void MacroAssembler::check_klass_subtype_slow_path(Register r_sub_klass,
-                                                   Klass *super_klass,
+                                                   Klass* super_klass,
                                                    Register temp,
                                                    Register temp2,
                                                    Register temp3,
@@ -1637,22 +1637,21 @@ void MacroAssembler::check_klass_subtype_slow_path(Register r_sub_klass,
 
   CHECK_KLASS_SUBTYPE_SLOW_REGISTERS;
 
+  u1 bit = super_klass->hash_slot();
+
   // We're going to need the bitmap in a vector reg and in a core reg,
   // so load both now.
   ldr(r_bitmap, Address(r_sub_klass, Klass::bitmap_offset()));
-  if (super_klass->hash() != 0) {
-    ldrd(vtemp, Address(r_sub_klass, Klass::bitmap_offset()));
-  }
 
   // First check the bitmap to see if super_klass might be present. If
   // the bit is zero, we are certain that super_klass is not one of
   // the secondary supers.
-  u1 bit = super_klass->hash_slot();
   tbz(r_bitmap, bit, L_failure);
 
   // Get the first array index that can contain super_klass into r_array_index.
   if (bit != 0) {
-    shld(vtemp, vtemp, Klass::SEC_HASH_MASK - bit);
+    fmovd(vtemp, r_bitmap);
+    shld(vtemp, vtemp, Klass::SECONDARY_SUPERS_TABLE_MASK - bit);
     cnt(vtemp, T8B, vtemp);
     addv(vtemp, T8B, vtemp);
     fmovd(r_array_index, vtemp);
@@ -1676,7 +1675,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register r_sub_klass,
   cbz(result, L_fallthrough); // Found a match
 
   // Is there another entry to check? Consult the bitmap.
-  tbz(r_bitmap, (bit+1) & Klass::SEC_HASH_MASK, L_failure);
+  tbz(r_bitmap, (bit+1) & Klass::SECONDARY_SUPERS_TABLE_MASK, L_failure);
 
   // Linear probe.
   if (bit != 0) {

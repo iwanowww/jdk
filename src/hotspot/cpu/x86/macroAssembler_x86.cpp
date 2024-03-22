@@ -4777,7 +4777,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register r_sub_klass,
   {
     // NB: If the count in a x86 shift instruction is 0, the flags are
     // not affected, so we do a testq instead.
-    int shift_count = Klass::SEC_HASH_MASK - bit;
+    int shift_count = Klass::SECONDARY_SUPERS_TABLE_MASK - bit;
     if (shift_count != 0) {
       salq(r_array_index, shift_count);
     } else {
@@ -4808,7 +4808,7 @@ void MacroAssembler::check_klass_subtype_slow_path(Register r_sub_klass,
   jcc(Assembler::equal, L_success);
 
   // Is there another entry to check? Consult the bitmap.
-  btq(r_bitmap, (bit+1) & Klass::SEC_HASH_MASK);
+  btq(r_bitmap, (bit+1) & Klass::SECONDARY_SUPERS_TABLE_MASK);
   jcc(Assembler::carryClear, L_failure);
 
   // Linear probe. Rotate the bitmap so that the next bit to test is

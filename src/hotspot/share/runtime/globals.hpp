@@ -2004,7 +2004,7 @@ const int ObjectAlignmentInBytes = 8;
   product(bool, VerifySecondarySupers, false, DIAGNOSTIC,                   \
           "Check that linear and hashed secondary lookups return the same result.") \
                                                                             \
-  product(bool, StressSecondarySuperHash, false, DIAGNOSTIC,                \
+  product(bool, StressSecondarySupers, false, DIAGNOSTIC,                   \
           "Use a terrible hash function in order to generate many collisions.") \
                                                                             \
 

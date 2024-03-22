@@ -128,7 +128,9 @@ class Universe: AllStatic {
   static Array<Method*>*        _the_empty_method_array;         // Canonicalized method array
 
   static Array<Klass*>*  _the_array_interfaces_array;
+
   static uint64_t _the_array_interfaces_bitmap;
+  static uint64_t _the_empty_klass_bitmap;
 
   // array of preallocated error objects with backtrace
   static OopHandle     _preallocated_out_of_memory_error_array;
@@ -300,6 +302,8 @@ class Universe: AllStatic {
   static Array<Method*>*         the_empty_method_array() { return _the_empty_method_array; }
   static Array<Klass*>*          the_empty_klass_array()  { return _the_empty_klass_array; }
   static Array<InstanceKlass*>*  the_empty_instance_klass_array() { return _the_empty_instance_klass_array; }
+
+  static uint64_t                the_empty_klass_bitmap() { return _the_empty_klass_bitmap; }
 
   // OutOfMemoryError support. Returns an error with the required message. The returned error
   // may or may not have a backtrace. If error has a backtrace then the stack trace is already
