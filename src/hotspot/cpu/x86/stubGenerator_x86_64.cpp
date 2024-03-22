@@ -3995,11 +3995,11 @@ address StubGenerator::generate_upcall_stub_exception_handler() {
 }
 
 // Used by UseSecondarySupersTable.
-address StubGenerator::generate_klass_subtype_fallback_stub() {
-  StubCodeMark mark(this, "StubRoutines", "klass_subtype_fallback");
+address StubGenerator::generate_lookup_secondary_supers_table_slow_path() {
+  StubCodeMark mark(this, "StubRoutines", "lookup_secondary_supers_table_slow_path");
 
   address start = __ pc();
-  __ klass_subtype_fallback();
+  __ lookup_secondary_supers_table_slow_path();
 
   return start;
 }
@@ -4157,7 +4157,9 @@ void StubGenerator::generate_final_stubs() {
     StubRoutines::_vectorizedMismatch = generate_vectorizedMismatch();
   }
 
-  StubRoutines::_klass_subtype_fallback_stub = generate_klass_subtype_fallback_stub();
+  if (UseSecondarySupersTable) {
+    StubRoutines::_lookup_secondary_supers_table_stub = generate_lookup_secondary_supers_table_stub();
+  }
 
   StubRoutines::_upcall_stub_exception_handler = generate_upcall_stub_exception_handler();
 }

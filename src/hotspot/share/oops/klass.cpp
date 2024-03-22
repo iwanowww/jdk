@@ -1121,3 +1121,12 @@ const char* Klass::class_in_module_of_loader(bool use_are, bool include_parent_l
 
   return class_description;
 }
+
+void Klass::on_secondary_supers_verification_failure(Klass* super, Klass* sub, bool linear_result, bool table_result, const char* msg) {
+  ResourceMark rm;
+  super->print();
+  sub->print();
+  fatal("%s: %s implements %s: is_subtype_of: %d; linear_search: %d; table_lookup: %d",
+        msg, sub->external_name(), super->external_name(),
+        sub->is_subtype_of(super), linear_result, table_result);
+}

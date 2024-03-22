@@ -745,6 +745,8 @@ protected:
 
   // for error reporting
   static bool is_valid(Klass* k);
+
+  static void on_secondary_supers_verification_failure(Klass* super, Klass* sub, bool linear_result, bool table_result, const char* msg);
 };
 
 #endif // SHARE_OOPS_KLASS_HPP
