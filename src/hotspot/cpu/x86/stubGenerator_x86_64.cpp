@@ -3994,12 +3994,31 @@ address StubGenerator::generate_upcall_stub_exception_handler() {
   return start;
 }
 
-// Used by UseSecondarySupersTable.
-address StubGenerator::generate_lookup_secondary_supers_table_slow_path() {
-  StubCodeMark mark(this, "StubRoutines", "lookup_secondary_supers_table_slow_path");
+// Slow path implementation for UseSecondarySupersTable.
+address StubGenerator::generate_lookup_secondary_supers_table_stub() {
+  StubCodeMark mark(this, "StubRoutines", "lookup_secondary_supers_table");
 
   address start = __ pc();
-  __ lookup_secondary_supers_table_slow_path();
+
+  const Register
+      r_super_klass  = rax,
+      r_array_base   = rbx,
+      r_array_length = rcx,
+      r_array_index  = rdx,
+      r_sub_klass    = rsi,
+      result         = rdi,
+      r_bitmap       = r11;
+
+  Label L_success;
+  __ lookup_secondary_supers_table_slow_path(r_super_klass, r_array_base, r_array_index, r_bitmap, r_array_length, result,
+                                             &L_success);
+  // bind(L_failure);
+  __ movl(result, 1);
+  __ ret(0);
+
+  __ bind(L_success);
+  __ movl(result, 0);
+  __ ret(0);
 
   return start;
 }
