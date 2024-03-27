@@ -3652,8 +3652,8 @@ void InstanceKlass::print_on(outputStream* st) const {
 
   st->print(BULLET"secondary supers: "); secondary_supers()->print_value_on(st); st->cr();
   if (UseSecondarySupersTable) {
-    st->print(BULLET"hash_slot:         %d", hash_slot());     st->cr();
-    st->print(BULLET"bitmap:            0x%" PRIx64, _bitmap); st->cr();
+    st->print(BULLET"hash_slot:         %d", hash_slot()); st->cr();
+    st->print(BULLET"bitmap:            " UINT64_FORMAT_X_0, _bitmap); st->cr();
   }
   if (secondary_supers() != nullptr) {
     if (Verbose) {

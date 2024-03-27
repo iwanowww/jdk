@@ -1169,6 +1169,11 @@ template<typename T, size_t N> char (&array_size_impl(T (&)[N]))[N];
 
 #define ARRAY_SIZE(array) sizeof(array_size_impl(array))
 
+inline uint64_t rotate_right_64(uint64_t x, uint64_t distance) {
+  distance = distance & 0x3F;
+  return (x >> distance) | (x << (64 - distance));
+}
+
 //----------------------------------------------------------------------------------------------------
 // Sum and product which can never overflow: they wrap, just like the
 // Java operations.  Note that we don't intend these to be used for

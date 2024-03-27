@@ -291,6 +291,16 @@ void Klass::set_secondary_supers(Array<Klass*>* secondaries, uint64_t bitmap) {
 #endif
   _bitmap = bitmap;
   _secondary_supers = secondaries;
+
+  if (secondaries != nullptr) {
+    LogMessage(class, load) msg;
+    NonInterleavingLogStream log {LogLevel::Debug, msg};
+    if (log.is_enabled()) {
+      ResourceMark rm;
+      log.print_cr("set_secondary_supers: klass: %s", external_name());
+      print_secondary_supers_on(&log);
+    }
+  }
 }
 
 void Klass::hash_insert(Klass* klass, GrowableArray<Klass*>* secondaries, uint64_t& bitmap) {
@@ -1120,6 +1130,95 @@ const char* Klass::class_in_module_of_loader(bool use_are, bool include_parent_l
                parent_loader_name_and_id);
 
   return class_description;
+}
+
+class LookupStats : StackObj {
+ private:
+  uint _no_of_samples;
+  uint _worst;
+  uint _worst_count;
+  uint _average;
+  uint _best;
+  uint _best_count;
+ public:
+  LookupStats() : _no_of_samples(0), _worst(0), _worst_count(0), _average(0), _best(INT_MAX), _best_count(0) {}
+
+  ~LookupStats() {
+    assert(_best <= _worst || _no_of_samples == 0, "sanity");
+  }
+
+  void sample(uint value) {
+    ++_no_of_samples;
+    _average += value;
+
+    if (_worst < value) {
+      _worst = value;
+      _worst_count = 1;
+    } else if (_worst == value) {
+      ++_worst_count;
+    }
+
+    if (_best > value) {
+      _best = value;
+      _best_count = 1;
+    } else if (_best == value) {
+      ++_best_count;
+    }
+  }
+
+  void print_on(outputStream* st) const {
+    if (_best_count < _no_of_samples) {
+      st->print("best: %2d (%4.1f%%); average: %4.1f; worst: %2d (%4.1f%%)",
+                _best, (100.0 * _best_count) / _no_of_samples,
+                float(_average) / _no_of_samples,
+                _worst, (100.0 * _worst_count) / _no_of_samples);
+    } else {
+      st->print(" %.1f ", float(_average));
+    }
+  }
+};
+
+static void print_positive_lookup_stats(Array<Klass*>* secondary_supers, outputStream* st) {
+  int num_of_supers = secondary_supers->length();
+
+  LookupStats s;
+  for (int i = 0; i < num_of_supers; i++) {
+    Klass* secondary_super = secondary_supers->at(i);
+    int home_slot = secondary_super->home_slot();
+    uint score = 1 + ((i - home_slot) & Klass::SECONDARY_SUPERS_TABLE_MASK);
+    s.sample(score);
+  }
+  st->print("positive_lookup: "); s.print_on(st);
+}
+
+static uint compute_distance_to_nearest_zero(int slot, uint64_t bitmap) {
+  assert(~bitmap != 0, "no zeroes");
+  uint64_t start = rotate_right_64(bitmap, slot);
+  return count_trailing_zeros_64(~start);
+}
+
+static void print_negative_lookup_stats(uint64_t bitmap, outputStream* st) {
+  LookupStats s;
+  for (int slot = 0; slot < Klass::SECONDARY_SUPERS_TABLE_SIZE; slot++) {
+    uint score = compute_distance_to_nearest_zero(slot, bitmap);
+    s.sample(score);
+  }
+  st->print("negative_lookup: "); s.print_on(st);
+}
+
+void Klass::print_secondary_supers_on(outputStream* st) const {
+  if (secondary_supers() != nullptr) {
+    if (UseSecondarySupersTable) {
+      st->print("  - "); st->print("%d elements;", _secondary_supers->length());
+      st->print_cr(" bitmap: " UINT64_FORMAT_X_0 ";", _bitmap);
+      if (_bitmap != SECONDARY_SUPERS_BITMAP_FULL) {
+        st->print("  - "); print_positive_lookup_stats(secondary_supers(), st); st->cr();
+        st->print("  - "); print_negative_lookup_stats(_bitmap,            st); st->cr();
+      }
+    }
+  } else {
+    st->print("null");
+  }
 }
 
 void Klass::on_secondary_supers_verification_failure(Klass* super, Klass* sub, bool linear_result, bool table_result, const char* msg) {
