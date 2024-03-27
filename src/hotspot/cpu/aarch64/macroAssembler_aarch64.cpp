@@ -1606,29 +1606,28 @@ do {                                                               \
 } while(0)
 
 void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
-                                                   Klass* super_klass,
+                                                   Register r_super_klass,
                                                    Register temp1,
                                                    Register temp2,
                                                    Register temp3,
-                                                   Register temp4,
                                                    FloatRegister vtemp,
-                                                   Register result) {
-  assert_different_registers(r_sub_klass, temp1, temp2, temp3, temp4, result, rscratch1, rscratch2);
+                                                   Register result,
+                                                   u1 super_klass_slot) {
+  assert_different_registers(r_sub_klass, temp1, temp2, temp3, result, rscratch1, rscratch2);
 
   Label L_fallthrough, L_success, L_failure;
 
   BLOCK_COMMENT("lookup_secondary_supers_table {");
 
   const Register
-    r_super_klass  = temp1, // r0
-    r_array_base   = temp2, // r1
-    r_array_length = temp3, // r2
-    r_array_index  = temp4, // r3
+    r_array_base   = temp1, // r1
+    r_array_length = temp2, // r2
+    r_array_index  = temp3, // r3
     r_bitmap       = rscratch2;
 
   LOOKUP_SECONDARY_SUPERS_TABLE_REGISTERS;
 
-  u1 bit = super_klass->hash_slot();
+  u1 bit = super_klass_slot;
 
   // We're going to need the bitmap in a vector reg and in a core reg,
   // so load both now.
@@ -1661,8 +1660,6 @@ void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
   assert(Array<Klass*>::base_offset_in_bytes() == wordSize, "Adjust this code");
   assert(Array<Klass*>::length_offset_in_bytes() == 0, "Adjust this code");
 
-  mov_metadata(r_super_klass, super_klass);
-
   ldr(result, Address(r_array_base, r_array_index, Address::lsl(LogBytesPerWord)));
   eor(result, result, r_super_klass);
   cbz(result, L_fallthrough); // Found a match
@@ -1689,9 +1686,8 @@ void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
   bind(L_fallthrough);
 
   if (VerifySecondarySupers) {
-    mov_metadata(r_super_klass, super_klass); // bitmap check failure doesn't set r_super_klass
     verify_secondary_supers_table(r_sub_klass, r_super_klass, // r4, r0
-                                  temp2, temp3, result);      // r1, r2, r5
+                                  temp1, temp2, result);      // r1, r2, r5
   }
 }
 

@@ -4741,14 +4741,14 @@ do {                                                                 \
 } while(0)
 
 void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
-                                                   Klass* super_klass,
+                                                   Register r_super_klass,
                                                    Register temp1,
                                                    Register temp2,
                                                    Register temp3,
                                                    Register temp4,
-                                                   Register temp5,
-                                                   Register result) {
-  assert_different_registers(r_sub_klass, temp1, temp2, temp3, temp4, temp5, result);
+                                                   Register result,
+                                                   u1 super_klass_slot) {
+  assert_different_registers(r_sub_klass, temp1, temp2, temp3, temp4, result);
 
   Label L_fallthrough, L_success, L_failure;
 
@@ -4758,8 +4758,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
     r_array_index  = temp1, // rdx
     r_array_length = temp2, // rcx
     r_array_base   = temp3, // rbx
-    r_super_klass  = temp4, // rax
-    r_bitmap       = temp5; // r11
+    r_bitmap       = temp4; // r11
 
   LOOKUP_SECONDARY_SUPERS_TABLE_REGISTERS;
 
@@ -4771,7 +4770,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
   // First check the bitmap to see if super_klass might be present. If
   // the bit is zero, we are certain that super_klass is not one of
   // the secondary supers.
-  u1 bit = super_klass->hash_slot();
+  u1 bit = super_klass_slot;
   {
     // NB: If the count in a x86 shift instruction is 0, the flags are
     // not affected, so we do a testq instead.
@@ -4792,8 +4791,6 @@ void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
   }
   // NB! r_array_index is off by 1. It is compensated by keeping r_array_base off by 1 word.
 
-  mov_metadata(r_super_klass, super_klass);
-
   // We will consult the secondary-super array.
   movptr(r_array_base, Address(r_sub_klass, in_bytes(Klass::secondary_supers_offset())));
 
@@ -4807,7 +4804,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
   jccb(Assembler::equal, L_success);
 
   // Is there another entry to check? Consult the bitmap.
-  btq(r_bitmap, (bit+1) & Klass::SECONDARY_SUPERS_TABLE_MASK);
+  btq(r_bitmap, (bit + 1) & Klass::SECONDARY_SUPERS_TABLE_MASK);
   jccb(Assembler::carryClear, L_failure);
 
   // Linear probe. Rotate the bitmap so that the next bit to test is
@@ -4834,7 +4831,6 @@ void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
   BLOCK_COMMENT("} lookup_secondary_supers_table");
 
   if (VerifySecondarySupers) {
-    mov_metadata(r_super_klass, super_klass); // bitmap check failure doesn't set r_super_klass
     verify_secondary_supers_table(r_sub_klass, r_super_klass, result,
                                   temp1, temp2, temp3);
   }

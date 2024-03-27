@@ -649,13 +649,13 @@ public:
   // As above, but with a constant super_klass.
   // The result is in Register result, not the condition codes.
   void lookup_secondary_supers_table(Register sub_klass,
-                                     Klass* super_klass,
+                                     Register super_klass,
                                      Register temp1,
                                      Register temp2,
                                      Register temp3,
                                      Register temp4,
-                                     Register temp5,
-                                     Register result);
+                                     Register result,
+                                     u1 super_klass_slot);
 
   void lookup_secondary_supers_table_slow_path(Register r_super_klass,
                                                Register r_array_base,

@@ -12104,21 +12104,22 @@ instruct partialSubtypeCheck(rdi_RegP result,
   ins_pipe(pipe_slow);
 %}
 
-instruct partialSubtypeCheckConstSuper(rsi_RegP sub, immP super, rdi_RegP result,
-                                       r11_RegL temp5, rax_RegP temp4, rbx_RegP temp3, rcx_RegL temp2, rdx_RegL temp1,
+instruct partialSubtypeCheckConstSuper(rsi_RegP sub, rax_RegP super_reg, immP super_con, rdi_RegP result,
+                                       rdx_RegL temp1, rcx_RegL temp2, rbx_RegP temp3, r11_RegL temp4,
                                        rFlagsReg cr)
 %{
-  match(Set result (PartialSubtypeCheck sub super));
+  match(Set result (PartialSubtypeCheck sub (Binary super_reg super_con)));
   predicate(UseSecondarySupersTable);
-  effect(KILL cr, TEMP temp1, TEMP temp2, TEMP temp3, TEMP temp4, TEMP temp5);
+  effect(KILL cr, TEMP temp1, TEMP temp2, TEMP temp3, TEMP temp4);
 
   ins_cost(700);  // smaller than the next version
   format %{ "partialSubtypeCheck $result, $sub, super" %}
 
   ins_encode %{
-    __ lookup_secondary_supers_table($sub$$Register, (Klass*)$super$$constant, $temp1$$Register, $temp2$$Register,
-                                     $temp3$$Register, $temp4$$Register, $temp5$$Register,
-                                     $result$$Register);
+    u1 super_klass_slot = ((Klass*)$super_con$$constant)->hash_slot();
+    __ lookup_secondary_supers_table($sub$$Register, $super_reg$$Register, $temp1$$Register, $temp2$$Register,
+                                     $temp3$$Register, $temp4$$Register, $result$$Register,
+                                     super_klass_slot);
   %}
 
   ins_pipe(pipe_slow);
