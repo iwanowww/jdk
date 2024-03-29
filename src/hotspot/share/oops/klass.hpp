@@ -243,6 +243,8 @@ protected:
   inline static void hash_insert(Klass* klass, GrowableArray<Klass*>* secondaries, uintx& bitmap);
   static uintx hash_secondary_supers(Array<Klass*>* secondaries, bool rewrite);
 
+  static uint8_t compute_home_slot(Klass* k, uintx bitmap);
+
   static constexpr int SECONDARY_SUPERS_TABLE_SIZE = sizeof(_bitmap) * 8; // BitsPerLong?
   static constexpr int SECONDARY_SUPERS_TABLE_MASK = SECONDARY_SUPERS_TABLE_SIZE - 1;
 
@@ -250,7 +252,6 @@ protected:
   static constexpr uintx SECONDARY_SUPERS_BITMAP_FULL     = ~(uintx)0;
 
   uint8_t hash_slot() const { return _hash_slot; }
-  uint8_t home_slot() const;
 
   // Return the element of the _super chain of the given depth.
   // If there is no such element, return either null or this.

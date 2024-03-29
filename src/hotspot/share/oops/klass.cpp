@@ -336,10 +336,10 @@ void Klass::hash_insert(Klass* klass, GrowableArray<Klass*>* secondaries, uintx&
   }
 }
 
-uint8_t Klass::home_slot() const {
-  uint8_t hash = hash_slot();
+uint8_t Klass::compute_home_slot(Klass* k, uintx bitmap) {
+  uint8_t hash = k->hash_slot();
   if (hash > 0) {
-    return population_count(_bitmap << (SECONDARY_SUPERS_TABLE_SIZE - hash));
+    return population_count(bitmap << (SECONDARY_SUPERS_TABLE_SIZE - hash));
   }
   return 0;
 }
@@ -1179,13 +1179,13 @@ class LookupStats : StackObj {
   }
 };
 
-static void print_positive_lookup_stats(Array<Klass*>* secondary_supers, outputStream* st) {
+static void print_positive_lookup_stats(Array<Klass*>* secondary_supers, uintx bitmap, outputStream* st) {
   int num_of_supers = secondary_supers->length();
 
   LookupStats s;
   for (int i = 0; i < num_of_supers; i++) {
     Klass* secondary_super = secondary_supers->at(i);
-    int home_slot = secondary_super->home_slot();
+    int home_slot = Klass::compute_home_slot(secondary_super, bitmap);
     uint score = 1 + ((i - home_slot) & Klass::SECONDARY_SUPERS_TABLE_MASK);
     s.sample(score);
   }
@@ -1213,8 +1213,8 @@ void Klass::print_secondary_supers_on(outputStream* st) const {
       st->print("  - "); st->print("%d elements;", _secondary_supers->length());
       st->print_cr(" bitmap: " UINTX_FORMAT_X_0 ";", _bitmap);
       if (_bitmap != SECONDARY_SUPERS_BITMAP_FULL) {
-        st->print("  - "); print_positive_lookup_stats(secondary_supers(), st); st->cr();
-        st->print("  - "); print_negative_lookup_stats(_bitmap,            st); st->cr();
+        st->print("  - "); print_positive_lookup_stats(secondary_supers(), _bitmap, st); st->cr();
+        st->print("  - "); print_negative_lookup_stats(_bitmap, st); st->cr();
       }
     }
   } else {

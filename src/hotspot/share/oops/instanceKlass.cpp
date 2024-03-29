@@ -3664,7 +3664,7 @@ void InstanceKlass::print_on(outputStream* st) const {
         Klass* secondary_super = _secondary_supers->at(i);
         st->print(BULLET"%2d:", i);
         if (is_hashed) {
-          int home_slot = secondary_super->home_slot();
+          int home_slot = compute_home_slot(secondary_super, _bitmap);
           int distance = (i - home_slot) & SECONDARY_SUPERS_TABLE_MASK;
           st->print(" dist:%02d:", distance);
         }
