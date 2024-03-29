@@ -55,6 +55,7 @@
 #include "runtime/perfData.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/powerOfTwo.hpp"
+#include "utilities/rotate_bits.hpp"
 #include "utilities/stack.inline.hpp"
 
 void Klass::set_java_mirror(Handle m) {
@@ -282,10 +283,10 @@ void Klass::set_secondary_supers(Array<Klass*>* secondaries) {
   set_secondary_supers(secondaries, SECONDARY_SUPERS_BITMAP_EMPTY);
 }
 
-void Klass::set_secondary_supers(Array<Klass*>* secondaries, uint64_t bitmap) {
+void Klass::set_secondary_supers(Array<Klass*>* secondaries, uintx bitmap) {
 #ifdef ASSERT
   if (UseSecondarySupersTable && secondaries != nullptr) {
-    uint64_t real_bitmap = hash_secondary_supers(secondaries, /*rewrite*/false);
+    uintx real_bitmap = hash_secondary_supers(secondaries, /*rewrite*/false);
     assert(bitmap == real_bitmap, "must be");
   }
 #endif
@@ -303,7 +304,7 @@ void Klass::set_secondary_supers(Array<Klass*>* secondaries, uint64_t bitmap) {
   }
 }
 
-void Klass::hash_insert(Klass* klass, GrowableArray<Klass*>* secondaries, uint64_t& bitmap) {
+void Klass::hash_insert(Klass* klass, GrowableArray<Klass*>* secondaries, uintx& bitmap) {
   assert(bitmap != SECONDARY_SUPERS_BITMAP_FULL, "");
 
   int dist = 0;
@@ -312,7 +313,7 @@ void Klass::hash_insert(Klass* klass, GrowableArray<Klass*>* secondaries, uint64
     assert(((bitmap >> slot) & 1) == (existing != nullptr), "mismatch");
     if (existing == nullptr) { // no conflict
       secondaries->at_put(slot, klass);
-      bitmap |= uint64_t(1) << slot;
+      bitmap |= uintx(1) << slot;
       assert(bitmap != SECONDARY_SUPERS_BITMAP_FULL, "");
       return;
     } else {
@@ -353,7 +354,7 @@ uint8_t Klass::home_slot() const {
 // a kind of Bloom filter, which in many cases allows us quickly to
 // eliminate the possibility that something is a member of a set of
 // secondaries.
-uint64_t Klass::hash_secondary_supers(Array<Klass*>* secondaries, bool rewrite) {
+uintx Klass::hash_secondary_supers(Array<Klass*>* secondaries, bool rewrite) {
   const int length = secondaries->length();
 
   if (length == 0) {
@@ -362,7 +363,7 @@ uint64_t Klass::hash_secondary_supers(Array<Klass*>* secondaries, bool rewrite) 
 
   if (length == 1) {
     int hash_slot = secondaries->at(0)->hash_slot();
-    return uint64_t(1) << hash_slot;
+    return uintx(1) << hash_slot;
   }
 
   if (length >= SECONDARY_SUPERS_TABLE_SIZE) {
@@ -373,7 +374,7 @@ uint64_t Klass::hash_secondary_supers(Array<Klass*>* secondaries, bool rewrite) 
     PerfTraceTime ptt(ClassLoader::perf_secondary_hash_time());
 
     ResourceMark rm;
-    uint64_t bitmap = SECONDARY_SUPERS_BITMAP_EMPTY;
+    uintx bitmap = SECONDARY_SUPERS_BITMAP_EMPTY;
     auto hashed_secondaries = new GrowableArray<Klass*>(SECONDARY_SUPERS_TABLE_SIZE,
                                                         SECONDARY_SUPERS_TABLE_SIZE, nullptr);
 
@@ -515,7 +516,7 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
     }
   #endif
     if (UseSecondarySupersTable) {
-      uint64_t bitmap = hash_secondary_supers(s2, /*rewrite*/true);
+      uintx bitmap = hash_secondary_supers(s2, /*rewrite*/true);
       set_secondary_supers(s2, bitmap);
     } else {
       set_secondary_supers(s2);
@@ -1191,13 +1192,13 @@ static void print_positive_lookup_stats(Array<Klass*>* secondary_supers, outputS
   st->print("positive_lookup: "); s.print_on(st);
 }
 
-static uint compute_distance_to_nearest_zero(int slot, uint64_t bitmap) {
+static uint compute_distance_to_nearest_zero(int slot, uintx bitmap) {
   assert(~bitmap != 0, "no zeroes");
-  uint64_t start = rotate_right_64(bitmap, slot);
-  return count_trailing_zeros_64(~start);
+  uintx start = rotate_right(bitmap, slot);
+  return count_trailing_zeros(~start);
 }
 
-static void print_negative_lookup_stats(uint64_t bitmap, outputStream* st) {
+static void print_negative_lookup_stats(uintx bitmap, outputStream* st) {
   LookupStats s;
   for (int slot = 0; slot < Klass::SECONDARY_SUPERS_TABLE_SIZE; slot++) {
     uint score = compute_distance_to_nearest_zero(slot, bitmap);
@@ -1210,7 +1211,7 @@ void Klass::print_secondary_supers_on(outputStream* st) const {
   if (secondary_supers() != nullptr) {
     if (UseSecondarySupersTable) {
       st->print("  - "); st->print("%d elements;", _secondary_supers->length());
-      st->print_cr(" bitmap: " UINT64_FORMAT_X_0 ";", _bitmap);
+      st->print_cr(" bitmap: " UINTX_FORMAT_X_0 ";", _bitmap);
       if (_bitmap != SECONDARY_SUPERS_BITMAP_FULL) {
         st->print("  - "); print_positive_lookup_stats(secondary_supers(), st); st->cr();
         st->print("  - "); print_negative_lookup_stats(_bitmap,            st); st->cr();

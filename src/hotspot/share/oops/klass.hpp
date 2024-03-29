@@ -160,7 +160,7 @@ class Klass : public Metadata {
   ClassLoaderData* _class_loader_data;
 
   // Bitmap and hash code used by hashed secondary supers.
-  uint64_t _bitmap;
+  uintx    _bitmap;
   uint8_t  _hash_slot;
 
   static uint8_t compute_hash_slot(Symbol* s);
@@ -238,16 +238,16 @@ protected:
 
   Array<Klass*>* secondary_supers() const { return _secondary_supers; }
   void set_secondary_supers(Array<Klass*>* k);
-  void set_secondary_supers(Array<Klass*>* k, uint64_t bitmap);
+  void set_secondary_supers(Array<Klass*>* k, uintx bitmap);
 
-  inline static void hash_insert(Klass* klass, GrowableArray<Klass*>* secondaries, uint64_t& bitmap);
-  static uint64_t hash_secondary_supers(Array<Klass*>* secondaries, bool rewrite);
+  inline static void hash_insert(Klass* klass, GrowableArray<Klass*>* secondaries, uintx& bitmap);
+  static uintx hash_secondary_supers(Array<Klass*>* secondaries, bool rewrite);
 
   static constexpr int SECONDARY_SUPERS_TABLE_SIZE = sizeof(_bitmap) * 8; // BitsPerLong?
   static constexpr int SECONDARY_SUPERS_TABLE_MASK = SECONDARY_SUPERS_TABLE_SIZE - 1;
 
-  static constexpr uint64_t SECONDARY_SUPERS_BITMAP_EMPTY    = 0;
-  static constexpr uint64_t SECONDARY_SUPERS_BITMAP_FULL     = ~(uint64_t)0;
+  static constexpr uintx SECONDARY_SUPERS_BITMAP_EMPTY    = 0;
+  static constexpr uintx SECONDARY_SUPERS_BITMAP_FULL     = ~(uintx)0;
 
   uint8_t hash_slot() const { return _hash_slot; }
   uint8_t home_slot() const;

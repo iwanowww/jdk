@@ -147,8 +147,8 @@ Array<Klass*>* Universe::_the_empty_klass_array     = nullptr;
 Array<InstanceKlass*>* Universe::_the_empty_instance_klass_array  = nullptr;
 Array<Method*>* Universe::_the_empty_method_array   = nullptr;
 
-uint64_t Universe::_the_array_interfaces_bitmap = 0;
-uint64_t Universe::_the_empty_klass_bitmap = 0;
+uintx Universe::_the_array_interfaces_bitmap = 0;
+uintx Universe::_the_empty_klass_bitmap      = 0;
 
 // These variables are guarded by FullGCALot_lock.
 debug_only(OopHandle Universe::_fullgc_alot_dummy_array;)

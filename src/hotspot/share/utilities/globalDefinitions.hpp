@@ -150,6 +150,11 @@ class oopDesc;
 #define INTX_FORMAT_W(width)     "%"   #width PRIdPTR
 #define UINTX_FORMAT             "%"          PRIuPTR
 #define UINTX_FORMAT_X           "0x%"        PRIxPTR
+#ifdef _LP64
+#define UINTX_FORMAT_X_0         "0x%016"     PRIxPTR
+#else
+#define UINTX_FORMAT_X_0         "0x%08"      PRIxPTR
+#endif
 #define UINTX_FORMAT_W(width)    "%"   #width PRIuPTR
 
 // Format jlong, if necessary
@@ -1168,11 +1173,6 @@ template<class T> static void swap(T& a, T& b) {
 template<typename T, size_t N> char (&array_size_impl(T (&)[N]))[N];
 
 #define ARRAY_SIZE(array) sizeof(array_size_impl(array))
-
-inline uint64_t rotate_right_64(uint64_t x, uint64_t distance) {
-  distance = distance & 0x3F;
-  return (x >> distance) | (x << (64 - distance));
-}
 
 //----------------------------------------------------------------------------------------------------
 // Sum and product which can never overflow: they wrap, just like the

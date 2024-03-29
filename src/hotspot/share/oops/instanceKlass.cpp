@@ -1445,7 +1445,7 @@ GrowableArray<Klass*>* InstanceKlass::compute_secondary_supers(int num_extra_slo
     } else if (num_extra_slots == 0 && interfaces->length() <= 1) {
       // We will reuse the transitive interfaces list if we're certain
       // it's in hash order.
-      uint64_t bitmap = hash_secondary_supers(interfaces, /*rewrite*/false);
+      uintx bitmap = hash_secondary_supers(interfaces, /*rewrite*/false);
       set_secondary_supers(interfaces, bitmap);
       return nullptr;
     }
@@ -3653,7 +3653,7 @@ void InstanceKlass::print_on(outputStream* st) const {
   st->print(BULLET"secondary supers: "); secondary_supers()->print_value_on(st); st->cr();
   if (UseSecondarySupersTable) {
     st->print(BULLET"hash_slot:         %d", hash_slot()); st->cr();
-    st->print(BULLET"bitmap:            " UINT64_FORMAT_X_0, _bitmap); st->cr();
+    st->print(BULLET"bitmap:            " UINTX_FORMAT_X_0, _bitmap); st->cr();
   }
   if (secondary_supers() != nullptr) {
     if (Verbose) {
