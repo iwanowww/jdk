@@ -1439,17 +1439,13 @@ GrowableArray<Klass*>* InstanceKlass::compute_secondary_supers(int num_extra_slo
     // The secondary super list is exactly the same as the transitive interfaces, so
     // let's use it instead of making a copy.
     // Redefine classes has to be careful not to delete this!
-    if (!UseSecondarySupersTable) {
-      set_secondary_supers(interfaces);
-      return nullptr;
-    } else if (num_extra_slots == 0 && interfaces->length() <= 1) {
-      // We will reuse the transitive interfaces list if we're certain
-      // it's in hash order.
+    if (UseSecondarySupersTable) {
       uintx bitmap = compute_secondary_supers_bitmap(interfaces);
       set_secondary_supers(interfaces, bitmap);
-      return nullptr;
+    } else {
+      set_secondary_supers(interfaces);
     }
-    // ... fall through if that didn't work.
+    return nullptr;
   }
   // Copy transitive interfaces to a temporary growable array to be constructed
   // into the secondary super list with extra slots.
