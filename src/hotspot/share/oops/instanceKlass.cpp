@@ -1445,7 +1445,7 @@ GrowableArray<Klass*>* InstanceKlass::compute_secondary_supers(int num_extra_slo
     } else if (num_extra_slots == 0 && interfaces->length() <= 1) {
       // We will reuse the transitive interfaces list if we're certain
       // it's in hash order.
-      uintx bitmap = hash_secondary_supers(interfaces, /*rewrite*/false);
+      uintx bitmap = compute_secondary_supers_bitmap(interfaces);
       set_secondary_supers(interfaces, bitmap);
       return nullptr;
     }

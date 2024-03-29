@@ -286,7 +286,7 @@ void Klass::set_secondary_supers(Array<Klass*>* secondaries) {
 void Klass::set_secondary_supers(Array<Klass*>* secondaries, uintx bitmap) {
 #ifdef ASSERT
   if (UseSecondarySupersTable && secondaries != nullptr) {
-    uintx real_bitmap = hash_secondary_supers(secondaries, /*rewrite*/false);
+    uintx real_bitmap = compute_secondary_supers_bitmap(secondaries);
     assert(bitmap == real_bitmap, "must be");
   }
 #endif
@@ -302,46 +302,6 @@ void Klass::set_secondary_supers(Array<Klass*>* secondaries, uintx bitmap) {
       print_secondary_supers_on(&log);
     }
   }
-}
-
-void Klass::hash_insert(Klass* klass, GrowableArray<Klass*>* secondaries, uintx& bitmap) {
-  assert(bitmap != SECONDARY_SUPERS_BITMAP_FULL, "");
-
-  int dist = 0;
-  for (int slot = klass->hash_slot(); true; slot = (slot + 1) & SECONDARY_SUPERS_TABLE_MASK) {
-    Klass* existing = secondaries->at(slot);
-    assert(((bitmap >> slot) & 1) == (existing != nullptr), "mismatch");
-    if (existing == nullptr) { // no conflict
-      secondaries->at_put(slot, klass);
-      bitmap |= uintx(1) << slot;
-      assert(bitmap != SECONDARY_SUPERS_BITMAP_FULL, "");
-      return;
-    } else {
-      // Use Robin Hood hashing to minimize the worst case search.
-      // Also, every permutation of the insertion sequence produces
-      // the same final Robin Hood hash table, provided that a
-      // consistent tie breaker is used.
-      int existing_dist = (slot - existing->hash_slot()) & SECONDARY_SUPERS_TABLE_MASK;
-      if (existing_dist < dist
-          // This tie breaker ensures that the hash order is maintained.
-          || ((existing_dist == dist)
-              && (uintptr_t(existing) < uintptr_t(klass)))) {
-        Klass* tmp = secondaries->at(slot);
-        secondaries->at_put(slot, klass);
-        klass = tmp;
-        dist = existing_dist;
-      }
-      ++dist;
-    }
-  }
-}
-
-uint8_t Klass::compute_home_slot(Klass* k, uintx bitmap) {
-  uint8_t hash = k->hash_slot();
-  if (hash > 0) {
-    return population_count(bitmap << (SECONDARY_SUPERS_TABLE_SIZE - hash));
-  }
-  return 0;
 }
 
 // Hashed secondary superclasses
@@ -406,6 +366,82 @@ uintx Klass::hash_secondary_supers(Array<Klass*>* secondaries, bool rewrite) {
     return bitmap;
   }
 }
+
+void Klass::hash_insert(Klass* klass, GrowableArray<Klass*>* secondaries, uintx& bitmap) {
+  assert(bitmap != SECONDARY_SUPERS_BITMAP_FULL, "");
+
+  int dist = 0;
+  for (int slot = klass->hash_slot(); true; slot = (slot + 1) & SECONDARY_SUPERS_TABLE_MASK) {
+    Klass* existing = secondaries->at(slot);
+    assert(((bitmap >> slot) & 1) == (existing != nullptr), "mismatch");
+    if (existing == nullptr) { // no conflict
+      secondaries->at_put(slot, klass);
+      bitmap |= uintx(1) << slot;
+      assert(bitmap != SECONDARY_SUPERS_BITMAP_FULL, "");
+      return;
+    } else {
+      // Use Robin Hood hashing to minimize the worst case search.
+      // Also, every permutation of the insertion sequence produces
+      // the same final Robin Hood hash table, provided that a
+      // consistent tie breaker is used.
+      int existing_dist = (slot - existing->hash_slot()) & SECONDARY_SUPERS_TABLE_MASK;
+      if (existing_dist < dist
+          // This tie breaker ensures that the hash order is maintained.
+          || ((existing_dist == dist)
+              && (uintptr_t(existing) < uintptr_t(klass)))) {
+        Klass* tmp = secondaries->at(slot);
+        secondaries->at_put(slot, klass);
+        klass = tmp;
+        dist = existing_dist;
+      }
+      ++dist;
+    }
+  }
+}
+
+Array<Klass*>* Klass::pack_secondary_supers(ClassLoaderData* loader_data,
+                                            GrowableArray<Klass*>* primaries,
+                                            GrowableArray<Klass*>* secondaries,
+                                            uintx& bitmap, TRAPS) {
+  int new_length = primaries->length() + secondaries->length();
+  Array<Klass*>* secondary_supers = MetadataFactory::new_array<Klass*>(loader_data, new_length, CHECK_NULL);
+
+  // Combine the two arrays into a metadata object to pack the array.
+  // The primaries are added in the reverse order, then the secondaries.
+  int fill_p = primaries->length();
+  for (int j = 0; j < fill_p; j++) {
+    secondary_supers->at_put(j, primaries->pop());  // add primaries in reverse order.
+  }
+  for( int j = 0; j < secondaries->length(); j++ ) {
+    secondary_supers->at_put(j+fill_p, secondaries->at(j));  // add secondaries on the end.
+  }
+#ifdef ASSERT
+  // We must not copy any null placeholders left over from bootstrap.
+  for (int j = 0; j < secondary_supers->length(); j++) {
+    assert(secondary_supers->at(j) != nullptr, "correct bootstrapping order");
+  }
+#endif
+
+  if (UseSecondarySupersTable) {
+    bitmap = hash_secondary_supers(secondary_supers, /*rewrite=*/true); // rewrites freshly allocated array
+  } else {
+    bitmap = SECONDARY_SUPERS_BITMAP_EMPTY;
+  }
+  return secondary_supers;
+}
+
+uintx Klass::compute_secondary_supers_bitmap(Array<Klass*>* secondary_supers) {
+  return hash_secondary_supers(secondary_supers, /*rewrite=*/false); // no rewrites allowed
+}
+
+uint8_t Klass::compute_home_slot(Klass* k, uintx bitmap) {
+  uint8_t hash = k->hash_slot();
+  if (hash > 0) {
+    return population_count(bitmap << (SECONDARY_SUPERS_TABLE_SIZE - hash));
+  }
+  return 0;
+}
+
 
 void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interfaces, TRAPS) {
   if (k == nullptr) {
@@ -497,30 +533,9 @@ void Klass::initialize_supers(Klass* k, Array<InstanceKlass*>* transitive_interf
       primaries->push(p);
     }
     // Combine the two arrays into a metadata object to pack the array.
-    // The primaries are added in the reverse order, then the secondaries.
-    int new_length = primaries->length() + secondaries->length();
-    Array<Klass*>* s2 = MetadataFactory::new_array<Klass*>(
-                                       class_loader_data(), new_length, CHECK);
-    int fill_p = primaries->length();
-    for (int j = 0; j < fill_p; j++) {
-      s2->at_put(j, primaries->pop());  // add primaries in reverse order.
-    }
-    for( int j = 0; j < secondaries->length(); j++ ) {
-      s2->at_put(j+fill_p, secondaries->at(j));  // add secondaries on the end.
-    }
-
-  #ifdef ASSERT
-      // We must not copy any null placeholders left over from bootstrap.
-    for (int j = 0; j < s2->length(); j++) {
-      assert(s2->at(j) != nullptr, "correct bootstrapping order");
-    }
-  #endif
-    if (UseSecondarySupersTable) {
-      uintx bitmap = hash_secondary_supers(s2, /*rewrite*/true);
-      set_secondary_supers(s2, bitmap);
-    } else {
-      set_secondary_supers(s2);
-    }
+    uintx bitmap = 0;
+    Array<Klass*>* s2 = pack_secondary_supers(class_loader_data(), primaries, secondaries, bitmap, CHECK);
+    set_secondary_supers(s2, bitmap);
   }
 }
 

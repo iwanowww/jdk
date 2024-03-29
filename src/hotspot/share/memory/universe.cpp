@@ -383,8 +383,8 @@ void Universe::genesis(TRAPS) {
     }
 
     if (UseSecondarySupersTable) {
-      Universe::_the_array_interfaces_bitmap = Klass::hash_secondary_supers(_the_array_interfaces_array, /*rewrite*/false);
-      Universe::_the_empty_klass_bitmap      = Klass::hash_secondary_supers(_the_empty_klass_array,      /*rewrite*/false);
+      Universe::_the_array_interfaces_bitmap = Klass::compute_secondary_supers_bitmap(_the_array_interfaces_array);
+      Universe::_the_empty_klass_bitmap      = Klass::compute_secondary_supers_bitmap(_the_empty_klass_array);
     }
 
     initialize_basic_type_klass(_fillerArrayKlassObj, CHECK);

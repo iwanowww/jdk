@@ -240,17 +240,6 @@ protected:
   void set_secondary_supers(Array<Klass*>* k);
   void set_secondary_supers(Array<Klass*>* k, uintx bitmap);
 
-  inline static void hash_insert(Klass* klass, GrowableArray<Klass*>* secondaries, uintx& bitmap);
-  static uintx hash_secondary_supers(Array<Klass*>* secondaries, bool rewrite);
-
-  static uint8_t compute_home_slot(Klass* k, uintx bitmap);
-
-  static constexpr int SECONDARY_SUPERS_TABLE_SIZE = sizeof(_bitmap) * 8; // BitsPerLong?
-  static constexpr int SECONDARY_SUPERS_TABLE_MASK = SECONDARY_SUPERS_TABLE_SIZE - 1;
-
-  static constexpr uintx SECONDARY_SUPERS_BITMAP_EMPTY    = 0;
-  static constexpr uintx SECONDARY_SUPERS_BITMAP_FULL     = ~(uintx)0;
-
   uint8_t hash_slot() const { return _hash_slot; }
 
   // Return the element of the _super chain of the given depth.
@@ -402,7 +391,26 @@ protected:
   void     set_subklass(Klass* s);
   void     set_next_sibling(Klass* s);
 
+ private:
+  static void  hash_insert(Klass* klass, GrowableArray<Klass*>* secondaries, uintx& bitmap);
+  static uintx hash_secondary_supers(Array<Klass*>* secondaries, bool rewrite);
+
  public:
+  // Secondary supers table support
+  static Array<Klass*>* pack_secondary_supers(ClassLoaderData* loader_data,
+                                              GrowableArray<Klass*>* primaries,
+                                              GrowableArray<Klass*>* secondaries,
+                                              uintx& bitmap,
+                                              TRAPS);
+
+  static uintx   compute_secondary_supers_bitmap(Array<Klass*>* secondary_supers);
+  static uint8_t compute_home_slot(Klass* k, uintx bitmap);
+
+  static constexpr int SECONDARY_SUPERS_TABLE_SIZE = sizeof(_bitmap) * 8;
+  static constexpr int SECONDARY_SUPERS_TABLE_MASK = SECONDARY_SUPERS_TABLE_SIZE - 1;
+
+  static constexpr uintx SECONDARY_SUPERS_BITMAP_EMPTY    = 0;
+  static constexpr uintx SECONDARY_SUPERS_BITMAP_FULL     = ~(uintx)0;
 
   // Compiler support
   static ByteSize super_offset()                 { return byte_offset_of(Klass, _super); }
