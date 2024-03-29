@@ -742,6 +742,11 @@ void Klass::remove_unshareable_info() {
   // Null out class_loader_data because we don't share that yet.
   set_class_loader_data(nullptr);
   set_is_shared();
+
+  // FIXME: validation in Klass::hash_secondary_supers() may fail for shared klasses.
+  // Even though the bitmaps always match, the canonical order of elements in the table
+  // is not guaranteed to stay the same (see tie breaker during Robin Hood hashing in Klass::hash_insert).
+  //assert(compute_secondary_supers_bitmap(secondary_supers()) == _bitmap, "broken table");
 }
 
 void Klass::remove_java_mirror() {
