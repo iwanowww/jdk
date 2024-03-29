@@ -4201,7 +4201,7 @@ void ClassFileParser::set_precomputed_flags(InstanceKlass* ik) {
 
 // utility methods for appending an array with check for duplicates
 
-static void append_interfaces(GrowableArray<InstanceKlass*>* result,
+static void append_interfaces(GrowableArray<Klass*>* result,
                               const Array<InstanceKlass*>* const ifs) {
   // iterate over new interfaces
   for (int i = 0; i < ifs->length(); i++) {
@@ -4239,15 +4239,17 @@ static Array<InstanceKlass*>* compute_transitive_interfaces(const InstanceKlass*
   if (max_transitive_size == 0) {
     // no interfaces, use canonicalized array
     return Universe::the_empty_instance_klass_array();
-  } else if (max_transitive_size == super_size) {
+  } else if (max_transitive_size == super_size &&
+             (!super->is_shared() || !UseSecondarySupersTable)) { // FIXME: aren't guaranteed to be in canonical order
     // no new local interfaces added, share superklass' transitive interface array
     return super->transitive_interfaces();
-  } else if (max_transitive_size == local_size) {
+  } else if (max_transitive_size == local_size &&
+             !UseSecondarySupersTable) { // local interface array can't be hashed
     // only local interfaces added, share local interface array
     return local_ifs;
   } else {
     ResourceMark rm;
-    GrowableArray<InstanceKlass*>* const result = new GrowableArray<InstanceKlass*>(max_transitive_size);
+    auto result = new GrowableArray<Klass*>(max_transitive_size);
 
     // Copy down from superclass
     if (super != nullptr) {
@@ -4263,16 +4265,12 @@ static Array<InstanceKlass*>* compute_transitive_interfaces(const InstanceKlass*
     append_interfaces(result, local_ifs);
 
     // length will be less than the max_transitive_size if duplicates were removed
-    const int length = result->length();
-    assert(length <= max_transitive_size, "just checking");
-    Array<InstanceKlass*>* const new_result =
-      MetadataFactory::new_array<InstanceKlass*>(loader_data, length, CHECK_NULL);
-    for (int i = 0; i < length; i++) {
-      InstanceKlass* const e = result->at(i);
-      assert(e != nullptr, "just checking");
-      new_result->at_put(i, e);
-    }
-    return new_result;
+    assert(result->length() <= max_transitive_size, "just checking");
+
+    uintx unused = 0;
+    GrowableArray<Klass*> empty(0);
+    Array<Klass*>* new_result = Klass::pack_secondary_supers(loader_data, &empty, result, unused, CHECK_NULL);
+    return (Array<InstanceKlass*>*)(address)new_result; // FIXME: contains only InstanceKlasses
   }
 }
 
