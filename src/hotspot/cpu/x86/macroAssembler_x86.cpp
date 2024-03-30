@@ -4764,54 +4764,107 @@ void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
 
   xorq(result, result); // = 0
 
-  movq(r_bitmap, Address(r_sub_klass, Klass::bitmap_offset()));
-  movq(r_array_index, r_bitmap);
+  if (UseNewCode2) {
+    assert(!UseNewCode, "");
+    movptr(r_array_base, Address(r_sub_klass, in_bytes(Klass::secondary_supers_offset())));
+    xorq(r_bitmap, r_bitmap); // 0L
+    notq(r_bitmap); // ~0L = TABLE_FULL
+  } else if (UseNewCode) {
+    const Register r_bit = r_array_length; // reuse temp2
 
-  // First check the bitmap to see if super_klass might be present. If
-  // the bit is zero, we are certain that super_klass is not one of
-  // the secondary supers.
-  u1 bit = super_klass_slot;
-  {
-    // NB: If the count in a x86 shift instruction is 0, the flags are
-    // not affected, so we do a testq instead.
-    int shift_count = Klass::SECONDARY_SUPERS_TABLE_MASK - bit;
-    if (shift_count != 0) {
-      salq(r_array_index, shift_count);
-    } else {
-      testq(r_array_index, r_array_index);
-    }
-  }
-  // We test the MSB of r_array_index, i.e. its sign bit
-  jcc(Assembler::positive, L_failure);
+    movq(r_bitmap, Address(r_sub_klass, Klass::bitmap_offset()));
+    movzbl(r_bit, Address(r_super_klass, Klass::hash_slot_offset()));
 
-  // Get the first array index that can contain super_klass into r_array_index.
-  if (bit != 0) {
+    movq(r_array_index, r_bitmap);
+    mov(temp3, r_bit); // reuse r_array_base as temp
+
+    // check i-th bit
+    sarq(r_array_index); // shift count in rcx (r_bit / temp2)
+    tzcntl(r_array_index, r_array_index); // kills r_array_index
+    jccb(Assembler::notZero, L_failure); // (LSB == 0) == (r_array_index > 0)
+
+    movq(r_array_index, r_bitmap); // restore r_array_index
+
+    // Get the first array index that can contain super_klass into r_array_index.
+    increment(r_bit);
+    negl(r_bit);
+    andl(r_bit, Klass::SECONDARY_SUPERS_TABLE_MASK);
+    salq(r_array_index); // count in rcx/temp2
+
     popcntq(r_array_index, r_array_index);
+
+    mov(r_bit, temp3); // restore r_bit
+
+    // NB! r_array_index is off by 1. It is compensated by keeping r_array_base off by 1 word.
+
+    // We will consult the secondary-super array.
+    movptr(r_array_base, Address(r_sub_klass, in_bytes(Klass::secondary_supers_offset())));
+
+    // We're asserting that the first word in an Array<Klass*> is the
+    // length, and the second word is the first word of the data. If
+    // that ever changes, r_array_base will have to be adjusted here.
+    assert(Array<Klass*>::base_offset_in_bytes() == wordSize, "Adjust this code");
+    assert(Array<Klass*>::length_offset_in_bytes() == 0, "Adjust this code");
+
+    cmpq(r_super_klass, Address(r_array_base, r_array_index, Address::times_8));
+    jccb(Assembler::equal, L_success);
+
+    assert(r_bit == rcx, "");
+    rorq(r_bitmap); // count in rcx
+
+    // Is there another entry to check? Consult the bitmap.
+    btq(r_bitmap, 1);
+    jccb(Assembler::carryClear, L_failure);
   } else {
-    movl(r_array_index, 1);
-  }
-  // NB! r_array_index is off by 1. It is compensated by keeping r_array_base off by 1 word.
+    movq(r_bitmap, Address(r_sub_klass, Klass::bitmap_offset()));
+    movq(r_array_index, r_bitmap);
 
-  // We will consult the secondary-super array.
-  movptr(r_array_base, Address(r_sub_klass, in_bytes(Klass::secondary_supers_offset())));
+    // First check the bitmap to see if super_klass might be present. If
+    // the bit is zero, we are certain that super_klass is not one of
+    // the secondary supers.
+    u1 bit = super_klass_slot;
+    {
+      // NB: If the count in a x86 shift instruction is 0, the flags are
+      // not affected, so we do a testq instead.
+      int shift_count = Klass::SECONDARY_SUPERS_TABLE_MASK - bit;
+      if (shift_count != 0) {
+        salq(r_array_index, shift_count);
+      } else {
+        testq(r_array_index, r_array_index); // MSB
+      }
+    }
+    // We test the MSB of r_array_index, i.e. its sign bit
+    jccb(Assembler::positive, L_failure);
 
-  // We're asserting that the first word in an Array<Klass*> is the
-  // length, and the second word is the first word of the data. If
-  // that ever changes, r_array_base will have to be adjusted here.
-  assert(Array<Klass*>::base_offset_in_bytes() == wordSize, "Adjust this code");
-  assert(Array<Klass*>::length_offset_in_bytes() == 0, "Adjust this code");
+    // Get the first array index that can contain super_klass into r_array_index.
+    if (bit != 0) {
+      popcntq(r_array_index, r_array_index);
+    } else {
+      movl(r_array_index, 1);
+    }
+    // NB! r_array_index is off by 1. It is compensated by keeping r_array_base off by 1 word.
 
-  cmpq(r_super_klass, Address(r_array_base, r_array_index, Address::times_8));
-  jccb(Assembler::equal, L_success);
+    // We will consult the secondary-super array.
+    movptr(r_array_base, Address(r_sub_klass, in_bytes(Klass::secondary_supers_offset())));
 
-  // Is there another entry to check? Consult the bitmap.
-  btq(r_bitmap, (bit + 1) & Klass::SECONDARY_SUPERS_TABLE_MASK);
-  jccb(Assembler::carryClear, L_failure);
+    // We're asserting that the first word in an Array<Klass*> is the
+    // length, and the second word is the first word of the data. If
+    // that ever changes, r_array_base will have to be adjusted here.
+    assert(Array<Klass*>::base_offset_in_bytes() == wordSize, "Adjust this code");
+    assert(Array<Klass*>::length_offset_in_bytes() == 0, "Adjust this code");
 
-  // Linear probe. Rotate the bitmap so that the next bit to test is
-  // in Bit 1.
-  if (bit != 0) {
-    rorq(r_bitmap, bit);
+    cmpq(r_super_klass, Address(r_array_base, r_array_index, Address::times_8));
+    jccb(Assembler::equal, L_success);
+
+    // Is there another entry to check? Consult the bitmap.
+    btq(r_bitmap, (bit + 1) & Klass::SECONDARY_SUPERS_TABLE_MASK);
+    jccb(Assembler::carryClear, L_failure);
+
+    // Linear probe. Rotate the bitmap so that the next bit to test is
+    // in Bit 0.
+    if (bit != 0) {
+      rorq(r_bitmap, bit);
+    }
   }
 
   // Calls into the stub generated by lookup_secondary_supers_table_slow_path.
