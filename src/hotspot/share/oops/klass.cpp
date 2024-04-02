@@ -1191,7 +1191,7 @@ class LookupStats : StackObj {
     if (_best_count < _no_of_samples) {
       st->print("best: %2d (%4.1f%%); average: %4.1f; worst: %2d (%4.1f%%)",
                 _best, (100.0 * _best_count) / _no_of_samples,
-                float(_average) / _no_of_samples,
+                (1.0 * _average) / _no_of_samples,
                 _worst, (100.0 * _worst_count) / _no_of_samples);
     } else {
       st->print(" %.1f ", float(_average));

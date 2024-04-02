@@ -29,12 +29,20 @@
 
 inline uint32_t rotate_right_32(uint32_t x, int distance) {
   distance = distance & 0x1F;
-  return (x >> distance) | (x << (32 - distance));
+  if (distance > 0) {
+    return (x >> distance) | (x << (32 - distance));
+  } else {
+    return x;
+  }
 }
 
 inline uint64_t rotate_right_64(uint64_t x, int distance) {
   distance = distance & 0x3F;
-  return (x >> distance) | (x << (64 - distance));
+  if (distance > 0) {
+    return (x >> distance) | (x << (64 - distance));
+  } else {
+    return x;
+  }
 }
 
 template<typename T,
