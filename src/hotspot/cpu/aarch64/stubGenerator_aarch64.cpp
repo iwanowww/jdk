@@ -6773,8 +6773,8 @@ class StubGenerator: public StubCodeGenerator {
   }
 
   // Slow path implementation for UseSecondarySupersTable.
-  address generate_lookup_secondary_supers_table_stub() {
-    StubCodeMark mark(this, "StubRoutines", "lookup_secondary_supers_table");
+  address generate_lookup_secondary_supers_table_slow_path_stub() {
+    StubCodeMark mark(this, "StubRoutines", "lookup_secondary_supers_table_slow_path");
 
     address start = __ pc();
 
@@ -8448,7 +8448,7 @@ class StubGenerator: public StubCodeGenerator {
 #endif // LINUX
 
     if (UseSecondarySupersTable) {
-      StubRoutines::_lookup_secondary_supers_table_stub = generate_lookup_secondary_supers_table_stub();
+      StubRoutines::_lookup_secondary_supers_table_slow_path_stub = generate_lookup_secondary_supers_table_slow_path_stub();
     }
 
     StubRoutines::_upcall_stub_exception_handler = generate_upcall_stub_exception_handler();

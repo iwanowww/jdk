@@ -1672,7 +1672,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
     ror(r_bitmap, r_bitmap, bit);
   }
   adr(result, L_success);
-  trampoline_call(RuntimeAddress(StubRoutines::lookup_secondary_supers_table_stub()));
+  trampoline_call(RuntimeAddress(StubRoutines::lookup_secondary_supers_table_slow_path_stub()));
 
   bind(L_failure);
   mov(result, (u1)1);

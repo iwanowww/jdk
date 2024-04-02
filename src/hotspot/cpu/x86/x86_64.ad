@@ -12117,9 +12117,13 @@ instruct partialSubtypeCheckConstSuper(rsi_RegP sub, rax_RegP super_reg, immP su
 
   ins_encode %{
     u1 super_klass_slot = ((Klass*)$super_con$$constant)->hash_slot();
-    __ lookup_secondary_supers_table($sub$$Register, $super_reg$$Register, $temp1$$Register, $temp2$$Register,
-                                     $temp3$$Register, $temp4$$Register, $result$$Register,
-                                     super_klass_slot);
+    if (InlineSecondarySupersTest) {
+      __ lookup_secondary_supers_table($sub$$Register, $super_reg$$Register, $temp1$$Register, $temp2$$Register,
+                                       $temp3$$Register, $temp4$$Register, $result$$Register,
+                                       super_klass_slot);
+    } else {
+      __ call(RuntimeAddress(StubRoutines::hashed_secondary_subklass_stubs[super_klass_slot]));
+    }
   %}
 
   ins_pipe(pipe_slow);

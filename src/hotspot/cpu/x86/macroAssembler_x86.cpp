@@ -4748,7 +4748,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
                                                    Register temp4,
                                                    Register result,
                                                    u1 super_klass_slot) {
-  assert_different_registers(r_sub_klass, temp1, temp2, temp3, temp4, result);
+  assert_different_registers(r_sub_klass, r_super_klass, temp1, temp2, temp3, temp4, result);
 
   Label L_fallthrough, L_success, L_failure;
 
@@ -4780,8 +4780,9 @@ void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
     } else {
       testq(r_array_index, r_array_index);
     }
-  }  // We test the MSB of r_array_index, i.e. its sign bit
-  jccb(Assembler::positive, L_failure);
+  }
+  // We test the MSB of r_array_index, i.e. its sign bit
+  jcc(Assembler::positive, L_failure);
 
   // Get the first array index that can contain super_klass into r_array_index.
   if (bit != 0) {
@@ -4808,7 +4809,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
   jccb(Assembler::carryClear, L_failure);
 
   // Linear probe. Rotate the bitmap so that the next bit to test is
-  // in Bit 0.
+  // in Bit 1.
   if (bit != 0) {
     rorq(r_bitmap, bit);
   }
@@ -4817,7 +4818,7 @@ void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
   // Arguments: r_super_klass, r_array_base, r_array_index, r_bitmap.
   // Kills: r_array_length.
   // Returns: result.
-  call(RuntimeAddress(StubRoutines::lookup_secondary_supers_table_stub()));
+  call(RuntimeAddress(StubRoutines::lookup_secondary_supers_table_slow_path_stub()));
   // Result (0/1) is in rdi
   jmpb(L_fallthrough);
 
@@ -4917,7 +4918,7 @@ void MacroAssembler::lookup_secondary_supers_table_slow_path(Register r_super_kl
     jcc(Assembler::equal, *L_success);
 
     // If the next bit in bitmap is zero, we're done.
-    btq(r_bitmap, 1);
+    btq(r_bitmap, 1); // FIXME-merge: 2?  // We just tested Bit 1, so now test Bit 2
     jcc(Assembler::carryClear, *L_failure);
 
     rorq(r_bitmap, 1);

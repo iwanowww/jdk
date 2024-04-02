@@ -645,6 +645,13 @@ public:
                                      Label* L_success,
                                      Label* L_failure,
                                      bool set_cond_codes = false);
+  void hashed_check_klass_subtype_slow_path(Register sub_klass,
+                                     Register super_klass,
+                                     Register temp_reg,
+                                     Register temp2_reg,
+                                     Label* L_success,
+                                     Label* L_failure,
+                                     bool set_cond_codes = false);
 
   // As above, but with a constant super_klass.
   // The result is in Register result, not the condition codes.
@@ -661,7 +668,7 @@ public:
                                                Register r_array_base,
                                                Register r_array_index,
                                                Register r_bitmap,
-                                               Register temp1, // rcx
+                                               Register temp1,
                                                Register temp2,
                                                Label* L_success,
                                                Label* L_failure = nullptr);

@@ -3994,8 +3994,29 @@ address StubGenerator::generate_upcall_stub_exception_handler() {
   return start;
 }
 
+address StubGenerator::generate_lookup_secondary_supers_table_stub(u1 super_klass_index) {
+  StubCodeMark mark(this, "StubRoutines", "lookup_secondary_supers_table");
+
+  address start = __ pc();
+
+  const Register
+      r_super_klass  = rax,
+      r_array_base   = rbx,
+      r_array_length = rcx,
+      r_array_index  = rdx,
+      r_sub_klass    = rsi,
+      result         = rdi,
+      r_bitmap       = r11;
+
+  __ lookup_secondary_supers_table(r_super_klass, r_array_base, r_array_index, r_bitmap, r_array_length, result,
+                                   super_klass_index);
+  __ ret(0);
+
+  return start;
+}
+
 // Slow path implementation for UseSecondarySupersTable.
-address StubGenerator::generate_lookup_secondary_supers_table_stub() {
+address StubGenerator::generate_lookup_secondary_supers_table_slow_path_stub() {
   StubCodeMark mark(this, "StubRoutines", "lookup_secondary_supers_table");
 
   address start = __ pc();
@@ -4177,7 +4198,10 @@ void StubGenerator::generate_final_stubs() {
   }
 
   if (UseSecondarySupersTable) {
-    StubRoutines::_lookup_secondary_supers_table_stub = generate_lookup_secondary_supers_table_stub();
+    StubRoutines::_lookup_secondary_supers_table_slow_path_stub = generate_lookup_secondary_supers_table_slow_path_stub();
+    for (int slot = 0; slot < Klass::SECONDARY_SUPERS_TABLE_SIZE; slot++) {
+      StubRoutines::lookup_secondary_supers_table_stubs[slot] = generate_lookup_secondary_supers_table_stub(slot);
+    }
   }
 
   StubRoutines::_upcall_stub_exception_handler = generate_upcall_stub_exception_handler();
