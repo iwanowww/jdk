@@ -482,6 +482,12 @@ class StubRoutines: AllStatic {
     return _upcall_stub_exception_handler;
   }
 
+  static address lookup_secondary_supers_table_stub(u1 slot) {
+    assert(slot < Klass::SECONDARY_SUPERS_TABLE_SIZE, "out of bounds");
+    assert(_lookup_secondary_supers_table_stubs[slot] != nullptr, "not implemented");
+    return _lookup_secondary_supers_table_stubs[slot];
+  }
+
   static address lookup_secondary_supers_table_slow_path_stub() {
     assert(_lookup_secondary_supers_table_slow_path_stub != nullptr, "not implemented");
     return _lookup_secondary_supers_table_slow_path_stub;

@@ -4755,10 +4755,10 @@ void MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
   BLOCK_COMMENT("lookup_secondary_supers_table {");
 
   const Register
-    r_array_index  = temp1, // rdx
-    r_array_length = temp2, // rcx
-    r_array_base   = temp3, // rbx
-    r_bitmap       = temp4; // r11
+    r_array_index  = temp1,
+    r_array_length = temp2,
+    r_array_base   = temp3,
+    r_bitmap       = temp4;
 
   LOOKUP_SECONDARY_SUPERS_TABLE_REGISTERS;
 

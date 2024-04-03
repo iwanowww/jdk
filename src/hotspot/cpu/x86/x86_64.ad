@@ -12122,7 +12122,7 @@ instruct partialSubtypeCheckConstSuper(rsi_RegP sub, rax_RegP super_reg, immP su
                                        $temp3$$Register, $temp4$$Register, $result$$Register,
                                        super_klass_slot);
     } else {
-      __ call(RuntimeAddress(StubRoutines::hashed_secondary_subklass_stubs[super_klass_slot]));
+      __ call(RuntimeAddress(StubRoutines::lookup_secondary_supers_table_stub(super_klass_slot)));
     }
   %}
 

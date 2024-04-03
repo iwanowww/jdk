@@ -4000,15 +4000,13 @@ address StubGenerator::generate_lookup_secondary_supers_table_stub(u1 super_klas
   address start = __ pc();
 
   const Register
-      r_super_klass  = rax,
-      r_array_base   = rbx,
-      r_array_length = rcx,
-      r_array_index  = rdx,
-      r_sub_klass    = rsi,
-      result         = rdi,
-      r_bitmap       = r11;
+      r_super_klass = rax,
+      r_sub_klass   = rsi,
+      result        = rdi;
 
-  __ lookup_secondary_supers_table(r_super_klass, r_array_base, r_array_index, r_bitmap, r_array_length, result,
+  __ lookup_secondary_supers_table(r_sub_klass, r_super_klass,
+                                   rdx, rcx, rbx, r11, // temps
+                                   result,
                                    super_klass_index);
   __ ret(0);
 
@@ -4024,14 +4022,14 @@ address StubGenerator::generate_lookup_secondary_supers_table_slow_path_stub() {
   const Register
       r_super_klass  = rax,
       r_array_base   = rbx,
-      r_array_length = rcx,
       r_array_index  = rdx,
       r_sub_klass    = rsi,
-      result         = rdi,
-      r_bitmap       = r11;
+      r_bitmap       = r11,
+      result         = rdi;
 
   Label L_success;
-  __ lookup_secondary_supers_table_slow_path(r_super_klass, r_array_base, r_array_index, r_bitmap, r_array_length, result,
+  __ lookup_secondary_supers_table_slow_path(r_super_klass, r_array_base, r_array_index, r_bitmap,
+                                             rcx, rdi, // temps
                                              &L_success);
   // bind(L_failure);
   __ movl(result, 1);
@@ -4200,7 +4198,7 @@ void StubGenerator::generate_final_stubs() {
   if (UseSecondarySupersTable) {
     StubRoutines::_lookup_secondary_supers_table_slow_path_stub = generate_lookup_secondary_supers_table_slow_path_stub();
     for (int slot = 0; slot < Klass::SECONDARY_SUPERS_TABLE_SIZE; slot++) {
-      StubRoutines::lookup_secondary_supers_table_stubs[slot] = generate_lookup_secondary_supers_table_stub(slot);
+      StubRoutines::_lookup_secondary_supers_table_stubs[slot] = generate_lookup_secondary_supers_table_stub(slot);
     }
   }
 
