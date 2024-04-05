@@ -6807,12 +6807,12 @@ class StubGenerator: public StubCodeGenerator {
     const Register
       r_super_klass  = r0,        // argument
       r_array_base   = r1,        // argument
-      temp1          = r2,        // temp
+      r_array_length = r2,        // argument
       r_array_index  = r3,        // argument
       r_bitmap       = rscratch2, // argument
       result         = r5;        // argument
 
-    __ lookup_secondary_supers_table_slow_path(r_super_klass, r_array_base, r_array_index, r_bitmap, temp1, result);
+    __ lookup_secondary_supers_table_slow_path(r_super_klass, r_array_base, r_array_length, r_array_index, r_bitmap, result);
     __ ret(lr);
 
     return start;

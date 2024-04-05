@@ -1644,25 +1644,20 @@ bool MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
   // the secondary supers.
   tbz(r_bitmap, bit, L_fallthrough);
 
+  // We will consult the secondary-super array.
+  ldr(r_array_base, Address(r_sub_klass, in_bytes(Klass::secondary_supers_offset())));
+  ldrw(r_array_length, Address(r_array_base, Array<Klass*>::length_offset_in_bytes()));
+  add(r_array_base, r_array_base, Array<Klass*>::base_offset_in_bytes());
+
   // Get the first array index that can contain super_klass into r_array_index.
   if (bit != 0) {
-    shld(vtemp, vtemp, Klass::SECONDARY_SUPERS_TABLE_MASK - bit);
+    shld(vtemp, vtemp, Klass::SECONDARY_SUPERS_TABLE_MASK - (bit - 1));
     cnt(vtemp, T8B, vtemp);
     addv(vtemp, T8B, vtemp);
     fmovd(r_array_index, vtemp);
   } else {
-    mov(r_array_index, (u1)1);
+    mov(r_array_index, (u1)0);
   }
-  // NB! r_array_index is off by 1. It is compensated by keeping r_array_base off by 1 word.
-
-  // We will consult the secondary-super array.
-  ldr(r_array_base, Address(r_sub_klass, in_bytes(Klass::secondary_supers_offset())));
-
-  // The value i in r_array_index is >= 1, so even though r_array_base
-  // points to the length, we don't need to adjust it to point to the
-  // data.
-  assert(Array<Klass*>::base_offset_in_bytes() == wordSize, "Adjust this code");
-  assert(Array<Klass*>::length_offset_in_bytes() == 0, "Adjust this code");
 
   ldr(result, Address(r_array_base, r_array_index, Address::lsl(LogBytesPerWord)));
   eor(result, result, r_super_klass);
@@ -1676,7 +1671,7 @@ bool MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
     ror(r_bitmap, r_bitmap, bit);
   }
 
-  // By now, current slot (at r_array_index - 1) and bits 0/1 in the bitmap are checked.
+  // By now, current slot at r_array_index and bits 0/1 in the bitmap are checked.
   Address stub = RuntimeAddress(StubRoutines::lookup_secondary_supers_table_slow_path_stub());
   if (stub_is_near) {
     bl(stub);
@@ -1703,26 +1698,17 @@ bool MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
 // lookup in the secondary supers array.
 void MacroAssembler::lookup_secondary_supers_table_slow_path(Register r_super_klass,
                                                              Register r_array_base,
+                                                             Register r_array_length,
                                                              Register r_array_index,
                                                              Register r_bitmap,
-                                                             Register temp1,
                                                              Register result) {
-  assert_different_registers(r_super_klass, r_array_base, r_array_index, r_bitmap, temp1, result, rscratch1);
+  assert_different_registers(r_super_klass, r_array_base, r_array_index, r_bitmap, r_array_length, result, rscratch1);
 
-  const Register
-    r_array_length = temp1,
-    r_sub_klass    = noreg; // unused
+  const Register r_sub_klass = noreg; // unused
 
   LOOKUP_SECONDARY_SUPERS_TABLE_REGISTERS;
 
   Label L_fallthrough, L_huge;
-
-  // Load the array length.
-  ldrw(r_array_length, Address(r_array_base, Array<Klass*>::length_offset_in_bytes()));
-  // And adjust the array base to point to the data.
-  // NB! Effectively increments current slot index by 1.
-  assert(Array<Klass*>::base_offset_in_bytes() == wordSize, "");
-  add(r_array_base, r_array_base, Array<Klass*>::base_offset_in_bytes());
 
   // The bitmap is full to bursting.
   // Implicit invariant: BITMAP_FULL => (length > 0)
@@ -1730,9 +1716,8 @@ void MacroAssembler::lookup_secondary_supers_table_slow_path(Register r_super_kl
   cmn(r_bitmap, (u1)1);
   br(EQ, L_huge);
 
-  // NB! By now, bits 0 and 1 in bitmap are checked.
-  // Current slot (at r_array_index) is not checked yet though and
-  // current slot index (r_array_index) may be out-of-bounds.
+  // By now, slot at r_array_index and bitmap bits 0/1 were checked.
+  // On loop entry first element is skipped.
 
   { // This is conventional linear probing, but instead of terminating
     // when a null entry is found in the table, we maintain a bitmap
@@ -1740,17 +1725,21 @@ void MacroAssembler::lookup_secondary_supers_table_slow_path(Register r_super_kl
     Label L_loop;
     bind(L_loop);
 
+    // Proceed to the next element.
+    ror(r_bitmap, r_bitmap, 1); // Bit 2/1 => Bit 1/0
+    add(r_array_index, r_array_index, 1);
+
     cmp(r_array_index, r_array_length);
     csel(r_array_index, zr, r_array_index, GE);
+
+    // Bit 0 was already checked (either on the previous iteration or before the loop).
 
     ldr(rscratch1, Address(r_array_base, r_array_index, Address::lsl(LogBytesPerWord)));
     eor(result, rscratch1, r_super_klass);
     cbz(result, L_fallthrough);
 
-    tbz(r_bitmap, 2, L_fallthrough); // look-ahead check (Bit 2); result is non-zero
+    tbz(r_bitmap, 1, L_fallthrough); // look-ahead check (Bit 1); result is nonzero.
 
-    ror(r_bitmap, r_bitmap, 1);
-    add(r_array_index, r_array_index, 1);
     b(L_loop);
   }
 

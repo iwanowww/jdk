@@ -1019,9 +1019,9 @@ public:
 
   void lookup_secondary_supers_table_slow_path(Register r_super_klass,
                                                Register r_array_base,
+                                               Register r_array_length,
                                                Register r_array_index,
                                                Register r_bitmap,
-                                               Register temp1,
                                                Register result);
 
   // Simplified, combined version, good for typical uses.
