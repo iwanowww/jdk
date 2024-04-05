@@ -1676,6 +1676,7 @@ bool MacroAssembler::lookup_secondary_supers_table(Register r_sub_klass,
     ror(r_bitmap, r_bitmap, bit);
   }
 
+  // By now, current slot (at r_array_index - 1) and bits 0/1 in the bitmap are checked.
   Address stub = RuntimeAddress(StubRoutines::lookup_secondary_supers_table_slow_path_stub());
   if (stub_is_near) {
     bl(stub);
@@ -1714,25 +1715,30 @@ void MacroAssembler::lookup_secondary_supers_table_slow_path(Register r_super_kl
 
   LOOKUP_SECONDARY_SUPERS_TABLE_REGISTERS;
 
-  Label L_fallthrough;
+  Label L_fallthrough, L_huge;
 
   // Load the array length.
   ldrw(r_array_length, Address(r_array_base, Array<Klass*>::length_offset_in_bytes()));
   // And adjust the array base to point to the data.
+  // NB! Effectively increments current slot index by 1.
+  assert(Array<Klass*>::base_offset_in_bytes() == wordSize, "");
   add(r_array_base, r_array_base, Array<Klass*>::base_offset_in_bytes());
 
-  // Linear probe
-  Label LOOPY, huge;
-
-  // The bitmap is full to bursting: >= 64 entries.
+  // The bitmap is full to bursting.
+  // Implicit invariant: BITMAP_FULL => (length > 0)
+  assert(Klass::SECONDARY_SUPERS_BITMAP_FULL == ~uintx(0), "");
   cmn(r_bitmap, (u1)1);
-  br(EQ, huge);
+  br(EQ, L_huge);
 
-  {
-    // This is conventional linear probing, but instead of terminating
+  // NB! By now, bits 0 and 1 in bitmap are checked.
+  // Current slot (at r_array_index) is not checked yet though and
+  // current slot index (r_array_index) may be out-of-bounds.
+
+  { // This is conventional linear probing, but instead of terminating
     // when a null entry is found in the table, we maintain a bitmap
     // in which a 0 indicates missing entries.
-    bind(LOOPY);
+    Label L_loop;
+    bind(L_loop);
 
     cmp(r_array_index, r_array_length);
     csel(r_array_index, zr, r_array_index, GE);
@@ -1741,28 +1747,21 @@ void MacroAssembler::lookup_secondary_supers_table_slow_path(Register r_super_kl
     eor(result, rscratch1, r_super_klass);
     cbz(result, L_fallthrough);
 
-    tbz(r_bitmap, 2, L_fallthrough); // End of run. result is nonzero.
+    tbz(r_bitmap, 2, L_fallthrough); // look-ahead check (Bit 2); result is non-zero
 
     ror(r_bitmap, r_bitmap, 1);
     add(r_array_index, r_array_index, 1);
-    b(LOOPY);
+    b(L_loop);
   }
 
-  // Degenerate case: more than 64 secondary supers
-  bind(huge);
-  mov(r_array_index, 0);
-  {
+  { // Degenerate case: more than 64 secondary supers.
     // FIXME: We could do something smarter here, maybe a vectorized
     // comparison or a binary search, but is that worth any added
     // complexity?
-    Label again;
-    bind(again);
-    ldr(rscratch1, Address(r_array_base, r_array_index, Address::lsl(LogBytesPerWord)));
-    eor(result, rscratch1, r_super_klass);
-    cbz(result, L_fallthrough);
-    add(r_array_index, r_array_index, 1);
-    cmp(r_array_index, r_array_length);
-    br(LT, again);
+    bind(L_huge);
+    cmp(sp, zr); // Clear Z flag; SP is never zero
+    repne_scan(r_array_base, r_super_klass, r_array_length, rscratch1);
+    cset(result, NE); // result == 0 iff we got a match.
   }
 
   bind(L_fallthrough);
