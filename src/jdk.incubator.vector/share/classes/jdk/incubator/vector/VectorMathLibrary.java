@@ -213,7 +213,7 @@ import static jdk.incubator.vector.VectorOperators.*;
             System.loadLibrary("sleef");
         }
 
-        private static String suffixX64(VectorSpecies vspecies) {
+        private static String suffixX64(VectorSpecies<?> vspecies) {
             assert vspecies.vectorBitSize() <= VectorShape.getMaxVectorBitSize(vspecies.elementType());
 
             boolean hasAVX2 = VectorShape.getMaxVectorBitSize(byte.class)  >= 256;
@@ -228,11 +228,11 @@ import static jdk.incubator.vector.VectorOperators.*;
             }
         }
 
-        private static String suffixAArch64(VectorSpecies vspecies) {
+        private static String suffixAArch64(VectorSpecies<?> vspecies) {
             return (vspecies.vectorBitSize() > 128 ? "sve" : "advsimd");
         }
 
-        private static String suffix(VectorSpecies vspecies) {
+        private static String suffix(VectorSpecies<?> vspecies) {
             switch (StaticProperty.osArch()) {
                 case "amd64":
                 case "x86_64":
