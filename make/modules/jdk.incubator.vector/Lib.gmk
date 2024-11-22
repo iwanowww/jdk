@@ -46,9 +46,13 @@ ifeq ($(INCLUDE_COMPILER2), true)
   ## Build libsleef
   ##############################################################################
 
-  ifeq ($(call isTargetOs, linux macosx)+$(call isTargetCpu, aarch64 riscv64), true+true)
+  ifeq ($(call isTargetOs, linux macosx)+$(call isTargetCpu, aarch64 riscv64 x86_64), true+true)
     ifeq ($(call isTargetCpu, riscv64), true)
       LIBSLEEF_CFLAGS := -march=rv64gcv
+    endif
+
+    ifeq ($(call isTargetOs, linux)+$(call isTargetCpu, x86_64), true+true)
+      LIBSLEEF_CFLAGS := -march=skylake-avx512
     endif
 
     $(eval $(call SetupJdkLibrary, BUILD_LIBSLEEF, \

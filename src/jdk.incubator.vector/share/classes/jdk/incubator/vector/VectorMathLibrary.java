@@ -213,8 +213,35 @@ import static jdk.incubator.vector.VectorOperators.*;
             System.loadLibrary("sleef");
         }
 
-        private static String suffix(VectorShape vshape) {
-            return (vshape.vectorBitSize() > 128 ? "sve" : "advsimd");
+        private static String suffixX64(VectorSpecies vspecies) {
+            assert vspecies.vectorBitSize() <= VectorShape.getMaxVectorBitSize(vspecies.elementType());
+
+            boolean hasAVX2 = VectorShape.getMaxVectorBitSize(byte.class)  >= 256;
+            boolean hasAVX1 = VectorShape.getMaxVectorBitSize(float.class) >= 256;
+
+            switch (vspecies.vectorBitSize()) {
+                case 512: return "avx512f";
+                case 256: return (hasAVX2 ? "avx2" : "avx");
+                case 128: return (hasAVX2 ? "avx2128" :
+                                  hasAVX1 ? "sse4" : "sse2"); // FIXME: sse4 w/o avx
+                default: throw new InternalError("not supported");
+            }
+        }
+
+        private static String suffixAArch64(VectorSpecies vspecies) {
+            return (vspecies.vectorBitSize() > 128 ? "sve" : "advsimd");
+        }
+
+        private static String suffix(VectorSpecies vspecies) {
+            switch (StaticProperty.osArch()) {
+                case "amd64":
+                case "x86_64":
+                    return suffixX64(vspecies);
+                case "aarch64":
+                    return suffixAArch64(vspecies);
+                default:
+                    return JAVA;
+            }
         }
 
         private static String precisionLevel(Operator op) {
@@ -243,7 +270,7 @@ import static jdk.incubator.vector.VectorOperators.*;
                                  (vspecies.elementType() == float.class ? "f" : "d"),
                                  vspecies.length(),
                                  precisionLevel(op),
-                                 suffix(vspecies.vectorShape()));
+                                 suffix(vspecies));
         }
 
         @Override
