@@ -159,7 +159,7 @@ class OptoRuntime : public AllStatic {
   static const TypeFunc *_checkcast_arraycopy_tf;
   static const TypeFunc *_generic_arraycopy_tf;
   static const TypeFunc *_slow_arraycopy_tf;
-  static const TypeFunc *_make_setmemory_tf;
+  static const TypeFunc *_unsafe_setmemory_tf;
   static const TypeFunc *_array_fill_tf;
   static const TypeFunc *_array_sort_tf;
   static const TypeFunc *_array_partition_tf;
@@ -310,101 +310,12 @@ private:
   // Type functions
   // ======================================================
 
-  // Initialization methods
-
-  static void new_instance_Type_init(); // object allocation (slow case)
-  static void new_array_Type_init ();   // [a]newarray (slow case)
-  static void multianewarray2_Type_init(); // multianewarray
-  static void multianewarray3_Type_init(); // multianewarray
-  static void multianewarray4_Type_init(); // multianewarray
-  static void multianewarray5_Type_init(); // multianewarray
-  static void multianewarrayN_Type_init(); // multianewarray
-  static void complete_monitor_enter_Type_init();
-  static void complete_monitor_exit_Type_init();
-  static void monitor_notify_Type_init();
-  static void uncommon_trap_Type_init();
-  static void athrow_Type_init();
-  static void rethrow_Type_init();
-  static void Math_D_D_Type_init();  // sin,cos & friends
-  static void Math_DD_D_Type_init(); // mod,pow & friends
-  static void modf_Type_init();
-  static void l2f_Type_init();
-  static void void_long_Type_init();
-  static void void_void_Type_init();
-
-  static void jfr_write_checkpoint_Type_init();
-
-  static void flush_windows_Type_init();
-
-  // arraycopy routine types
-  static void fast_arraycopy_Type_init(); // bit-blasters
-  static void checkcast_arraycopy_Type_init();
-  static void generic_arraycopy_Type_init();
-  static void slow_arraycopy_Type_init();   // the full routine
-
-  static void make_setmemory_Type_init();
-
-  static void array_fill_Type_init();
-
-  static void array_sort_Type_init();
-  static void array_partition_Type_init();
-  static void aescrypt_block_Type_init();
-  static void cipherBlockChaining_aescrypt_Type_init();
-  static void electronicCodeBook_aescrypt_Type_init();
-  static void counterMode_aescrypt_Type_init();
-  static void galoisCounterMode_aescrypt_Type_init();
-
-  static void digestBase_implCompress_Type_init();
-  static const TypeFunc* digestBase_implCompress_Type_helper(bool is_sha3);
-  static void digestBase_implCompressMB_Type_init();
-  static const TypeFunc* digestBase_implCompressMB_Type_helper(bool is_sha3);
-
-  static void multiplyToLen_Type_init();
-  static void montgomeryMultiply_Type_init();
-  static void montgomerySquare_Type_init();
-
-  static void squareToLen_Type_init();
-
-  static void mulAdd_Type_init();
-
-  static void bigIntegerShift_Type_init();
-
-  static void vectorizedMismatch_Type_init();
-
-  static void ghash_processBlocks_Type_init();
-  static void chacha20Block_Type_init();
-  static void base64_encodeBlock_Type_init();
-  static void base64_decodeBlock_Type_init();
-  static void string_IndexOf_Type_init();
-  static void poly1305_processBlocks_Type_init();
-  static void intpoly_montgomeryMult_P256_Type_init();
-  static void intpoly_assign_Type_init();
-
-  static void updateBytesCRC32_Type_init();
-  static void updateBytesCRC32C_Type_init();
-
-  static void updateBytesAdler32_Type_init();
-
-  // leaf on stack replacement interpreter accessor types
-  static void osr_end_Type_init();
-
-  static void register_finalizer_Type_init();
-
-  JFR_ONLY(static void class_id_load_barrier_Type_init();)
-#if INCLUDE_JVMTI
-  static void notify_jvmti_vthread_Type_init();
-#endif
-
-  // Dtrace support
-  static void dtrace_method_entry_exit_Type_init();
-  static void dtrace_object_alloc_Type_init();
-
-  static inline const TypeFunc *new_instance_Type() {
+  static inline const TypeFunc* new_instance_Type() {
     assert(_new_instance_tf != nullptr, "should be initialized");
     return _new_instance_tf;
   }
 
-  static inline const TypeFunc *new_array_Type() {
+  static inline const TypeFunc* new_array_Type() {
     assert(_new_array_tf != nullptr, "should be initialized");
     return _new_array_tf;
   }
@@ -415,97 +326,97 @@ private:
 
   static const TypeFunc* multianewarray_Type(int ndim); // multianewarray
 
-  static inline const TypeFunc *multianewarray2_Type() {
+  static inline const TypeFunc* multianewarray2_Type() {
     assert(_multianewarray2_tf != nullptr, "should be initialized");
     return _multianewarray2_tf;
   }
 
-  static inline const TypeFunc *multianewarray3_Type() {
+  static inline const TypeFunc* multianewarray3_Type() {
     assert(_multianewarray3_tf != nullptr, "should be initialized");
     return _multianewarray3_tf;
   }
 
-  static inline const TypeFunc *multianewarray4_Type() {
+  static inline const TypeFunc* multianewarray4_Type() {
     assert(_multianewarray4_tf != nullptr, "should be initialized");
     return _multianewarray4_tf;
   }
 
-  static inline const TypeFunc *multianewarray5_Type() {
+  static inline const TypeFunc* multianewarray5_Type() {
     assert(_multianewarray5_tf != nullptr, "should be initialized");
     return _multianewarray5_tf;
   }
 
-  static inline const TypeFunc *multianewarrayN_Type() {
+  static inline const TypeFunc* multianewarrayN_Type() {
     assert(_multianewarrayN_tf != nullptr, "should be initialized");
     return _multianewarrayN_tf;
   }
 
-  static inline const TypeFunc *complete_monitor_enter_Type() {
+  static inline const TypeFunc* complete_monitor_enter_Type() {
     assert(_complete_monitor_enter_tf != nullptr, "should be initialized");
     return _complete_monitor_enter_tf;
   }
 
-  static inline const TypeFunc *complete_monitor_locking_Type() {
+  static inline const TypeFunc* complete_monitor_locking_Type() {
     return complete_monitor_enter_Type();
   }
 
-  static inline const TypeFunc *complete_monitor_exit_Type() {
+  static inline const TypeFunc* complete_monitor_exit_Type() {
     assert(_complete_monitor_exit_tf != nullptr, "should be initialized");
     return _complete_monitor_exit_tf;
   }
 
-  static inline const TypeFunc *monitor_notify_Type() {
+  static inline const TypeFunc* monitor_notify_Type() {
     assert(_monitor_notify_tf != nullptr, "should be initialized");
     return _monitor_notify_tf;
   }
 
-  static inline const TypeFunc *monitor_notifyAll_Type() {
+  static inline const TypeFunc* monitor_notifyAll_Type() {
     return monitor_notify_Type();
   }
 
-  static inline const TypeFunc *uncommon_trap_Type() {
+  static inline const TypeFunc* uncommon_trap_Type() {
     assert(_uncommon_trap_tf != nullptr, "should be initialized");
     return _uncommon_trap_tf;
   }
 
-  static inline const TypeFunc *athrow_Type() {
+  static inline const TypeFunc* athrow_Type() {
     assert(_athrow_tf != nullptr, "should be initialized");
     return _athrow_tf;
   }
 
-  static inline const TypeFunc *rethrow_Type() {
+  static inline const TypeFunc* rethrow_Type() {
     assert(_rethrow_tf != nullptr, "should be initialized");
     return _rethrow_tf;
   }
 
-  static inline const TypeFunc *Math_D_D_Type() {
+  static inline const TypeFunc* Math_D_D_Type() {
     assert(_Math_D_D_tf != nullptr, "should be initialized");
     return _Math_D_D_tf;
   }
 
-  static inline const TypeFunc *Math_DD_D_Type() {
+  static inline const TypeFunc* Math_DD_D_Type() {
     assert(_Math_DD_D_tf != nullptr, "should be initialized");
     return _Math_DD_D_tf;
   }
 
   static const TypeFunc* Math_Vector_Vector_Type(uint num_arg, const TypeVect* in_type, const TypeVect* out_type);
 
-  static inline const TypeFunc *modf_Type() {
+  static inline const TypeFunc*modf_Type() {
     assert(_modf_tf != nullptr, "should be initialized");
     return _modf_tf;
   }
 
-  static inline const TypeFunc *l2f_Type() {
+  static inline const TypeFunc*l2f_Type() {
     assert(_l2f_tf != nullptr, "should be initialized");
     return _l2f_tf;
   }
 
-  static inline const TypeFunc *void_long_Type() {
+  static inline const TypeFunc*void_long_Type() {
     assert(_void_long_tf != nullptr, "should be initialized");
     return _void_long_tf;
   }
 
-  static inline const TypeFunc *void_void_Type() {
+  static inline const TypeFunc*void_void_Type() {
     assert(_void_void_tf != nullptr, "should be initialized");
     return _void_void_tf;
   }
@@ -521,7 +432,7 @@ private:
   }
 
   // arraycopy routine types
-  static inline const TypeFunc *fast_arraycopy_Type() {
+  static inline const TypeFunc* fast_arraycopy_Type() {
     assert(_fast_arraycopy_tf != nullptr, "should be initialized");
     // This signature is simple:  Two base pointers and a size_t.
     return _fast_arraycopy_tf;
@@ -546,9 +457,9 @@ private:
     return _slow_arraycopy_tf;
   }   // the full routine
 
-  static inline const TypeFunc* make_setmemory_Type() {
-    assert(_make_setmemory_tf != nullptr, "should be initialized");
-    return _make_setmemory_tf;
+  static inline const TypeFunc* unsafe_setmemory_Type() {
+    assert(_unsafe_setmemory_tf != nullptr, "should be initialized");
+    return _unsafe_setmemory_tf;
   }
 
   static inline const TypeFunc* array_fill_Type() {

@@ -217,7 +217,7 @@ const TypeFunc* OptoRuntime::_fast_arraycopy_tf = nullptr;
 const TypeFunc* OptoRuntime::_checkcast_arraycopy_tf = nullptr;
 const TypeFunc* OptoRuntime::_generic_arraycopy_tf = nullptr;
 const TypeFunc* OptoRuntime::_slow_arraycopy_tf = nullptr;
-const TypeFunc* OptoRuntime::_make_setmemory_tf = nullptr;
+const TypeFunc* OptoRuntime::_unsafe_setmemory_tf = nullptr;
 const TypeFunc* OptoRuntime::_array_fill_tf = nullptr;
 const TypeFunc* OptoRuntime::_array_sort_tf = nullptr;
 const TypeFunc* OptoRuntime::_array_partition_tf = nullptr;
@@ -562,9 +562,7 @@ JRT_BLOCK_ENTRY(void, OptoRuntime::monitor_notifyAll_C(oopDesc* obj, JavaThread*
   JRT_BLOCK_END;
 JRT_END
 
-void OptoRuntime::new_instance_Type_init() {
-  assert(_new_instance_tf == nullptr, "should be called once only");
-
+static const TypeFunc* make_new_instance_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL; // Klass to be allocated
@@ -575,13 +573,11 @@ void OptoRuntime::new_instance_Type_init() {
   fields[TypeFunc::Parms+0] = TypeRawPtr::NOTNULL; // Returned oop
 
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+1, fields);
-
-  _new_instance_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
 #if INCLUDE_JVMTI
-void OptoRuntime::notify_jvmti_vthread_Type_init() {
-  assert(_notify_jvmti_vthread_tf == nullptr, "should be called once only");
+static const TypeFunc* make_notify_jvmti_vthread_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(2);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL; // VirtualThread oop
@@ -593,12 +589,11 @@ void OptoRuntime::notify_jvmti_vthread_Type_init() {
   fields[TypeFunc::Parms+0] = nullptr; // void
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
 
-  _notify_jvmti_vthread_tf = TypeFunc::make(domain,range);
+  return TypeFunc::make(domain,range);
 }
 #endif
 
-void OptoRuntime::athrow_Type_init() {
-  assert(_athrow_tf == nullptr, "should be called once only");
+static const TypeFunc* make_athrow_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL; // Klass to be allocated
@@ -609,11 +604,10 @@ void OptoRuntime::athrow_Type_init() {
 
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+0, fields);
 
-  _athrow_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::new_array_Type_init() {
-  assert(_new_array_tf == nullptr, "should be called once only");
+static const TypeFunc* make_new_array_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(2);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL;   // element klass
@@ -626,7 +620,7 @@ void OptoRuntime::new_array_Type_init() {
 
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+1, fields);
 
-  _new_array_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
 const TypeFunc *OptoRuntime::multianewarray_Type(int ndim) {
@@ -646,28 +640,7 @@ const TypeFunc *OptoRuntime::multianewarray_Type(int ndim) {
   return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::multianewarray2_Type_init() {
-  assert(_multianewarray2_tf == nullptr, "should be called once only");
-  _multianewarray2_tf = multianewarray_Type(2);
-}
-
-void OptoRuntime::multianewarray3_Type_init() {
-  assert(_multianewarray3_tf == nullptr, "should be called once only");
-  _multianewarray3_tf = multianewarray_Type(3);
-}
-
-void OptoRuntime::multianewarray4_Type_init() {
-  assert(_multianewarray4_tf == nullptr, "should be called once only");
-  _multianewarray4_tf = multianewarray_Type(4);
-}
-
-void OptoRuntime::multianewarray5_Type_init() {
-  assert(_multianewarray5_tf == nullptr, "should be called once only");
-  _multianewarray5_tf = multianewarray_Type(5);
-}
-
-void OptoRuntime::multianewarrayN_Type_init() {
-  assert(_multianewarrayN_tf == nullptr, "should be called once only");
+static const TypeFunc* make_multianewarrayN_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(2);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL;   // element klass
@@ -679,11 +652,10 @@ void OptoRuntime::multianewarrayN_Type_init() {
   fields[TypeFunc::Parms+0] = TypeRawPtr::NOTNULL; // Returned oop
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+1, fields);
 
-  _multianewarrayN_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::uncommon_trap_Type_init() {
-  assert(_uncommon_trap_tf == nullptr, "should be called once only");
+static const TypeFunc* make_uncommon_trap_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeInt::INT; // trap_reason (deopt reason and action)
@@ -693,14 +665,13 @@ void OptoRuntime::uncommon_trap_Type_init() {
   fields = TypeTuple::fields(0);
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+0, fields);
 
-  _uncommon_trap_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
 //-----------------------------------------------------------------------------
 // Monitor Handling
 
-void OptoRuntime::complete_monitor_enter_Type_init() {
-  assert(_complete_monitor_enter_tf == nullptr, "should be called once only");
+static const TypeFunc* make_complete_monitor_enter_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(2);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL;  // Object to be Locked
@@ -712,13 +683,12 @@ void OptoRuntime::complete_monitor_enter_Type_init() {
 
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+0,fields);
 
-  _complete_monitor_enter_tf = TypeFunc::make(domain,range);
+  return TypeFunc::make(domain,range);
 }
 
 //-----------------------------------------------------------------------------
 
-void OptoRuntime::complete_monitor_exit_Type_init() {
-  assert(_complete_monitor_exit_tf == nullptr, "should be called once only");
+static const TypeFunc* make_complete_monitor_exit_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(3);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL;  // Object to be Locked
@@ -731,11 +701,10 @@ void OptoRuntime::complete_monitor_exit_Type_init() {
 
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+0, fields);
 
-  _complete_monitor_exit_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::monitor_notify_Type_init() {
-  assert(_monitor_notify_tf == nullptr, "should be called once only");
+static const TypeFunc* make_monitor_notify_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL;  // Object to be Locked
@@ -744,11 +713,10 @@ void OptoRuntime::monitor_notify_Type_init() {
   // create result type (range)
   fields = TypeTuple::fields(0);
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+0, fields);
-  _monitor_notify_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::flush_windows_Type_init() {
-  assert(_flush_windows_tf == nullptr, "should be called once only");
+static const TypeFunc* make_flush_windows_Type() {
   // create input type (domain)
   const Type** fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = nullptr; // void
@@ -759,11 +727,10 @@ void OptoRuntime::flush_windows_Type_init() {
   fields[TypeFunc::Parms+0] = nullptr; // void
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms, fields);
 
-  _flush_windows_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::l2f_Type_init() {
-  assert(_l2f_tf == nullptr, "should be called once only");
+static const TypeFunc* make_l2f_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(2);
   fields[TypeFunc::Parms+0] = TypeLong::LONG;
@@ -775,11 +742,10 @@ void OptoRuntime::l2f_Type_init() {
   fields[TypeFunc::Parms+0] = Type::FLOAT;
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+1, fields);
 
-  _l2f_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::modf_Type_init() {
-  assert(_modf_tf == nullptr, "should be called once only");
+static const TypeFunc* make_modf_Type() {
   const Type **fields = TypeTuple::fields(2);
   fields[TypeFunc::Parms+0] = Type::FLOAT;
   fields[TypeFunc::Parms+1] = Type::FLOAT;
@@ -791,11 +757,10 @@ void OptoRuntime::modf_Type_init() {
 
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+1, fields);
 
-  _modf_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::Math_D_D_Type_init() {
-  assert(_Math_D_D_tf == nullptr, "should be called once only");
+static const TypeFunc* make_Math_D_D_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(2);
   // Symbol* name of class to be loaded
@@ -809,7 +774,7 @@ void OptoRuntime::Math_D_D_Type_init() {
   fields[TypeFunc::Parms+1] = Type::HALF;
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+2, fields);
 
-  _Math_D_D_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
 const TypeFunc *OptoRuntime::Math_Vector_Vector_Type(uint num_arg, const TypeVect* in_type, const TypeVect* out_type) {
@@ -831,8 +796,7 @@ const TypeFunc *OptoRuntime::Math_Vector_Vector_Type(uint num_arg, const TypeVec
   return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::Math_DD_D_Type_init() {
-  assert(_Math_DD_D_tf == nullptr, "should be called once only");
+static const TypeFunc* make_Math_DD_D_Type() {
   const Type **fields = TypeTuple::fields(4);
   fields[TypeFunc::Parms+0] = Type::DOUBLE;
   fields[TypeFunc::Parms+1] = Type::HALF;
@@ -846,13 +810,12 @@ void OptoRuntime::Math_DD_D_Type_init() {
   fields[TypeFunc::Parms+1] = Type::HALF;
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+2, fields);
 
-  _Math_DD_D_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
 //-------------- currentTimeMillis, currentTimeNanos, etc
 
-void OptoRuntime::void_long_Type_init() {
-  assert(_void_long_tf == nullptr, "should be called once only");
+static const TypeFunc* make_void_long_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(0);
   const TypeTuple *domain = TypeTuple::make(TypeFunc::Parms+0, fields);
@@ -863,11 +826,10 @@ void OptoRuntime::void_long_Type_init() {
   fields[TypeFunc::Parms+1] = Type::HALF;
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+2, fields);
 
-  _void_long_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::void_void_Type_init() {
-  assert(_void_void_tf == nullptr, "should be called once only");
+static const TypeFunc* make_void_void_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(0);
   const TypeTuple *domain = TypeTuple::make(TypeFunc::Parms+0, fields);
@@ -875,11 +837,10 @@ void OptoRuntime::void_void_Type_init() {
   // create result type (range)
   fields = TypeTuple::fields(0);
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+0, fields);
-  _void_void_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::jfr_write_checkpoint_Type_init() {
-  assert(_jfr_write_checkpoint_tf == nullptr, "should be called once only");
+static const TypeFunc* make_jfr_write_checkpoint_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(0);
   const TypeTuple *domain = TypeTuple::make(TypeFunc::Parms, fields);
@@ -887,7 +848,7 @@ void OptoRuntime::jfr_write_checkpoint_Type_init() {
   // create result type (range)
   fields = TypeTuple::fields(0);
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms, fields);
-  _jfr_write_checkpoint_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
 
@@ -896,8 +857,7 @@ void OptoRuntime::jfr_write_checkpoint_Type_init() {
 // long size
 // uchar byte
 
-void OptoRuntime::make_setmemory_Type_init() {
-  assert(_make_setmemory_tf == nullptr, "should be called once only");
+static const TypeFunc* make_make_setmemory_Type() {
   // create input type (domain)
   int argcnt = NOT_LP64(3) LP64_ONLY(4);
   const Type** fields = TypeTuple::fields(argcnt);
@@ -913,7 +873,7 @@ void OptoRuntime::make_setmemory_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = nullptr; // void
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
-  _make_setmemory_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
 // arraycopy stub variations:
@@ -962,28 +922,7 @@ static const TypeFunc* make_arraycopy_Type(ArrayCopyType act) {
   return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::fast_arraycopy_Type_init() {
-  assert(_fast_arraycopy_tf == nullptr, "should be called once only");
-  _fast_arraycopy_tf = make_arraycopy_Type(ac_fast);
-}
-
-void OptoRuntime::checkcast_arraycopy_Type_init() {
-  assert(_checkcast_arraycopy_tf == nullptr, "should be called once only");
-  _checkcast_arraycopy_tf = make_arraycopy_Type(ac_checkcast);
-}
-
-void OptoRuntime::slow_arraycopy_Type_init() {
-  assert(_slow_arraycopy_tf == nullptr, "should be called once only");
-  _slow_arraycopy_tf = make_arraycopy_Type(ac_slow);
-}
-
-void OptoRuntime::generic_arraycopy_Type_init() {
-  assert(_generic_arraycopy_tf == nullptr, "should be called once only");
-  _generic_arraycopy_tf = make_arraycopy_Type(ac_generic);
-}
-
-void OptoRuntime::array_fill_Type_init() {
-  assert(_array_fill_tf == nullptr, "should be called once only");
+static const TypeFunc* make_array_fill_Type() {
   const Type** fields;
   int argp = TypeFunc::Parms;
   // create input type (domain): pointer, int, size_t
@@ -999,11 +938,10 @@ void OptoRuntime::array_fill_Type_init() {
   fields[TypeFunc::Parms+0] = nullptr; // void
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms, fields);
 
-  _array_fill_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::array_partition_Type_init() {
-  assert(_array_partition_tf == nullptr, "should be called once only");
+static const TypeFunc* make_array_partition_Type() {
   // create input type (domain)
   int num_args = 7;
   int argcnt = num_args;
@@ -1023,11 +961,10 @@ void OptoRuntime::array_partition_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = nullptr; // void
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
-  _array_partition_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::array_sort_Type_init() {
-  assert(_array_sort_tf == nullptr, "should be called once only");
+static const TypeFunc* make_array_sort_Type() {
   // create input type (domain)
   int num_args      = 4;
   int argcnt = num_args;
@@ -1044,11 +981,10 @@ void OptoRuntime::array_sort_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = nullptr; // void
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
-  _array_sort_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::aescrypt_block_Type_init() {
-  assert(_aescrypt_block_tf == nullptr, "should be called once only");
+static const TypeFunc* make_aescrypt_block_Type() {
   // create input type (domain)
   int num_args      = 3;
   int argcnt = num_args;
@@ -1064,11 +1000,10 @@ void OptoRuntime::aescrypt_block_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = nullptr; // void
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
-  _aescrypt_block_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::updateBytesCRC32_Type_init() {
-  assert(_updateBytesCRC32_tf == nullptr, "should be called once only");
+static const TypeFunc* make_updateBytesCRC32_Type() {
   // create input type (domain)
   int num_args      = 3;
   int argcnt = num_args;
@@ -1084,11 +1019,10 @@ void OptoRuntime::updateBytesCRC32_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeInt::INT; // crc result
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms+1, fields);
-  _updateBytesCRC32_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::updateBytesCRC32C_Type_init() {
-  assert(_updateBytesCRC32C_tf == nullptr, "should be called once only");
+static const TypeFunc* make_updateBytesCRC32C_Type() {
   // create input type (domain)
   int num_args      = 4;
   int argcnt = num_args;
@@ -1105,11 +1039,10 @@ void OptoRuntime::updateBytesCRC32C_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeInt::INT; // crc result
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms+1, fields);
-  _updateBytesCRC32C_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::updateBytesAdler32_Type_init() {
-  assert(_updateBytesAdler32_tf == nullptr, "should be called once only");
+static const TypeFunc* make_updateBytesAdler32_Type() {
   // create input type (domain)
   int num_args      = 3;
   int argcnt = num_args;
@@ -1125,11 +1058,10 @@ void OptoRuntime::updateBytesAdler32_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeInt::INT; // crc result
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms+1, fields);
-  _updateBytesAdler32_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::cipherBlockChaining_aescrypt_Type_init() {
-  assert(_cipherBlockChaining_aescrypt_tf == nullptr, "should be called once only");
+static const TypeFunc* make_cipherBlockChaining_aescrypt_Type() {
   // create input type (domain)
   int num_args      = 5;
   int argcnt = num_args;
@@ -1147,11 +1079,10 @@ void OptoRuntime::cipherBlockChaining_aescrypt_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeInt::INT;
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms+1, fields);
-  _cipherBlockChaining_aescrypt_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::electronicCodeBook_aescrypt_Type_init() {
-  assert(_electronicCodeBook_aescrypt_tf == nullptr, "should be called once only");
+static const TypeFunc* make_electronicCodeBook_aescrypt_Type() {
   // create input type (domain)
   int num_args = 4;
   int argcnt = num_args;
@@ -1168,11 +1099,10 @@ void OptoRuntime::electronicCodeBook_aescrypt_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms + 0] = TypeInt::INT;
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms + 1, fields);
-  _electronicCodeBook_aescrypt_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::counterMode_aescrypt_Type_init() {
-  assert(_counterMode_aescrypt_tf == nullptr, "should be called once only");
+static const TypeFunc* make_counterMode_aescrypt_Type() {
   // create input type (domain)
   int num_args = 7;
   int argcnt = num_args;
@@ -1191,11 +1121,10 @@ void OptoRuntime::counterMode_aescrypt_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms + 0] = TypeInt::INT;
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms + 1, fields);
-  _counterMode_aescrypt_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::galoisCounterMode_aescrypt_Type_init() {
-  assert(_galoisCounterMode_aescrypt_tf == nullptr, "should be called once only");
+static const TypeFunc* make_galoisCounterMode_aescrypt_Type() {
   // create input type (domain)
   int num_args = 8;
   int argcnt = num_args;
@@ -1216,17 +1145,10 @@ void OptoRuntime::galoisCounterMode_aescrypt_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms + 0] = TypeInt::INT;
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms + 1, fields);
-  _galoisCounterMode_aescrypt_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::digestBase_implCompress_Type_init() {
-  assert((_digestBase_implCompress_with_sha3_tf == nullptr) &&
-         (_digestBase_implCompress_without_sha3_tf == nullptr), "should be called once only");
-  _digestBase_implCompress_with_sha3_tf = OptoRuntime::digestBase_implCompress_Type_helper( /* is_sha3= */ true);
-  _digestBase_implCompress_without_sha3_tf = OptoRuntime::digestBase_implCompress_Type_helper( /* is_sha3= */ false);
-}
-
-const TypeFunc* OptoRuntime::digestBase_implCompress_Type_helper(bool is_sha3) {
+static const TypeFunc* make_digestBase_implCompress_Type(bool is_sha3) {
   // create input type (domain)
   int num_args = is_sha3 ? 3 : 2;
   int argcnt = num_args;
@@ -1245,14 +1167,7 @@ const TypeFunc* OptoRuntime::digestBase_implCompress_Type_helper(bool is_sha3) {
   return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::digestBase_implCompressMB_Type_init() {
-  assert((_digestBase_implCompressMB_with_sha3_tf == nullptr) &&
-         (_digestBase_implCompressMB_without_sha3_tf == nullptr), "should be called once only");
-  _digestBase_implCompressMB_with_sha3_tf = OptoRuntime::digestBase_implCompressMB_Type_helper(/* is_sha3 */true);
-  _digestBase_implCompressMB_without_sha3_tf = OptoRuntime::digestBase_implCompressMB_Type_helper(/* is_sha3 */false);
-}
-
-const TypeFunc* OptoRuntime::digestBase_implCompressMB_Type_helper(bool is_sha3) {
+static const TypeFunc* make_digestBase_implCompressMB_Type(bool is_sha3) {
   // create input type (domain)
   int num_args = is_sha3 ? 5 : 4;
   int argcnt = num_args;
@@ -1273,8 +1188,7 @@ const TypeFunc* OptoRuntime::digestBase_implCompressMB_Type_helper(bool is_sha3)
   return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::multiplyToLen_Type_init() {
-  assert(_multiplyToLen_tf == nullptr, "should be called once only");
+static const TypeFunc* make_multiplyToLen_Type() {
   // create input type (domain)
   int num_args      = 5;
   int argcnt = num_args;
@@ -1292,11 +1206,10 @@ void OptoRuntime::multiplyToLen_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = nullptr;
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
-  _multiplyToLen_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::squareToLen_Type_init() {
-  assert(_squareToLen_tf == nullptr, "should be called once only");
+static const TypeFunc* make_squareToLen_Type() {
   // create input type (domain)
   int num_args      = 4;
   int argcnt = num_args;
@@ -1313,11 +1226,10 @@ void OptoRuntime::squareToLen_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = nullptr;
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
-  _squareToLen_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::mulAdd_Type_init() {
-  assert(_mulAdd_tf == nullptr, "should be called once only");
+static const TypeFunc* make_mulAdd_Type() {
   // create input type (domain)
   int num_args      = 5;
   int argcnt = num_args;
@@ -1335,11 +1247,10 @@ void OptoRuntime::mulAdd_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeInt::INT;
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms+1, fields);
-  _mulAdd_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::montgomeryMultiply_Type_init() {
-  assert(_montgomeryMultiply_tf == nullptr, "should be called once only");
+static const TypeFunc* make_montgomeryMultiply_Type() {
   // create input type (domain)
   int num_args      = 7;
   int argcnt = num_args;
@@ -1360,11 +1271,10 @@ void OptoRuntime::montgomeryMultiply_Type_init() {
   fields[TypeFunc::Parms+0] = TypePtr::NOTNULL;
 
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
-  _montgomeryMultiply_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::montgomerySquare_Type_init() {
-  assert(_montgomerySquare_tf == nullptr, "should be called once only");
+static const TypeFunc* make_montgomerySquare_Type() {
   // create input type (domain)
   int num_args      = 6;
   int argcnt = num_args;
@@ -1384,11 +1294,10 @@ void OptoRuntime::montgomerySquare_Type_init() {
   fields[TypeFunc::Parms+0] = TypePtr::NOTNULL;
 
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
-  _montgomerySquare_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::bigIntegerShift_Type_init() {
-  assert(_bigIntegerShift_tf == nullptr, "should be called once only");
+static const TypeFunc* make_bigIntegerShift_Type() {
   int argcnt = 5;
   const Type** fields = TypeTuple::fields(argcnt);
   int argp = TypeFunc::Parms;
@@ -1404,11 +1313,10 @@ void OptoRuntime::bigIntegerShift_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms + 0] = nullptr;
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
-  _bigIntegerShift_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::vectorizedMismatch_Type_init() {
-  assert(_vectorizedMismatch_tf == nullptr, "should be called once only");
+static const TypeFunc* make_vectorizedMismatch_Type() {
   // create input type (domain)
   int num_args = 4;
   int argcnt = num_args;
@@ -1425,11 +1333,10 @@ void OptoRuntime::vectorizedMismatch_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms + 0] = TypeInt::INT;
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms + 1, fields);
-  _vectorizedMismatch_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::ghash_processBlocks_Type_init() {
-  assert(_ghash_processBlocks_tf == nullptr, "should be called once only");
+static const TypeFunc* make_ghash_processBlocks_Type() {
   int argcnt = 4;
 
   const Type** fields = TypeTuple::fields(argcnt);
@@ -1445,11 +1352,10 @@ void OptoRuntime::ghash_processBlocks_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = nullptr; // void
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
-  _ghash_processBlocks_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::chacha20Block_Type_init() {
-  assert(_chacha20Block_tf == nullptr, "should be called once only");
+static const TypeFunc* make_chacha20Block_Type() {
   int argcnt = 2;
 
   const Type** fields = TypeTuple::fields(argcnt);
@@ -1464,11 +1370,10 @@ void OptoRuntime::chacha20Block_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms + 0] = TypeInt::INT;     // key stream outlen as int
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms + 1, fields);
-  _chacha20Block_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::base64_encodeBlock_Type_init() {
-  assert(_base64_encodeBlock_tf == nullptr, "should be called once only");
+static const TypeFunc* make_base64_encodeBlock_Type() {
   int argcnt = 6;
 
   const Type** fields = TypeTuple::fields(argcnt);
@@ -1486,11 +1391,10 @@ void OptoRuntime::base64_encodeBlock_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms + 0] = nullptr; // void
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
-  _base64_encodeBlock_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::string_IndexOf_Type_init() {
-  assert(_string_IndexOf_tf == nullptr, "should be called once only");
+static const TypeFunc* make_string_IndexOf_Type() {
   int argcnt = 4;
 
   const Type** fields = TypeTuple::fields(argcnt);
@@ -1506,11 +1410,10 @@ void OptoRuntime::string_IndexOf_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms + 0] = TypeInt::INT; // Index of needle in haystack
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms + 1, fields);
-  _string_IndexOf_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::base64_decodeBlock_Type_init() {
-  assert(_base64_decodeBlock_tf == nullptr, "should be called once only");
+static const TypeFunc* make_base64_decodeBlock_Type() {
   int argcnt = 7;
 
   const Type** fields = TypeTuple::fields(argcnt);
@@ -1529,11 +1432,10 @@ void OptoRuntime::base64_decodeBlock_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms + 0] = TypeInt::INT; // count of bytes written to dst
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms + 1, fields);
-  _base64_decodeBlock_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::poly1305_processBlocks_Type_init() {
-  assert(_poly1305_processBlocks_tf == nullptr, "should be called once only");
+static const TypeFunc* make_poly1305_processBlocks_Type() {
   int argcnt = 4;
 
   const Type** fields = TypeTuple::fields(argcnt);
@@ -1549,11 +1451,10 @@ void OptoRuntime::poly1305_processBlocks_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms + 0] = nullptr; // void
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
-  _poly1305_processBlocks_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::intpoly_montgomeryMult_P256_Type_init() {
-  assert(_intpoly_montgomeryMult_P256_tf == nullptr, "should be called once only");
+static const TypeFunc* make_intpoly_montgomeryMult_P256_Type() {
   int argcnt = 3;
 
   const Type** fields = TypeTuple::fields(argcnt);
@@ -1568,11 +1469,10 @@ void OptoRuntime::intpoly_montgomeryMult_P256_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms + 0] = nullptr; // void
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
-  _intpoly_montgomeryMult_P256_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
-void OptoRuntime::intpoly_assign_Type_init() {
-  assert(_intpoly_assign_tf == nullptr, "should be called once only");
+static const TypeFunc* make_intpoly_assign_Type() {
   int argcnt = 4;
 
   const Type** fields = TypeTuple::fields(argcnt);
@@ -1588,12 +1488,11 @@ void OptoRuntime::intpoly_assign_Type_init() {
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms + 0] = nullptr; // void
   const TypeTuple* range = TypeTuple::make(TypeFunc::Parms, fields);
-  _intpoly_assign_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
 //------------- Interpreter state for on stack replacement
-void OptoRuntime::osr_end_Type_init() {
-  assert(_osr_end_tf == nullptr, "should be called once only");
+static const TypeFunc* make_osr_end_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeRawPtr::BOTTOM; // OSR temp buf
@@ -1604,7 +1503,7 @@ void OptoRuntime::osr_end_Type_init() {
   // fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL; // locked oop
   fields[TypeFunc::Parms+0] = nullptr; // void
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms, fields);
-  _osr_end_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
 //-------------------------------------------------------------------------------------
@@ -1839,8 +1738,7 @@ address OptoRuntime::rethrow_C(oopDesc* exception, JavaThread* thread, address r
   return SharedRuntime::raw_exception_handler_for_return_address(thread, ret_pc);
 }
 
-void OptoRuntime::rethrow_Type_init() {
-  assert(_rethrow_tf == nullptr, "should be called once only");
+static const TypeFunc* make_rethrow_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL; // Exception oop
@@ -1851,7 +1749,7 @@ void OptoRuntime::rethrow_Type_init() {
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL; // Exception oop
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+1, fields);
 
-  _rethrow_tf = TypeFunc::make(domain, range);
+  return TypeFunc::make(domain, range);
 }
 
 
@@ -1890,8 +1788,7 @@ bool OptoRuntime::is_deoptimized_caller_frame(JavaThread *thread) {
   return caller_frame.is_deoptimized_frame();
 }
 
-void OptoRuntime::register_finalizer_Type_init() {
-  assert(_register_finalizer_tf == nullptr, "should be called once only");
+static const TypeFunc* make_register_finalizer_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL;  // oop;          Receiver
@@ -1904,12 +1801,11 @@ void OptoRuntime::register_finalizer_Type_init() {
 
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+0,fields);
 
-  _register_finalizer_tf = TypeFunc::make(domain,range);
+  return TypeFunc::make(domain,range);
 }
 
 #if INCLUDE_JFR
-void OptoRuntime::class_id_load_barrier_Type_init() {
-  assert(_class_id_load_barrier_tf == nullptr, "should be called once only");
+static const TypeFunc* make_class_id_load_barrier_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeInstPtr::KLASS;
@@ -1920,13 +1816,12 @@ void OptoRuntime::class_id_load_barrier_Type_init() {
 
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms + 0, fields);
 
-  _class_id_load_barrier_tf = TypeFunc::make(domain,range);
+  return TypeFunc::make(domain,range);
 }
 #endif // INCLUDE_JFR
 
 //-----------------------------------------------------------------------------
-void OptoRuntime::dtrace_method_entry_exit_Type_init() {
-  assert(_dtrace_method_entry_exit_tf == nullptr, "should be called once only");
+static const TypeFunc* make_dtrace_method_entry_exit_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(2);
   fields[TypeFunc::Parms+0] = TypeRawPtr::BOTTOM; // Thread-local storage
@@ -1938,11 +1833,10 @@ void OptoRuntime::dtrace_method_entry_exit_Type_init() {
 
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+0,fields);
 
-  _dtrace_method_entry_exit_tf = TypeFunc::make(domain,range);
+  return TypeFunc::make(domain,range);
 }
 
-void OptoRuntime::dtrace_object_alloc_Type_init() {
-  assert(_dtrace_object_alloc_tf == nullptr, "should be called once only");
+static const TypeFunc* make_dtrace_object_alloc_Type() {
   // create input type (domain)
   const Type **fields = TypeTuple::fields(2);
   fields[TypeFunc::Parms+0] = TypeRawPtr::BOTTOM; // Thread-local storage
@@ -1955,7 +1849,7 @@ void OptoRuntime::dtrace_object_alloc_Type_init() {
 
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+0,fields);
 
-  _dtrace_object_alloc_tf = TypeFunc::make(domain,range);
+  return TypeFunc::make(domain,range);
 }
 
 
@@ -2045,67 +1939,69 @@ NamedCounter* OptoRuntime::new_named_counter(JVMState* youngest_jvms, NamedCount
 }
 
 void OptoRuntime::initialize_types() {
-  new_instance_Type_init();
-  new_array_Type_init();
-  multianewarray2_Type_init();
-  multianewarray3_Type_init();
-  multianewarray4_Type_init();
-  multianewarray5_Type_init();
-  multianewarrayN_Type_init();
-  complete_monitor_enter_Type_init();
-  complete_monitor_exit_Type_init();
-  monitor_notify_Type_init();
-  uncommon_trap_Type_init();
-  athrow_Type_init();
-  rethrow_Type_init();
-  Math_D_D_Type_init();
-  Math_DD_D_Type_init();
-  modf_Type_init();
-  l2f_Type_init();
-  void_long_Type_init();
-  void_void_Type_init();
-  jfr_write_checkpoint_Type_init();
-  fast_arraycopy_Type_init();
-  checkcast_arraycopy_Type_init();
-  generic_arraycopy_Type_init();
-  slow_arraycopy_Type_init();
-  make_setmemory_Type_init();
-  array_fill_Type_init();
-  array_sort_Type_init();
-  array_partition_Type_init();
-  aescrypt_block_Type_init();
-  cipherBlockChaining_aescrypt_Type_init();
-  electronicCodeBook_aescrypt_Type_init();
-  counterMode_aescrypt_Type_init();
-  galoisCounterMode_aescrypt_Type_init();
-  digestBase_implCompress_Type_init();
-  digestBase_implCompressMB_Type_init();
-  multiplyToLen_Type_init();
-  montgomeryMultiply_Type_init();
-  montgomerySquare_Type_init();
-  squareToLen_Type_init();
-  mulAdd_Type_init();
-  bigIntegerShift_Type_init();
-  vectorizedMismatch_Type_init();
-  ghash_processBlocks_Type_init();
-  chacha20Block_Type_init();
-  base64_encodeBlock_Type_init();
-  base64_decodeBlock_Type_init();
-  string_IndexOf_Type_init();
-  poly1305_processBlocks_Type_init();
-  intpoly_montgomeryMult_P256_Type_init();
-  intpoly_assign_Type_init();
-  updateBytesCRC32_Type_init();
-  updateBytesCRC32C_Type_init();
-  updateBytesAdler32_Type_init();
-  osr_end_Type_init();
-  register_finalizer_Type_init();
-  JFR_ONLY(class_id_load_barrier_Type_init();)
+  _new_instance_tf = make_new_instance_Type();
+  _new_array_tf = make_new_array_Type();
+  _multianewarray2_tf = multianewarray_Type(2);
+  _multianewarray3_tf = multianewarray_Type(3);
+  _multianewarray4_tf = multianewarray_Type(4);
+  _multianewarray5_tf = multianewarray_Type(5);
+  _multianewarrayN_tf = make_multianewarrayN_Type();
+  _complete_monitor_enter_tf = make_complete_monitor_enter_Type();
+  _complete_monitor_exit_tf = make_complete_monitor_exit_Type();
+  _monitor_notify_tf = make_monitor_notify_Type();
+  _uncommon_trap_tf = make_uncommon_trap_Type();
+  _athrow_tf = make_athrow_Type();
+  _rethrow_tf = make_rethrow_Type();
+  _Math_D_D_tf = make_Math_D_D_Type();
+  _Math_DD_D_tf = make_Math_DD_D_Type();
+  _modf_tf = make_modf_Type();
+  _l2f_tf = make_l2f_Type();
+  _void_long_tf = make_void_long_Type();
+  _void_void_tf = make_void_void_Type();
+  _jfr_write_checkpoint_tf = make_jfr_write_checkpoint_Type();
+  _fast_arraycopy_tf = make_arraycopy_Type(ac_fast);
+  _checkcast_arraycopy_tf = make_arraycopy_Type(ac_checkcast);
+  _slow_arraycopy_tf = make_arraycopy_Type(ac_slow);
+  _generic_arraycopy_tf = make_arraycopy_Type(ac_generic);
+  _unsafe_setmemory_tf = make_make_setmemory_Type();
+  _array_fill_tf = make_array_fill_Type();
+  _array_sort_tf = make_array_sort_Type();
+  _array_partition_tf = make_array_partition_Type();
+  _aescrypt_block_tf = make_aescrypt_block_Type();
+  _cipherBlockChaining_aescrypt_tf = make_cipherBlockChaining_aescrypt_Type();
+  _electronicCodeBook_aescrypt_tf = make_electronicCodeBook_aescrypt_Type();
+  _counterMode_aescrypt_tf = make_counterMode_aescrypt_Type();
+  _galoisCounterMode_aescrypt_tf = make_galoisCounterMode_aescrypt_Type();
+  _digestBase_implCompress_with_sha3_tf = make_digestBase_implCompress_Type( /* is_sha3= */ true);
+  _digestBase_implCompress_without_sha3_tf = make_digestBase_implCompress_Type( /* is_sha3= */ false);
+  _digestBase_implCompressMB_with_sha3_tf = make_digestBase_implCompressMB_Type( /* is_sha3= */ true);
+  _digestBase_implCompressMB_without_sha3_tf = make_digestBase_implCompressMB_Type( /* is_sha3= */ false);
+  _multiplyToLen_tf = make_multiplyToLen_Type();
+  _montgomeryMultiply_tf = make_montgomeryMultiply_Type();
+  _montgomerySquare_tf = make_montgomerySquare_Type();
+  _squareToLen_tf = make_squareToLen_Type();
+  _mulAdd_tf = make_mulAdd_Type();
+  _bigIntegerShift_tf = make_bigIntegerShift_Type();
+  _vectorizedMismatch_tf = make_vectorizedMismatch_Type();
+  _ghash_processBlocks_tf = make_ghash_processBlocks_Type();
+  _chacha20Block_tf = make_chacha20Block_Type();
+  _base64_encodeBlock_tf = make_base64_encodeBlock_Type();
+  _base64_decodeBlock_tf = make_base64_decodeBlock_Type();
+  _string_IndexOf_tf = make_string_IndexOf_Type();
+  _poly1305_processBlocks_tf = make_poly1305_processBlocks_Type();
+  _intpoly_montgomeryMult_P256_tf = make_intpoly_montgomeryMult_P256_Type();
+  _intpoly_assign_tf = make_intpoly_assign_Type();
+  _updateBytesCRC32_tf = make_updateBytesCRC32_Type();
+  _updateBytesCRC32C_tf = make_updateBytesCRC32C_Type();
+  _updateBytesAdler32_tf = make_updateBytesAdler32_Type();
+  _osr_end_tf = make_osr_end_Type();
+  _register_finalizer_tf = make_register_finalizer_Type();
+  JFR_ONLY(_class_id_load_barrier_tf = make_class_id_load_barrier_Type();)
 #ifdef INCLUDE_JVMTI
-  notify_jvmti_vthread_Type_init();
+  _notify_jvmti_vthread_tf = make_notify_jvmti_vthread_Type();
 #endif // INCLUDE_JVMTI
-  dtrace_method_entry_exit_Type_init();
-  dtrace_object_alloc_Type_init();
+  _dtrace_method_entry_exit_tf = make_dtrace_method_entry_exit_Type();
+  _dtrace_object_alloc_tf = make_dtrace_object_alloc_Type();
 }
 
 int trace_exception_counter = 0;
