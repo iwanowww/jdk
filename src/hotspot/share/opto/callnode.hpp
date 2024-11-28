@@ -973,23 +973,13 @@ public:
     ParmLimit
   };
 
-  static const TypeFunc* alloc_type(const Type* t) {
-    const Type** fields = TypeTuple::fields(ParmLimit - TypeFunc::Parms);
-    fields[AllocSize]   = TypeInt::POS;
-    fields[KlassNode]   = TypeInstPtr::NOTNULL;
-    fields[InitialTest] = TypeInt::BOOL;
-    fields[ALength]     = t;  // length (can be a bad length)
-    fields[ValidLengthTest] = TypeInt::BOOL;
-
-    const TypeTuple *domain = TypeTuple::make(ParmLimit, fields);
-
-    // create result type (range)
-    fields = TypeTuple::fields(1);
-    fields[TypeFunc::Parms+0] = TypeRawPtr::NOTNULL; // Returned oop
-
-    const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+1, fields);
-
-    return TypeFunc::make(domain, range);
+  static const TypeFunc* alloc_instance_Type() {
+    return TypeFunc::make_func(TypeRawPtr::NOTNULL,  // ret: oop
+                               TypeInt::POS,         // AllocSize
+                               TypeInstPtr::NOTNULL, // KlassNode
+                               TypeInt::BOOL,        // InitialTest
+                               Type::TOP,            // ALength
+                               TypeInt::BOOL);       // ValidLengthTest
   }
 
   // Result of Escape Analysis
@@ -1073,10 +1063,18 @@ public:
 // High-level array allocation
 //
 class AllocateArrayNode : public AllocateNode {
+  static const TypeFunc* alloc_array_Type() {
+    return TypeFunc::make_func(TypeRawPtr::NOTNULL,  // ret: oop
+                               TypeInt::POS,         // AllocSize
+                               TypeInstPtr::NOTNULL, // KlassNode
+                               TypeInt::BOOL,        // InitialTest
+                               TypeInt::INT,         // ALength
+                               TypeInt::BOOL);       // ValidLengthTest
+  }
 public:
-  AllocateArrayNode(Compile* C, const TypeFunc* atype, Node* ctrl, Node* mem, Node* abio, Node* size, Node* klass_node,
+  AllocateArrayNode(Compile* C, Node* ctrl, Node* mem, Node* abio, Node* size, Node* klass_node,
                     Node* initial_test, Node* count_val, Node* valid_length_test)
-    : AllocateNode(C, atype, ctrl, mem, abio, size, klass_node,
+    : AllocateNode(C, alloc_array_Type(), ctrl, mem, abio, size, klass_node,
                    initial_test)
   {
     init_class_id(Class_AllocateArray);
@@ -1084,6 +1082,7 @@ public:
     set_req(AllocateNode::ValidLengthTest, valid_length_test);
   }
   virtual int Opcode() const;
+
 
   // Dig the length operand out of a array allocation site.
   Node* Ideal_length() {
@@ -1200,19 +1199,9 @@ public:
 
   static void lock_type_init() {
     assert(_lock_type_tf == nullptr, "should be called once");
-    // create input type (domain)
-    const Type **fields = TypeTuple::fields(3);
-    fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL;  // Object to be Locked
-    fields[TypeFunc::Parms+1] = TypeRawPtr::BOTTOM;    // Address of stack location for lock
-    fields[TypeFunc::Parms+2] = TypeInt::BOOL;         // FastLock
-    const TypeTuple *domain = TypeTuple::make(TypeFunc::Parms+3,fields);
-
-    // create result type (range)
-    fields = TypeTuple::fields(0);
-
-    const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+0,fields);
-
-    _lock_type_tf = TypeFunc::make(domain,range);
+    _lock_type_tf = TypeFunc::make_void_func(TypeInstPtr::NOTNULL, // arg0: Object to be Locked
+                                             TypeRawPtr::BOTTOM,   // arg1: Address of stack location for lock
+                                             TypeInt::BOOL);       // arg2: FastLock
   }
 
   virtual int Opcode() const;

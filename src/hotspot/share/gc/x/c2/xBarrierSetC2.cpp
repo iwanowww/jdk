@@ -251,19 +251,9 @@ bool XBarrierSetC2::array_copy_requires_gc_barriers(bool tightly_coupled_alloc, 
 
 // This TypeFunc assumes a 64bit system
 static const TypeFunc* clone_type() {
-  // Create input type (domain)
-  const Type** domain_fields = TypeTuple::fields(4);
-  domain_fields[TypeFunc::Parms + 0] = TypeInstPtr::NOTNULL;  // src
-  domain_fields[TypeFunc::Parms + 1] = TypeInstPtr::NOTNULL;  // dst
-  domain_fields[TypeFunc::Parms + 2] = TypeLong::LONG;        // size lower
-  domain_fields[TypeFunc::Parms + 3] = Type::HALF;            // size upper
-  const TypeTuple* domain = TypeTuple::make(TypeFunc::Parms + 4, domain_fields);
-
-  // Create result type (range)
-  const Type** range_fields = TypeTuple::fields(0);
-  const TypeTuple* range = TypeTuple::make(TypeFunc::Parms + 0, range_fields);
-
-  return TypeFunc::make(domain, range);
+  return TypeFunc::make_void_func(TypeInstPtr::NOTNULL, // arg0: src
+                                  TypeInstPtr::NOTNULL, // arg1: dst
+                                  TypeLong::LONG);      // arg2: size
 }
 
 #define XTOP LP64_ONLY(COMMA phase->top())

@@ -1757,14 +1757,7 @@ Node* VectorUnboxNode::Identity(PhaseGVN* phase) {
 }
 
 const TypeFunc* VectorBoxNode::vec_box_type(const TypeInstPtr* box_type) {
-  const Type** fields = TypeTuple::fields(0);
-  const TypeTuple *domain = TypeTuple::make(TypeFunc::Parms, fields);
-
-  fields = TypeTuple::fields(1);
-  fields[TypeFunc::Parms+0] = box_type;
-  const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+1, fields);
-
-  return TypeFunc::make(domain, range);
+  return TypeFunc::make_func(box_type); // ret: box oop
 }
 
 Node* ShiftVNode::Identity(PhaseGVN* phase) {

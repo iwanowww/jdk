@@ -512,30 +512,11 @@ void Type::Initialize_shared(Compile* current) {
   TypeLong::UINT    = TypeLong::make(0,(jlong)max_juint,WidenMin);
   TypeLong::TYPE_DOMAIN  = TypeLong::LONG;
 
-  const Type **fboth =(const Type**)shared_type_arena->AmallocWords(2*sizeof(Type*));
-  fboth[0] = Type::CONTROL;
-  fboth[1] = Type::CONTROL;
-  TypeTuple::IFBOTH = TypeTuple::make( 2, fboth );
-
-  const Type **ffalse =(const Type**)shared_type_arena->AmallocWords(2*sizeof(Type*));
-  ffalse[0] = Type::CONTROL;
-  ffalse[1] = Type::TOP;
-  TypeTuple::IFFALSE = TypeTuple::make( 2, ffalse );
-
-  const Type **fneither =(const Type**)shared_type_arena->AmallocWords(2*sizeof(Type*));
-  fneither[0] = Type::TOP;
-  fneither[1] = Type::TOP;
-  TypeTuple::IFNEITHER = TypeTuple::make( 2, fneither );
-
-  const Type **ftrue =(const Type**)shared_type_arena->AmallocWords(2*sizeof(Type*));
-  ftrue[0] = Type::TOP;
-  ftrue[1] = Type::CONTROL;
-  TypeTuple::IFTRUE = TypeTuple::make( 2, ftrue );
-
-  const Type **floop =(const Type**)shared_type_arena->AmallocWords(2*sizeof(Type*));
-  floop[0] = Type::CONTROL;
-  floop[1] = TypeInt::INT;
-  TypeTuple::LOOPBODY = TypeTuple::make( 2, floop );
+  TypeTuple::IFBOTH    = TypeTuple::make_tuple(Type::CONTROL, Type::CONTROL);
+  TypeTuple::IFFALSE   = TypeTuple::make_tuple(Type::CONTROL, Type::TOP);
+  TypeTuple::IFNEITHER = TypeTuple::make_tuple(Type::TOP, Type::TOP);
+  TypeTuple::IFTRUE    = TypeTuple::make_tuple(Type::TOP, Type::CONTROL);
+  TypeTuple::LOOPBODY  = TypeTuple::make_tuple(Type::CONTROL, TypeInt::INT);
 
   TypePtr::NULL_PTR= TypePtr::make(AnyPtr, TypePtr::Null, 0);
   TypePtr::NOTNULL = TypePtr::make(AnyPtr, TypePtr::NotNull, OffsetBot);
@@ -544,13 +525,9 @@ void Type::Initialize_shared(Compile* current) {
   TypeRawPtr::BOTTOM = TypeRawPtr::make( TypePtr::BotPTR );
   TypeRawPtr::NOTNULL= TypeRawPtr::make( TypePtr::NotNull );
 
-  const Type **fmembar = TypeTuple::fields(0);
-  TypeTuple::MEMBAR = TypeTuple::make(TypeFunc::Parms+0, fmembar);
+  TypeTuple::MEMBAR = TypeFunc::make_tuple(); // ()V
 
-  const Type **fsc = (const Type**)shared_type_arena->AmallocWords(2*sizeof(Type*));
-  fsc[0] = TypeInt::CC;
-  fsc[1] = Type::MEMORY;
-  TypeTuple::STORECONDITIONAL = TypeTuple::make(2, fsc);
+  TypeTuple::STORECONDITIONAL = TypeTuple::make_tuple(TypeInt::CC, Type::MEMORY);
 
   TypeInstPtr::NOTNULL = TypeInstPtr::make(TypePtr::NotNull, current->env()->Object_klass());
   TypeInstPtr::BOTTOM  = TypeInstPtr::make(TypePtr::BotPTR,  current->env()->Object_klass());
@@ -622,30 +599,14 @@ void Type::Initialize_shared(Compile* current) {
   TypeInstKlassPtr::OBJECT = TypeInstKlassPtr::make(TypePtr::NotNull, current->env()->Object_klass(), 0);
   TypeInstKlassPtr::OBJECT_OR_NULL = TypeInstKlassPtr::make(TypePtr::BotPTR, current->env()->Object_klass(), 0);
 
-  const Type **fi2c = TypeTuple::fields(2);
-  fi2c[TypeFunc::Parms+0] = TypeInstPtr::BOTTOM; // Method*
-  fi2c[TypeFunc::Parms+1] = TypeRawPtr::BOTTOM; // argument pointer
-  TypeTuple::START_I2C = TypeTuple::make(TypeFunc::Parms+2, fi2c);
+  TypeTuple::START_I2C = TypeTuple::make_tuple(TypeInstPtr::BOTTOM, // Method*
+                                               TypeRawPtr::BOTTOM); // argument pointer
 
-  const Type **intpair = TypeTuple::fields(2);
-  intpair[0] = TypeInt::INT;
-  intpair[1] = TypeInt::INT;
-  TypeTuple::INT_PAIR = TypeTuple::make(2, intpair);
+  TypeTuple::INT_PAIR = TypeTuple::make_tuple(TypeInt::INT, TypeInt::INT);
+  TypeTuple::LONG_PAIR = TypeTuple::make_tuple(TypeLong::LONG, TypeLong::LONG);
 
-  const Type **longpair = TypeTuple::fields(2);
-  longpair[0] = TypeLong::LONG;
-  longpair[1] = TypeLong::LONG;
-  TypeTuple::LONG_PAIR = TypeTuple::make(2, longpair);
-
-  const Type **intccpair = TypeTuple::fields(2);
-  intccpair[0] = TypeInt::INT;
-  intccpair[1] = TypeInt::CC;
-  TypeTuple::INT_CC_PAIR = TypeTuple::make(2, intccpair);
-
-  const Type **longccpair = TypeTuple::fields(2);
-  longccpair[0] = TypeLong::LONG;
-  longccpair[1] = TypeInt::CC;
-  TypeTuple::LONG_CC_PAIR = TypeTuple::make(2, longccpair);
+  TypeTuple::INT_CC_PAIR = TypeTuple::make_tuple(TypeInt::INT, TypeInt::CC);
+  TypeTuple::LONG_CC_PAIR = TypeTuple::make_tuple(TypeLong::LONG, TypeInt::CC);
 
   _const_basic_type[T_NARROWOOP]   = TypeNarrowOop::BOTTOM;
   _const_basic_type[T_NARROWKLASS] = Type::BOTTOM;

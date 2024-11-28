@@ -107,10 +107,7 @@ Node *StartNode::match( const ProjNode *proj, const Matcher *match ) {
 
 //------------------------------osr_domain-----------------------------
 const TypeTuple *StartOSRNode::osr_domain() {
-  const Type **fields = TypeTuple::fields(2);
-  fields[TypeFunc::Parms+0] = TypeRawPtr::BOTTOM;  // address of osr buffer
-
-  return TypeTuple::make(TypeFunc::Parms+1, fields);
+  return TypeFunc::make_tuple(TypeRawPtr::BOTTOM); // address of osr buffer
 }
 
 //=============================================================================

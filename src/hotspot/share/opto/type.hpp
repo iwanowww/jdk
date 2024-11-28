@@ -727,6 +727,9 @@ public:
   static const TypeTuple *make_range(ciSignature *sig, InterfaceHandling interface_handling = ignore_interfaces);
   static const TypeTuple *make_domain(ciInstanceKlass* recv, ciSignature *sig, InterfaceHandling interface_handling);
 
+  template<typename... Ts>
+  static const TypeTuple* make_tuple(Ts... args);
+
   // Subroutine call type with space allocated for argument types
   // Memory for Control, I_O, Memory, FramePtr, and ReturnAdr is allocated implicitly
   static const Type **fields( uint arg_cnt );
@@ -1906,6 +1909,23 @@ public:
   static const TypeFunc *make(ciSignature signature, const Type* extra);
   static const TypeFunc *make(const TypeTuple* domain, const TypeTuple* range);
 
+  template<typename... Ts>
+  static const TypeTuple* make_tuple(Ts... args);
+
+  template<typename R, typename... As>
+  static const TypeFunc* make_func(R ret, As... args) {
+    const TypeTuple* domain = make_tuple(args...);
+    const TypeTuple* range  = make_tuple(ret);
+    return TypeFunc::make(domain, range);
+  }
+
+  template<typename... Ts>
+  static const TypeFunc* make_void_func(Ts... args) {
+    const TypeTuple* domain = make_tuple(args...);
+    const TypeTuple* range  = make_tuple(); // (...)void
+    return TypeFunc::make(domain, range);
+  }
+
   virtual const Type *xmeet( const Type *t ) const;
   virtual const Type *xdual() const;    // Compute dual right now.
 
@@ -2166,6 +2186,44 @@ inline bool Type::is_floatingpoint() const {
   return false;
 }
 
+// ===============================================================
+
+template<typename... Ts>
+static int compute_slots(Ts... args) {
+  const Type* argList[] = { args... };
+  int slot_cnt = 0;
+  for (const Type* arg : argList) {
+    bool is_double_word = is_double_word_type(arg->basic_type());
+    slot_cnt += (is_double_word ? 2 : 1);
+  }
+  return slot_cnt;
+}
+
+template<typename... Ts>
+const TypeTuple* make_tuple_helper(uint base_idx, Ts... args) {
+  const int arg_cnt = base_idx + compute_slots(args...);
+  const Type** fields = TypeTuple::fields(arg_cnt);
+
+  const Type* argList[] = { args... };
+  int cur_slot = base_idx;
+  for (const Type* arg : argList) {
+    fields[cur_slot++] = arg;
+    if (is_double_word_type(arg->basic_type())) {
+      fields[cur_slot++] = Type::HALF;
+    }
+  }
+  return TypeTuple::make(arg_cnt, fields);
+}
+
+template<typename... Ts>
+inline const TypeTuple* TypeTuple::make_tuple(Ts... args) {
+  return make_tuple_helper(0, args...);
+}
+
+template<typename... Ts>
+inline const TypeTuple* TypeFunc::make_tuple(Ts... args) {
+  return make_tuple_helper(TypeFunc::Parms, args...);
+}
 
 // ===============================================================
 // Things that need to be 64-bits in the 64-bit build but

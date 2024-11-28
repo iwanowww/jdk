@@ -2260,7 +2260,7 @@ Node* LibraryCallKit::gen_call_to_vector_math(int vector_api_op_id, BasicType bt
   assert(vector_api_op_id >= VectorSupport::VECTOR_OP_MATH_START && vector_api_op_id <= VectorSupport::VECTOR_OP_MATH_END, "need valid op id");
   assert(opd1 != nullptr, "must not be null");
   const TypeVect* vt = TypeVect::make(bt, num_elem);
-  const TypeFunc* call_type = OptoRuntime::Math_Vector_Vector_Type(opd2 != nullptr ? 2 : 1, vt, vt);
+  const TypeFunc* call_type = (opd2 != nullptr ? TypeFunc::make_func(vt, vt, vt) : TypeFunc::make_func(vt, vt));
   char name[100] = "";
 
   // Get address for vector math method.

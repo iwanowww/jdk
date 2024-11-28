@@ -3555,7 +3555,7 @@ void GraphKit::shared_unlock(Node* box, Node* obj) {
   // Memory barrier to avoid floating things down past the locked region
   insert_mem_bar(Op_MemBarReleaseLock);
 
-  const TypeFunc *tf = OptoRuntime::complete_monitor_exit_Type();
+  const TypeFunc *tf = OptoRuntime::complete_monitor_unlocking_Type();
   UnlockNode *unlock = new UnlockNode(C, tf);
 #ifdef ASSERT
   unlock->set_dbg_jvms(sync_jvms());
@@ -3785,7 +3785,7 @@ Node* GraphKit::new_instance(Node* klass_node,
   Node *mem = reset_memory();
   set_all_memory(mem); // Create new memory state
 
-  AllocateNode* alloc = new AllocateNode(C, AllocateNode::alloc_type(Type::TOP),
+  AllocateNode* alloc = new AllocateNode(C, AllocateNode::alloc_instance_Type(),
                                          control(), mem, i_o(),
                                          size, klass_node,
                                          initial_slow_test);
@@ -3963,8 +3963,7 @@ Node* GraphKit::new_array(Node* klass_node,     // array klass (maybe variable)
 
   // Create the AllocateArrayNode and its result projections
   AllocateArrayNode* alloc
-    = new AllocateArrayNode(C, AllocateArrayNode::alloc_type(TypeInt::INT),
-                            control(), mem, i_o(),
+    = new AllocateArrayNode(C, control(), mem, i_o(),
                             size, klass_node,
                             initial_slow_test,
                             length, valid_length_test);

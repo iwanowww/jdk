@@ -1936,12 +1936,14 @@ bool LibraryCallKit::inline_math_native(vmIntrinsics::ID id) {
 
 //----------------------------inline_notify-----------------------------------*
 bool LibraryCallKit::inline_notify(vmIntrinsics::ID id) {
-  const TypeFunc* ftype = OptoRuntime::monitor_notify_Type();
   address func;
+  const TypeFunc* ftype;
   if (id == vmIntrinsics::_notify) {
     func = OptoRuntime::monitor_notify_Java();
+    ftype = OptoRuntime::monitor_notify_Type();
   } else {
     func = OptoRuntime::monitor_notifyAll_Java();
+    ftype = OptoRuntime::monitor_notifyAll_Type();
   }
   Node* call = make_runtime_call(RC_NO_LEAF, ftype, func, nullptr, TypeRawPtr::BOTTOM, argument(0));
   make_slow_call_ex(call, env()->Throwable_klass(), false);
@@ -4626,10 +4628,7 @@ LibraryCallKit::generate_method_call(vmIntrinsicID method_id, bool is_virtual, b
   const TypeFunc* tf = TypeFunc::make(method);
   if (res_not_null) {
     assert(tf->return_type() == T_OBJECT, "");
-    const TypeTuple* range = tf->range();
-    const Type** fields = TypeTuple::fields(range->cnt());
-    fields[TypeFunc::Parms] = range->field_at(TypeFunc::Parms)->filter_speculative(TypePtr::NOTNULL);
-    const TypeTuple* new_range = TypeTuple::make(range->cnt(), fields);
+    const TypeTuple* new_range = TypeFunc::make_tuple(tf->range()->field_at(TypeFunc::Parms)->filter_speculative(TypePtr::NOTNULL));
     tf = TypeFunc::make(tf->domain(), new_range);
   }
   CallJavaNode* slow_call;

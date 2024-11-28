@@ -66,24 +66,15 @@ private:
   bool _arguments_validated;
 
   static const TypeFunc* arraycopy_type() {
-    const Type** fields = TypeTuple::fields(ParmLimit - TypeFunc::Parms);
-    fields[Src]       = TypeInstPtr::BOTTOM;
-    fields[SrcPos]    = TypeInt::INT;
-    fields[Dest]      = TypeInstPtr::BOTTOM;
-    fields[DestPos]   = TypeInt::INT;
-    fields[Length]    = TypeInt::INT;
-    fields[SrcLen]    = TypeInt::INT;
-    fields[DestLen]   = TypeInt::INT;
-    fields[SrcKlass]  = TypeKlassPtr::BOTTOM;
-    fields[DestKlass] = TypeKlassPtr::BOTTOM;
-    const TypeTuple *domain = TypeTuple::make(ParmLimit, fields);
-
-    // create result type (range)
-    fields = TypeTuple::fields(0);
-
-    const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+0, fields);
-
-    return TypeFunc::make(domain, range);
+    return TypeFunc::make_void_func(TypeInstPtr::BOTTOM,   // Src
+                                    TypeInt::INT,          // SrcPos
+                                    TypeInstPtr::BOTTOM,   // Dest
+                                    TypeInt::INT,          // DestPos
+                                    TypeInt::INT,          // Length
+                                    TypeInt::INT,          // SrcLen
+                                    TypeInt::INT,          // DestLen
+                                    TypeKlassPtr::BOTTOM,  // SrcKlass
+                                    TypeKlassPtr::BOTTOM); // DestKlass
   }
 
   ArrayCopyNode(Compile* C, bool alloc_tightly_coupled, bool has_negative_length_guard);
