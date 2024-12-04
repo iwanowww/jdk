@@ -1137,6 +1137,11 @@ JVM_PrintWarningAtDynamicAgentLoad(void);
 /*
  * FIXME
  */
+JNIEXPORT jlong JNICALL
+JVM_GetCPUFeatures(JNIEnv* env);
+/*
+ * FIXME
+ */
 JNIEXPORT jstring JNICALL
 JVM_GetCPUFeaturesString(JNIEnv* env);
 
