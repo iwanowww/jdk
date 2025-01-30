@@ -923,6 +923,7 @@ public:
     _unknown = 0,
     _method_CallerSensitive,
     _method_ForceInline,
+    _method_DelayInline,
     _method_DontInline,
     _method_ChangesCurrentThread,
     _method_JvmtiHideEvents,
@@ -1821,6 +1822,11 @@ AnnotationCollector::annotation_index(const ClassLoaderData* loader_data,
       if (!privileged)              break;  // only allow in privileged code
       return _method_ForceInline;
     }
+    case VM_SYMBOL_ENUM_NAME(jdk_internal_vm_annotation_DelayInline_signature): {
+      if (_location != _in_method)  break;  // only allow for methods
+      if (!privileged)              break;  // only allow in privileged code
+      return _method_DelayInline;
+    }
     case VM_SYMBOL_ENUM_NAME(jdk_internal_vm_annotation_DontInline_signature): {
       if (_location != _in_method)  break;  // only allow for methods
       if (!privileged)              break;  // only allow in privileged code
@@ -1919,6 +1925,8 @@ void MethodAnnotationCollector::apply_to(const methodHandle& m) {
     m->set_caller_sensitive();
   if (has_annotation(_method_ForceInline))
     m->set_force_inline();
+  if (has_annotation(_method_DelayInline))
+    m->set_delay_inline();
   if (has_annotation(_method_DontInline))
     m->set_dont_inline();
   if (has_annotation(_method_ChangesCurrentThread))

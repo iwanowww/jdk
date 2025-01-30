@@ -57,6 +57,7 @@ import static java.lang.classfile.ClassFile.*;
 import static java.lang.constant.ConstantDescs.*;
 import static java.lang.invoke.LambdaForm.*;
 import static java.lang.invoke.LambdaForm.BasicType.*;
+import static java.lang.invoke.LambdaForm.Kind.VARHANDLE_LINKER;
 import static java.lang.invoke.MethodHandleNatives.Constants.*;
 import static java.lang.invoke.MethodHandleStatics.*;
 import static java.lang.invoke.MethodHandles.Lookup.IMPL_LOOKUP;
@@ -518,6 +519,7 @@ class InvokerBytecodeGenerator {
     }
 
     static final Annotation DONTINLINE      = Annotation.of(ClassOrInterfaceDescImpl.ofValidated("Ljdk/internal/vm/annotation/DontInline;"));
+    static final Annotation DELAYINLINE     = Annotation.of(ClassOrInterfaceDescImpl.ofValidated("Ljdk/internal/vm/annotation/DelayInline;"));
     static final Annotation FORCEINLINE     = Annotation.of(ClassOrInterfaceDescImpl.ofValidated("Ljdk/internal/vm/annotation/ForceInline;"));
     static final Annotation HIDDEN          = Annotation.of(ClassOrInterfaceDescImpl.ofValidated("Ljdk/internal/vm/annotation/Hidden;"));
     static final Annotation INJECTEDPROFILE = Annotation.of(ClassOrInterfaceDescImpl.ofValidated("Ljava/lang/invoke/InjectedProfile;"));
@@ -529,6 +531,8 @@ class InvokerBytecodeGenerator {
     public static final RuntimeVisibleAnnotationsAttribute LF_DONTINLINE_PROFILE_ANNOTATIONS = RuntimeVisibleAnnotationsAttribute.of(HIDDEN, LF_COMPILED, DONTINLINE, INJECTEDPROFILE);
     public static final RuntimeVisibleAnnotationsAttribute LF_FORCEINLINE_ANNOTATIONS = RuntimeVisibleAnnotationsAttribute.of(HIDDEN, LF_COMPILED, FORCEINLINE);
     public static final RuntimeVisibleAnnotationsAttribute LF_FORCEINLINE_PROFILE_ANNOTATIONS = RuntimeVisibleAnnotationsAttribute.of(HIDDEN, LF_COMPILED, FORCEINLINE, INJECTEDPROFILE);
+
+    public static final RuntimeVisibleAnnotationsAttribute LF_VH_LINKER_ANNOTATIONS = RuntimeVisibleAnnotationsAttribute.of(HIDDEN, LF_COMPILED, FORCEINLINE, DELAYINLINE);
 
     /**
      * Generate an invoker method for the passed {@link LambdaForm}.
@@ -550,7 +554,9 @@ class InvokerBytecodeGenerator {
             @Override
             public void accept(MethodBuilder mb) {
 
-                if (lambdaForm.forceInline) {
+                if (lambdaForm.kind == VARHANDLE_LINKER) {
+                    mb.accept(LF_VH_LINKER_ANNOTATIONS);
+                } else if (lambdaForm.forceInline) {
                     mb.accept(LF_FORCEINLINE_ANNOTATIONS);
                 } else {
                     mb.accept(LF_DONTINLINE_ANNOTATIONS);

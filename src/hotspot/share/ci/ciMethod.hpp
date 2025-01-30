@@ -196,6 +196,7 @@ class ciMethod : public ciMetadata {
 
   bool caller_sensitive()       const { return get_Method()->caller_sensitive();       }
   bool force_inline()           const { return get_Method()->force_inline();           }
+  bool delay_inline()           const { return get_Method()->delay_inline();           }
   bool dont_inline()            const { return get_Method()->dont_inline();            }
   bool intrinsic_candidate()    const { return get_Method()->intrinsic_candidate();    }
   bool is_static_initializer()  const { return get_Method()->is_static_initializer();  }
