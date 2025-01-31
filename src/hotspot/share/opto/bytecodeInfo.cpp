@@ -391,6 +391,12 @@ bool InlineTree::try_to_inline(ciMethod* callee_method, ciMethod* caller_method,
     return true;
   }
 
+  if (UseNewCode3 && IncrementalInline &&
+      !caller_method->is_compiled_lambda_form() &&
+      callee_method->is_compiled_lambda_form()) {
+    should_delay = true;
+  }
+
   // suppress a few checks for accessors and trivial methods
   if (callee_method->code_size() > MaxTrivialSize) {
 
