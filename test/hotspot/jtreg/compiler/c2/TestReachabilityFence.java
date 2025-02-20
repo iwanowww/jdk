@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,25 +34,12 @@ import jdk.internal.misc.Unsafe;
  * @bug 8290892
  * @summary Tests to ensure that reachabilityFence() correctly keeps objects from being collected prematurely.
  * @modules java.base/jdk.internal.misc
- * @run main/othervm -XX:CompileCommand=compileonly,*TestReachabilityFenceWithBuffer::* -Xbatch compiler.c2.TestReachabilityFenceWithBuffer
+ * @run main/othervm -Xbatch compiler.c2.TestReachabilityFence
  */
-public class TestReachabilityFenceWithBuffer {
-    /*
-    /build/macosx-aarch64-debug/jdk/bin/java --add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-exports java.base/jdk.internal.misc=ALL-UNNAMED -XX:CompileCommand=compileonly,*TestReachabilityFenceWithBuffer::test* -Xbatch -XX:+UseNewCode TestReachabilityFenceWithBuffer.java
-    */
-
+public class TestReachabilityFence {
     static class MyBuffer {
 
         private static Unsafe UNSAFE = Unsafe.getUnsafe();
-
-        static {
-            try {
-                Field field = Unsafe.class.getDeclaredField("theUnsafe");
-                field.setAccessible(true);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
 
         private static int current = 0;
         private static long payload[] = new long[10];
@@ -60,20 +47,15 @@ public class TestReachabilityFenceWithBuffer {
         private final int id;
 
         public MyBuffer(long size) {
-            // Get a unique id, allocate memory and safe the address in the payload array
+            // Get a unique id, allocate memory and save the address in the payload array
             id = current++;
             payload[id] = UNSAFE.allocateMemory(size);
 
             // Register a cleaner to free the memory when the buffer is garbage collected
             int lid = id; // Capture current value
-            Cleaner.create()
-                .register(this, () -> {
-                    free(lid);
-                });
+            Cleaner.create().register(this, () -> { free(lid); });
 
-            System.out.println(
-                "Created new buffer of size = " + size + " with id = " + id
-            );
+            System.out.println("Created new buffer of size = " + size + " with id = " + id);
         }
 
         private static void free(int id) {
@@ -103,15 +85,14 @@ public class TestReachabilityFenceWithBuffer {
     static void test(int limit) {
         for (long j = 0; j < limit; j++) {
             MyBuffer myBuffer = buffer;
-            if (myBuffer == null) return;
+            if (myBuffer == null) {
+                return;
+            }
             for (int i = 0; i < 100; i++) {
                 byte b = myBuffer.get(i);
                 if (b != 42) {
-                    throw new RuntimeException(
-                        "Unexpected value = " +
-                        b +
-                        ". Buffer was garbage collected before reachabilityFence was reached!"
-                    );
+                    String msg = "Unexpected value = " + b + ". Buffer was garbage collected before reachabilityFence was reached!";
+                    throw new AssertionError(msg);
                 }
             }
             // Keep the buffer live while we read from it
