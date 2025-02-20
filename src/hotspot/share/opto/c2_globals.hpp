@@ -73,7 +73,7 @@
   develop(bool, StressBailout, false,                                       \
           "Perform bailouts randomly at C2 failing() checks")               \
                                                                             \
-  develop(bool, StressReachabilityFence, false,                             \
+  product(bool, StressReachabilityFence, false, DIAGNOSTIC,                 \
           "Randomly inserts ReachabilityFence nodes")                       \
                                                                             \
   develop(uint, StressBailoutMean, 100000,                                  \
