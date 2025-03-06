@@ -659,13 +659,8 @@ public abstract sealed class Reference<T>
      * {@code null}, this method has no effect.
      * @since 9
      */
-    @ForceInline
     @IntrinsicCandidate
     public static void reachabilityFence(Object ref) {
-        // Does nothing. This method is annotated with @ForceInline to eliminate
-        // most of the overhead that using @DontInline would cause with the
-        // HotSpot JVM, when this fence is used in a wide variety of situations.
-        // HotSpot JVM retains the ref and does not GC it before a call to
-        // this method, because the JIT-compilers do not have GC-only safepoints.
+        // TBD
     }
 }
