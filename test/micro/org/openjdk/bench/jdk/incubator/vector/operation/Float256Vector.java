@@ -33,6 +33,7 @@ import jdk.incubator.vector.VectorSpecies;
 import jdk.incubator.vector.VectorShuffle;
 import jdk.incubator.vector.FloatVector;
 
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.IntFunction;
@@ -60,6 +61,9 @@ public class Float256Vector extends AbstractVectorBenchmark {
     @Param("1024")
     int size;
 
+    @Param("false")
+    boolean random;
+
     float[] fill(IntFunction<Float> f) {
         float[] array = new float[size];
         for (int i = 0; i < array.length; i++) {
@@ -76,8 +80,14 @@ public class Float256Vector extends AbstractVectorBenchmark {
     public void init() {
         size += size % SPECIES.length(); // FIXME: add post-loops
 
-        a = fill(i -> (float)(2*i));
-        b = fill(i -> (float)(i+1));
+        if (random) {
+            Random random = new Random();
+            a = fill(i -> random.nextFloat());
+            b = fill(i -> random.nextFloat());
+        } else {
+            a = fill(i -> (float)(2*i));
+            b = fill(i -> (float)(i+1));
+        }
         c = fill(i -> (float)(i+5));
         r = fill(i -> (float)0);
 

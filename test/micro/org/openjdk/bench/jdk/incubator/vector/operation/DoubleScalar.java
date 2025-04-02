@@ -25,6 +25,7 @@ package org.openjdk.bench.jdk.incubator.vector.operation;
 
 // -- This file was mechanically generated: Do not edit! -- //
 
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntFunction;
 
@@ -44,6 +45,9 @@ public class DoubleScalar extends AbstractVectorBenchmark {
     @Param("1024")
     int size;
 
+    @Param("false")
+    boolean random;
+
     double[] fill(IntFunction<Double> f) {
         double[] array = new double[size];
         for (int i = 0; i < array.length; i++) {
@@ -62,8 +66,14 @@ public class DoubleScalar extends AbstractVectorBenchmark {
 
     @Setup
     public void init() {
-        as = fill(i -> (double)(2*i));
-        bs = fill(i -> (double)(i+1));
+        if (random) {
+            Random random = new Random();
+            as = fill(i -> random.nextDouble());
+            bs = fill(i -> random.nextDouble());
+        } else {
+            as = fill(i -> (double)(2*i));
+            bs = fill(i -> (double)(i+1));
+        }
         cs = fill(i -> (double)(i+5));
         rs = fill(i -> (double)0);
         ms = fillMask(size, i -> (i % 2) == 0);

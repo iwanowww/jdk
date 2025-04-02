@@ -33,6 +33,7 @@ import jdk.incubator.vector.VectorSpecies;
 import jdk.incubator.vector.VectorShuffle;
 import jdk.incubator.vector.DoubleVector;
 
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.IntFunction;
@@ -60,6 +61,9 @@ public class Double512Vector extends AbstractVectorBenchmark {
     @Param("1024")
     int size;
 
+    @Param("false")
+    boolean random;
+
     double[] fill(IntFunction<Double> f) {
         double[] array = new double[size];
         for (int i = 0; i < array.length; i++) {
@@ -76,8 +80,14 @@ public class Double512Vector extends AbstractVectorBenchmark {
     public void init() {
         size += size % SPECIES.length(); // FIXME: add post-loops
 
-        a = fill(i -> (double)(2*i));
-        b = fill(i -> (double)(i+1));
+        if (random) {
+            Random random = new Random();
+            a = fill(i -> random.nextDouble());
+            b = fill(i -> random.nextDouble());
+        } else {
+            a = fill(i -> (double)(2*i));
+            b = fill(i -> (double)(i+1));
+        }
         c = fill(i -> (double)(i+5));
         r = fill(i -> (double)0);
 
