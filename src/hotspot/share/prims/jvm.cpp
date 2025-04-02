@@ -3840,7 +3840,10 @@ JVM_LEAF(jboolean, JVM_PrintWarningAtDynamicAgentLoad(void))
 JVM_END
 
 JVM_ENTRY(jstring, JVM_GetCPUFeatures(JNIEnv* env))
-  const char* features = VM_Version::features_string();
-  ThreadToNativeFromVM ttn(thread);
-  return env->NewStringUTF(features);
+  const char* cpu_features = VM_Version::cpu_features_string();
+  if (cpu_features != nullptr) {
+    ThreadToNativeFromVM ttn(thread);
+    return env->NewStringUTF(cpu_features);
+  }
+  return nullptr;
 JVM_END

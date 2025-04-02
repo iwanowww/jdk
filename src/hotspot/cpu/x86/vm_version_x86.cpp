@@ -1099,6 +1099,7 @@ void VM_Version::get_processor_features() {
   insert_features_names(buf + res, sizeof(buf) - res, _features_names);
 
   _features_string = os::strdup(buf);
+  _cpu_features_string = os::strdup(buf + res);
 
   // Use AES instructions if available.
   if (supports_aes()) {

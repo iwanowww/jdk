@@ -35,6 +35,7 @@ const char* Abstract_VM_Version::_s_internal_vm_info_string = Abstract_VM_Versio
 uint64_t Abstract_VM_Version::_features = 0;
 const char* Abstract_VM_Version::_features_string = "";
 uint64_t Abstract_VM_Version::_cpu_features = 0;
+const char* Abstract_VM_Version::_cpu_features_string = "";
 
 #ifndef SUPPORTS_NATIVE_CX8
 bool Abstract_VM_Version::_supports_cx8 = false;

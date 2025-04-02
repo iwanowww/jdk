@@ -54,7 +54,7 @@ import static jdk.incubator.vector.VectorOperators.*;
         static final Set<String> features = getFeatureSet();
 
         private static Set<String> getFeatureSet() {
-            String[] features = VM.getCPUFeatures().split(" ");
+            String[] features = VM.getCPUFeatures().split(", ");
             if (DEBUG) {
                 System.out.printf("DEBUG: CPUFeatures: %s\n", Arrays.deepToString(features));
             }
