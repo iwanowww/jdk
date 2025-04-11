@@ -173,13 +173,13 @@ public final class String
     private final byte coder;
 
     /** Cache the hash code for the string */
-    private int hash; // Default to 0
+    @Stable private int hash; // Default to 0
 
     /**
      * Cache if the hash has been calculated as actually being zero, enabling
      * us to avoid recalculating this.
      */
-    private boolean hashIsZero; // Default to false;
+    @Stable private byte hashIsZero; // 0 = default (not yet initialized); -1 = false; 1 = true
 
     /** use serialVersionUID from JDK 1.0.2 for interoperability */
     @java.io.Serial
@@ -2441,16 +2441,22 @@ public final class String
         // String instance, and that the computation is idempotent and derived
         // from immutable state
         int h = hash;
-        if (h == 0 && !hashIsZero) {
+        if (hashIsZero == 1) {
+            return 0; // hash == 0
+        } else if (h != 0) {
+            return h; // hash != 0
+        } else {
+            // Compute hash
             h = isLatin1() ? StringLatin1.hashCode(value)
                            : StringUTF16.hashCode(value);
             if (h == 0) {
-                hashIsZero = true;
+                hashIsZero = 1; // hash == 0
             } else {
+                hashIsZero = -1; // hash != 0
                 hash = h;
             }
+            return h;
         }
-        return h;
     }
 
     /**

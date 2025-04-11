@@ -91,6 +91,22 @@ public class StringHashCode {
         return empty.hashCode();
     }
 
+    /**
+     * Benchmark testing String.hashCode() with the constant empty string (hashCode = 0).
+     */
+    @Benchmark
+    public int constantEmpty() {
+        return "".hashCode();
+    }
+
+    /**
+     * Benchmark testing String.hashCode() with the constant non-empty string (hashCode != 0).
+     */
+    @Benchmark
+    public int constantNonEmpty() {
+        return "123".hashCode();
+    }
+
     @BenchmarkMode(Mode.AverageTime)
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @State(Scope.Thread)

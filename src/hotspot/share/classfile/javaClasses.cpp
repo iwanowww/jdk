@@ -217,7 +217,7 @@ bool java_lang_String::test_and_set_flag(oop java_string, uint8_t flag_mask) {
 #define STRING_FIELDS_DO(macro) \
   macro(_value_offset, k, vmSymbols::value_name(), byte_array_signature, false); \
   macro(_hash_offset,  k, "hash",                  int_signature,        false); \
-  macro(_hashIsZero_offset, k, "hashIsZero",       bool_signature,       false); \
+  macro(_hashIsZero_offset, k, "hashIsZero",       byte_signature,       false); \
   macro(_coder_offset, k, "coder",                 byte_signature,       false);
 
 void java_lang_String::compute_offsets() {
@@ -526,9 +526,8 @@ inline unsigned int java_lang_String::hash_code_impl(oop java_string, bool updat
   if (update) {
     if (hash != 0) {
       java_string->int_field_put(_hash_offset, hash);
-    } else {
-      java_string->bool_field_put(_hashIsZero_offset, true);
     }
+    java_string->byte_field_put(_hashIsZero_offset, (hash != 0 ? -1 : 1));
   }
   return hash;
 }

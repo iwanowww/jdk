@@ -44,7 +44,7 @@ void java_lang_String::set_value(oop string, typeArrayOop buffer) {
 }
 
 bool java_lang_String::hash_is_set(oop java_string) {
-  return java_string->int_field(_hash_offset) != 0 || java_string->bool_field(_hashIsZero_offset) != 0;
+  return java_string->int_field(_hash_offset) != 0 || java_string->byte_field(_hashIsZero_offset) != 0;
 }
 
 // Accessors
