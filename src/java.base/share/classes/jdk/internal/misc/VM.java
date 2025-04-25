@@ -430,20 +430,11 @@ public class VM {
      */
     public static native long getNanoTimeAdjustment(long offsetInSeconds);
 
-    /**
-     * FIXME
-     */
-    public static native long getCPUFeatures();
 
     /**
-     * FIXME
+     * Returns a string containing a list of CPU features VM detected.
      */
-    public static native String getCPUFeaturesString();
-
-    /**
-     * FIXME
-     */
-    public static native boolean isIntelCPU();
+    public static native String getCPUFeatures();
 
     /**
      * Returns the VM arguments for this runtime environment.
@@ -462,10 +453,8 @@ public class VM {
 
     static {
         initialize();
-        registerNatives();
     }
     private static native void initialize();
-    private static native void registerNatives();
 
     /**
      * Provides access to information on buffer usage.
