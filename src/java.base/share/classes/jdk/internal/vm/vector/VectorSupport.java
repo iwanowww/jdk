@@ -758,11 +758,6 @@ public class VectorSupport {
 
     /* ============================================================================ */
 
-    // Returns a string containing a list of CPU features VM detected.
-    public static native String getCPUFeatures();
-
-    /* ============================================================================ */
-
     // query the JVM's supported vector sizes and types
     public static native int getMaxLaneCount(Class<?> etype);
 
