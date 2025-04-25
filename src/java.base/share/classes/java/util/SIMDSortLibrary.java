@@ -10,6 +10,7 @@ import java.lang.foreign.*;
 import java.util.stream.*;
 
 import static java.lang.foreign.ValueLayout.*;
+import static jdk.internal.vm.vector.Utils.debug;
 
 @SuppressWarnings("restricted")
 class SIMDSortLibrary {
@@ -29,7 +30,7 @@ class SIMDSortLibrary {
             return defaultImpl;
         }
         if (isLinuxX64() && LinuxX64Library.isPresent()) {
-            info("libsimdsort for linux-x64 is used");
+            info("libsimdsort for linux-x64 is used (cpu features: %s)", CPUFeatures.features());
             return LinuxX64Library.getLibrary(defaultImpl);
         }
         info("no native library found");
