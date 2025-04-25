@@ -3840,42 +3840,13 @@ JVM_END
 
 /* jdk.internal.misc.VM */
 
-JVM_ENTRY(jlong, VM_GetCPUFeatures(JNIEnv* env))
-  return VM_Version::features();
-JVM_END
+/*
+ * Retun a string representing a list of CPU features enabled in JVM.
+ */
+JVM_ENTRY(jstring, JVM_GetCPUFeatures(JNIEnv* env))
+  const char* features_string = VM_Version::features_string();
+  assert(features_string != nullptr, "missing cpu features info");
 
-JVM_ENTRY(jstring, VM_GetCPUFeaturesString(JNIEnv* env))
-//  char buf[1024];
-//  VM_Version::insert_features_names(buf, sizeof(buf), VM_Version::_features_names);
-//  const char* features = os::strdup(buf);
-  const char* features = VM_Version::features_string(); // FIXME: enumerate cpu feature only
-  ThreadToNativeFromVM ttn(thread);
-  jstring features_string = env->NewStringUTF(features);
-  return features_string;
-JVM_END
-
-JVM_ENTRY(jboolean, VM_IsIntelCPU(JNIEnv* env))
-#ifdef X86
-  return VM_Version::is_intel();
-#else
-  return JNI_FALSE;
-#endif
-JVM_END
-
-#define CC (char*)  /*cast a literal from (const char*)*/
-#define FN_PTR(f) CAST_FROM_FN_PTR(void*, &f)
-
-static JNINativeMethod jdk_internal_misc_VM_methods[] = {
-    {CC "getCPUFeatures",       CC "()J", FN_PTR(VM_GetCPUFeatures)},
-    {CC "getCPUFeaturesString", CC "()Ljava/lang/String;", FN_PTR(VM_GetCPUFeaturesString)},
-    {CC "isIntelCPU",           CC "()Z", FN_PTR(VM_IsIntelCPU)},
-};
-
-#undef CC
-#undef FN_PTR
-
-JVM_ENTRY(void, JVM_RegisterMiscVMMethods(JNIEnv* env, jclass vsclass))
-  ThreadToNativeFromVM ttnfv(thread);
-  int ok = env->RegisterNatives(vsclass, jdk_internal_misc_VM_methods, sizeof(jdk_internal_misc_VM_methods)/sizeof(JNINativeMethod));
-  guarantee(ok == 0, "register jdk.internal.misc.VM natives");
+  oop result = java_lang_String::create_oop_from_str(features_string, CHECK_NULL);
+  return (jstring) JNIHandles::make_local(THREAD, result);
 JVM_END

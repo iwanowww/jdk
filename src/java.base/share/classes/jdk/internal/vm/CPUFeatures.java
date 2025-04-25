@@ -22,28 +22,24 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package jdk.incubator.vector;
+package jdk.internal.vm;
 
-import jdk.internal.vm.vector.VectorSupport;
+import jdk.internal.misc.VM;
 
 import java.util.Locale;
 import java.util.Set;
 
-import static jdk.incubator.vector.Util.requires;
 import static jdk.internal.util.Architecture.isX64;
-import static jdk.internal.vm.vector.Utils.debug;
 
 /**
  * Enumerates CPU ISA extensions supported by the JVM on the current hardware.
  */
-/*package-private*/ class CPUFeatures {
+public class CPUFeatures {
     private static final Set<String> features = getCPUFeatures();
 
     private static Set<String> getCPUFeatures() {
-        String featuresString = VectorSupport.getCPUFeatures();
-        debug(featuresString);
-        String[] features = featuresString.toLowerCase(Locale.ROOT)
-                                          .split(",? "); // " " or ", " are used as a delimiter by JVM
+        String[] features = VM.getCPUFeatures().toLowerCase(Locale.ROOT)
+                                               .split(",? "); // " " or ", " are used as a delimiter by JVM
         assert validateFeatures(features);
         return Set.of(features);
     }
@@ -67,17 +63,16 @@ import static jdk.internal.vm.vector.Utils.debug;
 
         static {
             requires(isX64(), "unsupported platform");
-
-            debug("AVX=%b; AVX2=%b; AVX512F=%b; AVX512DQ=%b",
-                  SUPPORTS_AVX, SUPPORTS_AVX2, SUPPORTS_AVX512F, SUPPORTS_AVX512DQ);
-
-            assert SUPPORTS_AVX512F == (VectorShape.getMaxVectorBitSize(int.class)   == 512);
-            assert SUPPORTS_AVX2    == (VectorShape.getMaxVectorBitSize(byte.class)  >= 256);
-            assert SUPPORTS_AVX     == (VectorShape.getMaxVectorBitSize(float.class) >= 256);
         }
     }
 
     public static Set<String> features() {
         return features;
+    }
+
+    private static void requires(boolean cond, String message) {
+        if (!cond) {
+            throw new InternalError(message);
+        }
     }
 }

@@ -614,14 +614,6 @@ JVM_ENTRY(jint, VectorSupport_GetMaxLaneCount(JNIEnv *env, jclass vsclazz, jobje
   return -1;
 } JVM_END
 
-JVM_ENTRY(jstring, VectorSupport_GetCPUFeatures(JNIEnv* env, jclass ignored))
-  const char* features_string = VM_Version::features_string();
-  assert(features_string != nullptr, "missing cpu features info");
-
-  oop result = java_lang_String::create_oop_from_str(features_string, CHECK_NULL);
-  return (jstring) JNIHandles::make_local(THREAD, result);
-JVM_END
-
 // JVM_RegisterVectorSupportMethods
 
 #define LANG "Ljava/lang/"
@@ -632,8 +624,7 @@ JVM_END
 #define FN_PTR(f) CAST_FROM_FN_PTR(void*, &f)
 
 static JNINativeMethod jdk_internal_vm_vector_VectorSupport_methods[] = {
-    {CC "getMaxLaneCount", CC "(" CLS ")I", FN_PTR(VectorSupport_GetMaxLaneCount)},
-    {CC "getCPUFeatures",  CC "()" LSTR,    FN_PTR(VectorSupport_GetCPUFeatures)}
+    {CC "getMaxLaneCount", CC "(" CLS ")I", FN_PTR(VectorSupport_GetMaxLaneCount)}
 };
 
 #undef CC
