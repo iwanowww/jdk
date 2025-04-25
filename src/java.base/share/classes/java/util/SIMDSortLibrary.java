@@ -1,7 +1,8 @@
 package java.util;
 
-import jdk.internal.foreign.CABI;
-import jdk.internal.misc.VM;
+import jdk.internal.util.Architecture;
+import jdk.internal.util.OperatingSystem;
+import jdk.internal.vm.CPUFeatures;
 import jdk.internal.vm.annotation.ForceInline;
 
 import java.lang.invoke.*;
@@ -70,7 +71,7 @@ class SIMDSortLibrary {
     }
 
     private static boolean isLinuxX64() {
-        return (CABI.current() == CABI.SYS_V);
+        return (OperatingSystem.isLinux() && Architecture.isX64());
     }
 
     static class LinuxX64Library {
@@ -79,38 +80,14 @@ class SIMDSortLibrary {
         public static final AddressLayout C_POINTER = ValueLayout.ADDRESS
                 .withTargetLayout(MemoryLayout.sequenceLayout(java.lang.Long.MAX_VALUE, JAVA_BYTE));
 
-        private static final long VM_AVX2 = getCPUFeature("avx2", 1L << 19);
-        private static final long VM_AVX512DQ = getCPUFeature("avx512dq", 1L << 28);
-
-        static long getCPUFeature(String name, long feature) {
-            boolean namesFeature = VM.getCPUFeaturesString().contains(name);
-            boolean hasFeature = ((VM.getCPUFeatures() & feature) == feature);
-            if (namesFeature != hasFeature) {
-                throw new InternalError(name);
-            }
-            return feature;
-        }
-
         public static boolean isPresent() {
             return SYMBOL_LOOKUP != null;
         }
 
-        private static final boolean USE_AVX512;
-        private static final boolean USE_AVX2;
-
         static final SymbolLookup SYMBOL_LOOKUP;
 
         static {
-            if (!isLinuxX64()) {
-                throw new InternalError("linux-x64 only");
-            }
-            debug("cpu_features[0x%016x]=%s", VM.getCPUFeatures(), VM.getCPUFeaturesString());
-
-            USE_AVX2 = (VM.getCPUFeatures() & VM_AVX2) != 0L;
-            USE_AVX512 = VM.isIntelCPU() && (VM.getCPUFeatures() & VM_AVX512DQ) != 0L;
-
-            debug("USE_AVX512=" + USE_AVX512);
-            debug("USE_AVX2=" + USE_AVX2);
+            requires(isLinuxX64(), "linux-x64 only");
 
             SYMBOL_LOOKUP = getLibraryLookup();
         }
@@ -150,9 +127,9 @@ class SIMDSortLibrary {
         private static <A> SortOperation<?> select(SortOperation<A> avx512Impl,
                                                    SortOperation<A> avx2Impl,
                                                    SortOperation<?> defaultImpl) {
-            if (USE_AVX512 && avx512Impl != null) {
+            if (CPUFeatures.X64.SUPPORTS_AVX512DQ && avx512Impl != null) {
                 return avx512Impl;
-            } else if (USE_AVX2 && avx2Impl != null) {
+            } else if (CPUFeatures.X64.SUPPORTS_AVX2 && avx2Impl != null) {
                 return avx2Impl;
             } else {
                 return defaultImpl;
@@ -185,9 +162,9 @@ class SIMDSortLibrary {
         private static <A> PartitionOperation<?> select(PartitionOperation<A> avx512Impl,
                                                         PartitionOperation<A> avx2Impl,
                                                         PartitionOperation<?> defaultImpl) {
-            if (USE_AVX512 && avx512Impl != null) {
+            if (CPUFeatures.X64.SUPPORTS_AVX512DQ && avx512Impl != null) {
                 return avx512Impl;
-            } else if (USE_AVX2 && avx2Impl != null) {
+            } else if (CPUFeatures.X64.SUPPORTS_AVX2 && avx2Impl != null) {
                 return avx2Impl;
             } else {
                 return defaultImpl;
@@ -575,6 +552,12 @@ class SIMDSortLibrary {
     static void debug(String format, Object ... args) {
         if (DEBUG) {
             System.out.printf("DEBUG: SIMDSortLibrary: " + format + "\n", args);
+        }
+    }
+
+    private static void requires(boolean cond, String message) {
+        if (!cond) {
+            throw new InternalError(message);
         }
     }
 

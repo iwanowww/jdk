@@ -1139,15 +1139,10 @@ JNIEXPORT jboolean JNICALL
 JVM_PrintWarningAtDynamicAgentLoad(void);
 
 /*
- * FIXME
- */
-JNIEXPORT jlong JNICALL
-JVM_GetCPUFeatures(JNIEnv* env);
-/*
- * FIXME
+ * jdk.internal.misc.VM support.
  */
 JNIEXPORT jstring JNICALL
-JVM_GetCPUFeaturesString(JNIEnv* env);
+JVM_GetCPUFeatures(JNIEnv* env);
 
 /*
  * This structure is used by the launcher to get the default thread

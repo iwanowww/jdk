@@ -25,6 +25,7 @@
 package jdk.incubator.vector;
 
 import jdk.internal.util.StaticProperty;
+import jdk.internal.vm.CPUFeatures;
 import jdk.internal.vm.annotation.DontInline;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.annotation.Stable;
