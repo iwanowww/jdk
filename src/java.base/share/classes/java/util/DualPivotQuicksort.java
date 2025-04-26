@@ -121,7 +121,7 @@ final class DualPivotQuicksort {
      */
     private static final int MAX_RECURSION_DEPTH = 64 * DELTA;
 
-    private static final SortingLibrary LIBRARY = SIMDSortLibrary.getLibrary(new SortingLibrary() {});
+    private static final SortingLibrary LIBRARY = SIMDSortingLibrary.getLibrary(new SortingLibrary() {});
 
     /**
      * Calculates the double depth of parallel merging.

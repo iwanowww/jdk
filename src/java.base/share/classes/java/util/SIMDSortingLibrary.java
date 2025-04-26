@@ -10,28 +10,23 @@ import java.lang.foreign.*;
 import java.util.stream.*;
 
 import static java.lang.foreign.ValueLayout.*;
-import static jdk.internal.vm.vector.Utils.debug;
 
-@SuppressWarnings("restricted")
-class SIMDSortLibrary {
-    static final boolean TRACE = "trace".equalsIgnoreCase(System.getProperty("java.util.SIMDSortLibrary.LOG"));
-    static final boolean DEBUG = "debug".equalsIgnoreCase(System.getProperty("java.util.SIMDSortLibrary.LOG")) || TRACE;
-    static final boolean INFO  = "info".equalsIgnoreCase(System.getProperty("java.util.SIMDSortLibrary.LOG")) || DEBUG;
-
-    static final boolean DISABLE = Boolean.getBoolean("java.util.SIMDSortLibrary.DISABLE");
-
-    SIMDSortLibrary() {
+/*package-private*/ class SIMDSortingLibrary {
+    private SIMDSortingLibrary() {
         // Should not be called directly
     }
+
+    private static final boolean DISABLE = Boolean.getBoolean("java.util.SIMDSortLibrary.DISABLE");
 
     public static DualPivotQuicksort.SortingLibrary getLibrary(DualPivotQuicksort.SortingLibrary defaultImpl) {
         if (DISABLE) {
             info("library is disabled");
             return defaultImpl;
         }
-        if (isLinuxX64() && LinuxX64Library.isPresent()) {
-            info("libsimdsort for linux-x64 is used (cpu features: %s)", CPUFeatures.features());
-            return LinuxX64Library.getLibrary(defaultImpl);
+        if (isLinuxX64() && LinuxX64SortingLibrary.isLibraryPresent()) {
+            info("libsimdsort for linux-x64 is used");
+            debug("CPU features: %s", CPUFeatures.features());
+            return LinuxX64SortingLibrary.getLibrary(defaultImpl);
         }
         info("no native library found");
         return defaultImpl;
@@ -71,107 +66,86 @@ class SIMDSortLibrary {
         int[] partition(A a, int low, int high, int pivotIndex1, int pivotIndex2);
     }
 
-    private static boolean isLinuxX64() {
-        return (OperatingSystem.isLinux() && Architecture.isX64());
-    }
+    static class LinuxX64SortingLibrary {
+        static {
+            requires(isLinuxX64(), "linux-x64 only");
+        }
 
-    static class LinuxX64Library {
-        public static final ValueLayout.OfInt C_INT = ValueLayout.JAVA_INT;
+        private static final ValueLayout.OfInt C_INT = ValueLayout.JAVA_INT;
 
-        public static final AddressLayout C_POINTER = ValueLayout.ADDRESS
+        @SuppressWarnings("restricted")
+        private static final AddressLayout C_POINTER = ValueLayout.ADDRESS
                 .withTargetLayout(MemoryLayout.sequenceLayout(java.lang.Long.MAX_VALUE, JAVA_BYTE));
 
-        public static boolean isPresent() {
+        private static boolean isLibraryPresent() {
             return SYMBOL_LOOKUP != null;
         }
 
-        static final SymbolLookup SYMBOL_LOOKUP;
-
-        static {
-            requires(isLinuxX64(), "linux-x64 only");
-
-            SYMBOL_LOOKUP = getLibraryLookup();
-        }
-
-        static SymbolLookup getLibraryLookup() {
-            try {
-                return SymbolLookup.libraryLookup(System.mapLibraryName("simdsort"), Arena.ofAuto());
-            } catch (Exception e) {
-                info("library failed to load: " + e);
-                return null;
-            }
-        }
-
-        @SuppressWarnings("unchecked")
-        private static <A> SortOperation<A> select(Class<A> cls, SortOperation<A> defaultImpl) {
-            if (isPresent()) {
-                return (SortOperation<A>) dispatch(cls, defaultImpl);
-            } else {
-                return defaultImpl;
-            }
-        }
-
-        private static <A> SortOperation<?> dispatch(Class<A> cls, SortOperation<A> defaultImpl) {
-            if (cls == int[].class) {
-                return select(avx512_sort_int::sort, avx2_sort_int::sort, defaultImpl);
-            } else if (cls == long[].class) {
-                return select(avx512_sort_long::sort, null, defaultImpl);
-            } else if (cls == float[].class) {
-                return select(avx512_sort_float::sort, avx2_sort_float::sort, defaultImpl);
-            } else if (cls == double[].class) {
-                return select(avx512_sort_double::sort, null, defaultImpl);
-            } else {
-                throw new InternalError("not supported: " + cls);
-            }
-        }
-
-        private static <A> SortOperation<?> select(SortOperation<A> avx512Impl,
-                                                   SortOperation<A> avx2Impl,
-                                                   SortOperation<?> defaultImpl) {
-            if (CPUFeatures.X64.SUPPORTS_AVX512DQ && avx512Impl != null) {
-                return avx512Impl;
-            } else if (CPUFeatures.X64.SUPPORTS_AVX2 && avx2Impl != null) {
-                return avx2Impl;
+        private static <A> SortOperation<A> selectImpl(Class<A> cls, SortOperation<A> defaultImpl) {
+            if (isLibraryPresent()) {
+                if (cls == int[].class) {
+                    return selectImpl(avx512_sort_int::sort, avx2_sort_int::sort, defaultImpl);
+                } else if (cls == long[].class) {
+                    return selectImpl(avx512_sort_long::sort, null, defaultImpl);
+                } else if (cls == float[].class) {
+                    return selectImpl(avx512_sort_float::sort, avx2_sort_float::sort, defaultImpl);
+                } else if (cls == double[].class) {
+                    return selectImpl(avx512_sort_double::sort, null, defaultImpl);
+                } else {
+                    throw new InternalError("not supported: " + cls);
+                }
             } else {
                 return defaultImpl;
             }
         }
 
         @SuppressWarnings("unchecked")
-        private static <A> PartitionOperation<A> select(Class<A> cls, PartitionOperation<A> defaultImpl) {
-            if (isPresent()) {
-                return (PartitionOperation<A>) dispatch(cls, defaultImpl);
-            } else {
-                return defaultImpl;
-            }
-        }
-
-        private static <A> PartitionOperation<?> dispatch(Class<A> cls, PartitionOperation<A> defaultImpl) {
-            if (cls == int[].class) {
-                return select(avx512_partition_int::partition, avx2_partition_int::partition, defaultImpl);
-            } else if (cls == long[].class) {
-                return select(avx512_partition_long::partition, null, defaultImpl);
-            } else if (cls == float[].class) {
-                return select(avx512_partition_float::partition, avx2_partition_float::partition, defaultImpl);
-            } else if (cls == double[].class) {
-                return select(avx512_partition_double::partition, null, defaultImpl);
-            } else {
-                throw new InternalError("not supported: " + cls);
-            }
-        }
-
-        private static <A> PartitionOperation<?> select(PartitionOperation<A> avx512Impl,
-                                                        PartitionOperation<A> avx2Impl,
-                                                        PartitionOperation<?> defaultImpl) {
+        private static <A, B> SortOperation<A> selectImpl(SortOperation<B> avx512Impl,
+                                                          SortOperation<B> avx2Impl,
+                                                          SortOperation<A> defaultImpl) {
             if (CPUFeatures.X64.SUPPORTS_AVX512DQ && avx512Impl != null) {
-                return avx512Impl;
+                return (SortOperation<A>)avx512Impl;
             } else if (CPUFeatures.X64.SUPPORTS_AVX2 && avx2Impl != null) {
-                return avx2Impl;
+                return (SortOperation<A>)avx2Impl;
             } else {
                 return defaultImpl;
             }
         }
 
+        private static <A> PartitionOperation<A> selectImpl(Class<A> dataClass, PartitionOperation<A> defaultImpl) {
+            if (isLibraryPresent()) {
+                if (dataClass == int[].class) {
+                    return selectImpl(avx512_partition_int::partition, avx2_partition_int::partition, defaultImpl);
+                } else if (dataClass == long[].class) {
+                    return selectImpl(avx512_partition_long::partition, null, defaultImpl);
+                } else if (dataClass == float[].class) {
+                    return selectImpl(avx512_partition_float::partition, avx2_partition_float::partition, defaultImpl);
+                } else if (dataClass == double[].class) {
+                    return selectImpl(avx512_partition_double::partition, null, defaultImpl);
+                } else {
+                    throw new InternalError("not supported: " + dataClass);
+                }
+            } else {
+                return defaultImpl;
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        private static <A, B> PartitionOperation<A> selectImpl(PartitionOperation<B> avx512Impl,
+                                                               PartitionOperation<B> avx2Impl,
+                                                               PartitionOperation<A> defaultImpl) {
+            if (CPUFeatures.X64.SUPPORTS_AVX512DQ && avx512Impl != null) {
+                return (PartitionOperation<A>)avx512Impl;
+            } else if (CPUFeatures.X64.SUPPORTS_AVX2 && avx2Impl != null) {
+                return (PartitionOperation<A>)avx2Impl;
+            } else {
+                return defaultImpl;
+            }
+        }
+
+        private static final SymbolLookup SYMBOL_LOOKUP = getLibraryLookup("simdsort");
+
+        @SuppressWarnings("restricted")
         private static MethodHandle SORT_INVOKER = Linker.nativeLinker().downcallHandle(
                 FunctionDescriptor.ofVoid(C_POINTER, C_INT, C_INT),
                 Linker.Option.critical(true));
@@ -182,7 +156,7 @@ class SIMDSortLibrary {
          * }
          */
         private static class avx2_sort_int {
-            private static final MethodHandle HANDLER = findOrThrow("avx2_sort_int", SORT_INVOKER);
+            private static final MethodHandle HANDLER = findOrThrow("avx2_sort_int", SYMBOL_LOOKUP, SORT_INVOKER);
 
             @ForceInline
             private static void sort(int[] array, int low, int high) {
@@ -200,7 +174,7 @@ class SIMDSortLibrary {
          * }
          */
         private static class avx2_sort_float {
-            private static final MethodHandle HANDLER = findOrThrow("avx2_sort_float", SORT_INVOKER);
+            private static final MethodHandle HANDLER = findOrThrow("avx2_sort_float", SYMBOL_LOOKUP, SORT_INVOKER);
 
             @ForceInline
             private static void sort(float[] array, int low, int high) {
@@ -218,7 +192,7 @@ class SIMDSortLibrary {
          * }
          */
         private static class avx512_sort_int {
-            private static final MethodHandle HANDLER = findOrThrow("avx512_sort_int", SORT_INVOKER);
+            private static final MethodHandle HANDLER = findOrThrow("avx512_sort_int", SYMBOL_LOOKUP, SORT_INVOKER);
 
             @ForceInline
             private static void sort(int[] array, int low, int high) {
@@ -236,7 +210,7 @@ class SIMDSortLibrary {
          * }
          */
         private static class avx512_sort_long {
-            private static final MethodHandle HANDLER = findOrThrow("avx512_sort_long", SORT_INVOKER);
+            private static final MethodHandle HANDLER = findOrThrow("avx512_sort_long", SYMBOL_LOOKUP, SORT_INVOKER);
 
             @ForceInline
             private static void sort(long[] array, int low, int high) {
@@ -254,7 +228,7 @@ class SIMDSortLibrary {
          * }
          */
         private static class avx512_sort_float {
-            private static final MethodHandle HANDLER = findOrThrow("avx512_sort_float", SORT_INVOKER);
+            private static final MethodHandle HANDLER = findOrThrow("avx512_sort_float", SYMBOL_LOOKUP, SORT_INVOKER);
 
             @ForceInline
             private static void sort(float[] array, int low, int high) {
@@ -272,7 +246,7 @@ class SIMDSortLibrary {
          * }
          */
         private static class avx512_sort_double {
-            private static final MethodHandle HANDLER = findOrThrow("avx512_sort_double", SORT_INVOKER);
+            private static final MethodHandle HANDLER = findOrThrow("avx512_sort_double", SYMBOL_LOOKUP, SORT_INVOKER);
 
             @ForceInline
             private static void sort(double[] array, int low, int high) {
@@ -284,6 +258,7 @@ class SIMDSortLibrary {
             }
         }
 
+        @SuppressWarnings("restricted")
         private static MethodHandle PARTITION_INVOKER = Linker.nativeLinker().downcallHandle(
                 FunctionDescriptor.ofVoid(C_POINTER, C_INT, C_INT, C_POINTER, C_INT, C_INT),
                 Linker.Option.critical(true));
@@ -294,14 +269,14 @@ class SIMDSortLibrary {
          * }
          */
         private static class avx2_partition_int {
-            private static final MethodHandle HANDLER = findOrThrow("avx2_partition_int", PARTITION_INVOKER);
+            private static final MethodHandle HANDLER = findOrThrow("avx2_partition_int", SYMBOL_LOOKUP, PARTITION_INVOKER);
 
             @ForceInline
             private static int[] partition(int[] array, int low, int high, int pivotIndex1, int pivotIndex2) {
                 int[] pivotIndices = new int[2];
                 try {
                     HANDLER.invokeExact(MemorySegment.ofArray(array), low, high,
-                            MemorySegment.ofArray(pivotIndices), pivotIndex1, pivotIndex2);
+                                        MemorySegment.ofArray(pivotIndices), pivotIndex1, pivotIndex2);
                 } catch (Throwable e) {
                     throw new InternalError(e);
                 }
@@ -315,14 +290,14 @@ class SIMDSortLibrary {
          * }
          */
         private static class avx2_partition_float {
-            private static final MethodHandle HANDLER = findOrThrow("avx2_partition_float", PARTITION_INVOKER);
+            private static final MethodHandle HANDLER = findOrThrow("avx2_partition_float", SYMBOL_LOOKUP, PARTITION_INVOKER);
 
             @ForceInline
             private static int[] partition(float[] array, int low, int high, int pivotIndex1, int pivotIndex2) {
                 int[] pivotIndices = new int[2];
                 try {
                     HANDLER.invokeExact(MemorySegment.ofArray(array), low, high,
-                            MemorySegment.ofArray(pivotIndices), pivotIndex1, pivotIndex2);
+                                        MemorySegment.ofArray(pivotIndices), pivotIndex1, pivotIndex2);
                 } catch (Throwable e) {
                     throw new InternalError(e);
                 }
@@ -336,14 +311,14 @@ class SIMDSortLibrary {
          * }
          */
         private static class avx512_partition_int {
-            private static final MethodHandle HANDLER = findOrThrow("avx512_partition_int", PARTITION_INVOKER);
+            private static final MethodHandle HANDLER = findOrThrow("avx512_partition_int", SYMBOL_LOOKUP, PARTITION_INVOKER);
 
             @ForceInline
             private static int[] partition(int[] array, int low, int high, int pivotIndex1, int pivotIndex2) {
                 int[] pivotIndices = new int[2];
                 try {
                     HANDLER.invokeExact(MemorySegment.ofArray(array), low, high,
-                            MemorySegment.ofArray(pivotIndices), pivotIndex1, pivotIndex2);
+                                        MemorySegment.ofArray(pivotIndices), pivotIndex1, pivotIndex2);
                 } catch (Throwable e) {
                     throw new InternalError(e);
                 }
@@ -357,14 +332,14 @@ class SIMDSortLibrary {
          * }
          */
         private static class avx512_partition_long {
-            private static final MethodHandle HANDLER = findOrThrow("avx512_partition_long", PARTITION_INVOKER);
+            private static final MethodHandle HANDLER = findOrThrow("avx512_partition_long", SYMBOL_LOOKUP, PARTITION_INVOKER);
 
             @ForceInline
             private static int[] partition(long[] array, int low, int high, int pivotIndex1, int pivotIndex2) {
                 int[] pivotIndices = new int[2];
                 try {
                     HANDLER.invokeExact(MemorySegment.ofArray(array), low, high,
-                            MemorySegment.ofArray(pivotIndices), pivotIndex1, pivotIndex2);
+                                        MemorySegment.ofArray(pivotIndices), pivotIndex1, pivotIndex2);
                 } catch (Throwable e) {
                     throw new InternalError(e);
                 }
@@ -378,14 +353,14 @@ class SIMDSortLibrary {
          * }
          */
         private static class avx512_partition_float {
-            private static final MethodHandle HANDLER = findOrThrow("avx512_partition_float", PARTITION_INVOKER);
+            private static final MethodHandle HANDLER = findOrThrow("avx512_partition_float", SYMBOL_LOOKUP, PARTITION_INVOKER);
 
             @ForceInline
             private static int[] partition(float[] array, int low, int high, int pivotIndex1, int pivotIndex2) {
                 int[] pivotIndices = new int[2];
                 try {
                     HANDLER.invokeExact(MemorySegment.ofArray(array), low, high,
-                            MemorySegment.ofArray(pivotIndices), pivotIndex1, pivotIndex2);
+                                        MemorySegment.ofArray(pivotIndices), pivotIndex1, pivotIndex2);
                 } catch (Throwable e) {
                     throw new InternalError(e);
                 }
@@ -399,14 +374,14 @@ class SIMDSortLibrary {
          * }
          */
         private static class avx512_partition_double {
-            private static final MethodHandle HANDLER = findOrThrow("avx512_partition_double", PARTITION_INVOKER);
+            private static final MethodHandle HANDLER = findOrThrow("avx512_partition_double", SYMBOL_LOOKUP, PARTITION_INVOKER);
 
             @ForceInline
             private static int[] partition(double[] array, int low, int high, int pivotIndex1, int pivotIndex2) {
                 int[] pivotIndices = new int[2];
                 try {
                     HANDLER.invokeExact(MemorySegment.ofArray(array), low, high,
-                            MemorySegment.ofArray(pivotIndices), pivotIndex1, pivotIndex2);
+                                        MemorySegment.ofArray(pivotIndices), pivotIndex1, pivotIndex2);
                 } catch (Throwable e) {
                     throw new InternalError(e);
                 }
@@ -414,40 +389,26 @@ class SIMDSortLibrary {
             }
         }
 
-        static MemorySegment findOrThrow(String symbol) {
-            return getLibraryLookup().find(symbol)
-                    .orElseThrow(() -> new UnsatisfiedLinkError("unresolved symbol: " + symbol));
-        }
-
-        static MethodHandle findOrThrow(String symbol, MethodHandle invoker) {
-            MemorySegment entry = findOrThrow(symbol);
-            MethodHandle handler = invoker.bindTo(entry);
-            if (TRACE) {
-                handler = traceWrapper(symbol, handler);
-            }
-            return handler;
-        }
-
         static DualPivotQuicksort.SortingLibrary getLibrary(DualPivotQuicksort.SortingLibrary defaultImpl) {
-            final SortOperation<int[]> insertionSortInt = select(int[].class, defaultImpl::insertionSort);
-            final SortOperation<long[]> insertionSortLong = select(long[].class, defaultImpl::insertionSort);
-            final SortOperation<float[]> insertionSortFloat = select(float[].class, defaultImpl::insertionSort);
-            final SortOperation<double[]> insertionSortDouble = select(double[].class, defaultImpl::insertionSort);
+            final SortOperation<int[]>      insertionSortInt        = selectImpl(int[].class, defaultImpl::insertionSort);
+            final SortOperation<int[]>      mixedInsertionSortInt   = selectImpl(int[].class, defaultImpl::mixedInsertionSort);
+            final PartitionOperation<int[]> partitionSinglePivotInt = selectImpl(int[].class, defaultImpl::partitionSinglePivot);
+            final PartitionOperation<int[]> partitionDualPivotInt   = selectImpl(int[].class, defaultImpl::partitionDualPivot);
 
-            final SortOperation<int[]> mixedInsertionSortInt = select(int[].class, defaultImpl::mixedInsertionSort);
-            final SortOperation<long[]> mixedInsertionSortLong = select(long[].class, defaultImpl::mixedInsertionSort);
-            final SortOperation<float[]> mixedInsertionSortFloat = select(float[].class, defaultImpl::mixedInsertionSort);
-            final SortOperation<double[]> mixedInsertionSortDouble = select(double[].class, defaultImpl::mixedInsertionSort);
+            final SortOperation<long[]>      insertionSortLong        = selectImpl(long[].class, defaultImpl::insertionSort);
+            final SortOperation<long[]>      mixedInsertionSortLong   = selectImpl(long[].class, defaultImpl::mixedInsertionSort);
+            final PartitionOperation<long[]> partitionSinglePivotLong = selectImpl(long[].class, defaultImpl::partitionSinglePivot);
+            final PartitionOperation<long[]> partitionDualPivotLong   = selectImpl(long[].class, defaultImpl::partitionDualPivot);
 
-            final PartitionOperation<int[]> partitionSinglePivotInt = select(int[].class, defaultImpl::partitionSinglePivot);
-            final PartitionOperation<long[]> partitionSinglePivotLong = select(long[].class, defaultImpl::partitionSinglePivot);
-            final PartitionOperation<float[]> partitionSinglePivotFloat = select(float[].class, defaultImpl::partitionSinglePivot);
-            final PartitionOperation<double[]> partitionSinglePivotDouble = select(double[].class, defaultImpl::partitionSinglePivot);
+            final SortOperation<float[]>      insertionSortFloat        = selectImpl(float[].class, defaultImpl::insertionSort);
+            final SortOperation<float[]>      mixedInsertionSortFloat   = selectImpl(float[].class, defaultImpl::mixedInsertionSort);
+            final PartitionOperation<float[]> partitionSinglePivotFloat = selectImpl(float[].class, defaultImpl::partitionSinglePivot);
+            final PartitionOperation<float[]> partitionDualPivotFloat   = selectImpl(float[].class, defaultImpl::partitionDualPivot);
 
-            final PartitionOperation<int[]> partitionDualPivotInt = select(int[].class, defaultImpl::partitionDualPivot);
-            final PartitionOperation<long[]> partitionDualPivotLong = select(long[].class, defaultImpl::partitionDualPivot);
-            final PartitionOperation<float[]> partitionDualPivotFloat = select(float[].class, defaultImpl::partitionDualPivot);
-            final PartitionOperation<double[]> partitionDualPivotDouble = select(double[].class, defaultImpl::partitionDualPivot);
+            final SortOperation<double[]>      insertionSortDouble        = selectImpl(double[].class, defaultImpl::insertionSort);
+            final SortOperation<double[]>      mixedInsertionSortDouble   = selectImpl(double[].class, defaultImpl::mixedInsertionSort);
+            final PartitionOperation<double[]> partitionSinglePivotDouble = selectImpl(double[].class, defaultImpl::partitionSinglePivot);
+            final PartitionOperation<double[]> partitionDualPivotDouble   = selectImpl(double[].class, defaultImpl::partitionDualPivot);
 
             return new DualPivotQuicksort.SortingLibrary() {
                 @ForceInline
@@ -535,36 +496,42 @@ class SIMDSortLibrary {
 
     /* Helper utilities */
 
-    static void trace(String name, Object... args) {
-        if (TRACE) {
-            String traceArgs = Arrays.stream(args)
-                    .map(Object::toString)
-                    .collect(Collectors.joining(", "));
-            System.out.printf("TRACE: SIMDSortLibrary: %s(%s)\n", name, traceArgs);
-        }
-    }
-
-    static void info(String format, Object ... args) {
-        if (INFO) {
-            System.out.printf("INFO: SIMDSortLibrary: " + format + "\n", args);
-        }
-    }
-
-    static void debug(String format, Object ... args) {
-        if (DEBUG) {
-            System.out.printf("DEBUG: SIMDSortLibrary: " + format + "\n", args);
-        }
-    }
-
     private static void requires(boolean cond, String message) {
         if (!cond) {
             throw new InternalError(message);
         }
     }
 
+    private static boolean isLinuxX64() {
+        return (OperatingSystem.isLinux() && Architecture.isX64());
+    }
+
+    @SuppressWarnings("restricted")
+    private static SymbolLookup getLibraryLookup(String name) {
+        try {
+            return SymbolLookup.libraryLookup(System.mapLibraryName(name), Arena.ofAuto());
+        } catch (Exception e) {
+            info("library failed to load: " + e);
+            return null;
+        }
+    }
+
+    private static final boolean TRACE = "trace".equalsIgnoreCase(System.getProperty("java.util.SIMDSortLibrary.LOG"));
+    private static final boolean DEBUG = "debug".equalsIgnoreCase(System.getProperty("java.util.SIMDSortLibrary.LOG")) || TRACE;
+    private static final boolean INFO  = "info".equalsIgnoreCase(System.getProperty("java.util.SIMDSortLibrary.LOG")) || DEBUG;
+
+    static MethodHandle findOrThrow(String symbol, SymbolLookup lookup, MethodHandle invoker) {
+        MemorySegment entry = lookup.findOrThrow(symbol);
+        MethodHandle handler = invoker.bindTo(entry);
+        if (TRACE) {
+            handler = traceWrapper(symbol, handler);
+        }
+        return handler;
+    }
+
     private static MethodHandle traceWrapper(String symbol, MethodHandle handler) {
         try {
-            MethodHandle tracer = MethodHandles.lookup().findStatic(SIMDSortLibrary.class, "trace",
+            MethodHandle tracer = MethodHandles.lookup().findStatic(SIMDSortingLibrary.class, "trace",
                     MethodType.methodType(void.class, String.class, Object[].class));
 
             MethodHandle enter = tracer.bindTo("ENTRY: " + symbol)
@@ -584,6 +551,27 @@ class SIMDSortLibrary {
             return MethodHandles.filterReturnValue(handler, exit);
         } catch (Exception e) {
             throw new InternalError(e);
+        }
+    }
+
+    static void info(String format, Object ... args) {
+        if (INFO) {
+            System.out.printf("INFO: SIMDSortLibrary: " + format + "\n", args);
+        }
+    }
+
+    static void debug(String format, Object ... args) {
+        if (DEBUG) {
+            System.out.printf("DEBUG: SIMDSortLibrary: " + format + "\n", args);
+        }
+    }
+
+    static void trace(String name, Object... args) {
+        if (TRACE) {
+            String traceArgs = Arrays.stream(args)
+                    .map(Object::toString)
+                    .collect(Collectors.joining(", "));
+            System.out.printf("TRACE: SIMDSortLibrary: %s(%s)\n", name, traceArgs);
         }
     }
 }
