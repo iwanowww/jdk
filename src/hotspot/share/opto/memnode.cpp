@@ -4418,8 +4418,13 @@ Node* ReachabilityFenceNode::Ideal(PhaseGVN* phase, bool can_reshape) {
   if (n != nullptr) {
     return n;
   }
-  Node* d = post_dominating_fence(phase);
-  if (d != nullptr) {
+  // Don't bother trying to transform a dead node
+  if (in(0) != nullptr && in(0)->is_top()) {
+    return nullptr;
+  }
+  if (phase->type(in(TypeFunc::Parms)) == TypePtr::NULL_PTR ||
+      post_dominating_fence(phase) != nullptr) {
+    // Redundant fence
     return TupleNode::make(TypeTuple::MEMBAR, in(0), in(1), in(2), in(3), in(4));
   }
   return nullptr;
