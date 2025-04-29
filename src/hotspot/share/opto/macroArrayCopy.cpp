@@ -82,7 +82,7 @@ Node* PhaseMacroExpand::make_leaf_call(Node* ctrl, Node* mem,
                                        Node* parm2, Node* parm3,
                                        Node* parm4, Node* parm5,
                                        Node* parm6, Node* parm7) {
-  Node* call = new CallLeafNoFPNode(call_type, call_addr, call_name, adr_type);
+  Node* call = new CallLeafNoFPNode(C, call_type, call_addr, call_name, adr_type);
   call->init_req(TypeFunc::Control, ctrl);
   call->init_req(TypeFunc::I_O    , top());
   call->init_req(TypeFunc::Memory , mem);
@@ -1073,7 +1073,7 @@ MergeMemNode* PhaseMacroExpand::generate_slow_arraycopy(ArrayCopyNode *ac,
   assert(!dest_uninitialized, "Invariant");
 
   const TypeFunc* call_type = OptoRuntime::slow_arraycopy_Type();
-  CallNode* call = new CallStaticJavaNode(call_type, OptoRuntime::slow_arraycopy_Java(),
+  CallNode* call = new CallStaticJavaNode(C, call_type, OptoRuntime::slow_arraycopy_Java(),
                                           "slow_arraycopy", TypePtr::BOTTOM);
 
   call->init_req(TypeFunc::Control, *ctrl);

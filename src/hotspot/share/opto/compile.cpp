@@ -394,6 +394,9 @@ void Compile::remove_useless_node(Node* dead) {
   if (dead->is_expensive()) {
     remove_expensive_node(dead);
   }
+  if (dead->is_ReachabilityFence()) {
+    remove_reachability_fence(dead);
+  }
   if (dead->is_OpaqueTemplateAssertionPredicate()) {
     remove_template_assertion_predicate_opaque(dead->as_OpaqueTemplateAssertionPredicate());
   }
@@ -406,14 +409,18 @@ void Compile::remove_useless_node(Node* dead) {
   if (dead->for_merge_stores_igvn()) {
     remove_from_merge_stores_igvn(dead);
   }
-  if (dead->is_Call()) {
-    remove_useless_late_inlines(                &_late_inlines, dead);
-    remove_useless_late_inlines(         &_string_late_inlines, dead);
-    remove_useless_late_inlines(         &_boxing_late_inlines, dead);
-    remove_useless_late_inlines(&_vector_reboxing_late_inlines, dead);
+  if (dead->is_SafePoint()) {
+    remove_safepoint_node(dead);
 
-    if (dead->is_CallStaticJava()) {
-      remove_unstable_if_trap(dead->as_CallStaticJava(), false);
+    if (dead->is_Call()) {
+      remove_useless_late_inlines(                &_late_inlines, dead);
+      remove_useless_late_inlines(         &_string_late_inlines, dead);
+      remove_useless_late_inlines(         &_boxing_late_inlines, dead);
+      remove_useless_late_inlines(&_vector_reboxing_late_inlines, dead);
+
+      if (dead->is_CallStaticJava()) {
+        remove_unstable_if_trap(dead->as_CallStaticJava(), false);
+      }
     }
   }
   BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
@@ -457,6 +464,8 @@ void Compile::disconnect_useless_nodes(Unique_Node_List& useful, Unique_Node_Lis
   // Remove useless Template Assertion Predicate opaque nodes
   remove_useless_nodes(_template_assertion_predicate_opaques, useful);
   remove_useless_nodes(_expensive_nodes,    useful); // remove useless expensive nodes
+  remove_useless_nodes(_safepoint_nodes,    useful); // remove useless safepoint nodes
+  remove_useless_nodes(_reachability_fences, useful); // remove useless node recorded for post loop opts IGVN pass
   remove_useless_nodes(_for_post_loop_igvn, useful); // remove useless node recorded for post loop opts IGVN pass
   remove_useless_nodes(_for_merge_stores_igvn, useful); // remove useless node recorded for merge stores IGVN pass
   remove_useless_unstable_if_traps(useful);          // remove useless unstable_if traps
@@ -657,6 +666,8 @@ Compile::Compile(ciEnv* ci_env, ciMethod* target, int osr_bci,
       _parse_predicates(comp_arena(), 8, 0, nullptr),
       _template_assertion_predicate_opaques(comp_arena(), 8, 0, nullptr),
       _expensive_nodes(comp_arena(), 8, 0, nullptr),
+      _safepoint_nodes(comp_arena(), 8, 0, nullptr),
+      _reachability_fences(comp_arena(), 8, 0, nullptr),
       _for_post_loop_igvn(comp_arena(), 8, 0, nullptr),
       _for_merge_stores_igvn(comp_arena(), 8, 0, nullptr),
       _unstable_if_traps(comp_arena(), 8, 0, nullptr),
@@ -931,6 +942,8 @@ Compile::Compile(ciEnv* ci_env,
       _directive(directive),
       _log(ci_env->log()),
       _first_failure_details(nullptr),
+      _safepoint_nodes(comp_arena(), 8, 0, nullptr),
+      _reachability_fences(comp_arena(), 8, 0, nullptr),
       _for_post_loop_igvn(comp_arena(), 8, 0, nullptr),
       _for_merge_stores_igvn(comp_arena(), 8, 0, nullptr),
       _congraph(nullptr),
@@ -4732,6 +4745,16 @@ void Compile::add_expensive_node(Node * n) {
     // OptimizeExpensiveOps is off.
     n->set_req(0, nullptr);
   }
+}
+
+void Compile::add_safepoint_node(Node *n) {
+  assert(n->is_SafePoint(), "");
+  _safepoint_nodes.append(n);
+}
+
+void Compile::add_reachability_fence(Node *n) {
+  assert(n->is_ReachabilityFence(), "");
+  _reachability_fences.append(n);
 }
 
 /**

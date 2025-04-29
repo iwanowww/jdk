@@ -302,7 +302,7 @@ JVMState* GraphKit::transfer_exceptions_into_jvms() {
       JVMState* jvms = new (C) JVMState(_method, nullptr);
       jvms->set_bci(_bci);
       jvms->set_sp(_sp);
-      jvms->set_map(new SafePointNode(TypeFunc::Parms, jvms));
+      jvms->set_map(new SafePointNode(C, TypeFunc::Parms, jvms));
       set_jvms(jvms);
       for (uint i = 0; i < map()->req(); i++)  map()->init_req(i, top());
       set_all_memory(top());
@@ -2485,14 +2485,14 @@ Node* GraphKit::make_runtime_call(int flags,
   }
   CallNode* call;
   if (!is_leaf) {
-    call = new CallStaticJavaNode(call_type, call_addr, call_name, adr_type);
+    call = new CallStaticJavaNode(C, call_type, call_addr, call_name, adr_type);
   } else if (flags & RC_NO_FP) {
-    call = new CallLeafNoFPNode(call_type, call_addr, call_name, adr_type);
+    call = new CallLeafNoFPNode(C, call_type, call_addr, call_name, adr_type);
   } else  if (flags & RC_VECTOR){
     uint num_bits = call_type->range()->field_at(TypeFunc::Parms)->is_vect()->length_in_bytes() * BitsPerByte;
-    call = new CallLeafVectorNode(call_type, call_addr, call_name, adr_type, num_bits);
+    call = new CallLeafVectorNode(C, call_type, call_addr, call_name, adr_type, num_bits);
   } else {
-    call = new CallLeafNode(call_type, call_addr, call_name, adr_type);
+    call = new CallLeafNode(C, call_type, call_addr, call_name, adr_type);
   }
 
   // The following is similar to set_edges_for_java_call,

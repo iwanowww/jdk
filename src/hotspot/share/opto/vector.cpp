@@ -156,7 +156,7 @@ void PhaseVector::eliminate_vbox_alloc_nodes() {
 static JVMState* clone_jvms(Compile* C, SafePointNode* sfpt) {
   JVMState* new_jvms = sfpt->jvms()->clone_shallow(C);
   uint size = sfpt->req();
-  SafePointNode* map = new SafePointNode(size, new_jvms);
+  SafePointNode* map = new SafePointNode(C, size, new_jvms);
   for (uint i = 0; i < size; i++) {
     map->init_req(i, sfpt->in(i));
   }

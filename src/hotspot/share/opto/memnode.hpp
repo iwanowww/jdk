@@ -1293,7 +1293,10 @@ class ReachabilityFenceNode : public MemBarNode {
 
 public:
   ReachabilityFenceNode(Compile* C, int alias_idx, Node* precedent)
-    : MemBarNode(C, alias_idx, precedent) {}
+    : MemBarNode(C, alias_idx, precedent) {
+    init_class_id(Class_ReachabilityFence);
+    C->add_reachability_fence(this);
+  }
   virtual int   Opcode() const;
   virtual uint ideal_reg() const { return 0; } // not matched in the AD file
   const RegMask &in_RegMask(uint idx) const {
