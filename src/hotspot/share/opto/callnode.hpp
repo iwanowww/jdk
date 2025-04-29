@@ -348,7 +348,7 @@ protected:
     *(JVMState**)&_jvms = s;  // override const attribute in the accessor
   }
 public:
-  SafePointNode(uint edges, JVMState* jvms,
+  SafePointNode(Compile* C, uint edges, JVMState* jvms,
                 // A plain safepoint advertises no memory effects (null):
                 const TypePtr* adr_type = nullptr)
     : MultiNode( edges ),
@@ -357,6 +357,7 @@ public:
       _has_ea_local_in_scope(false)
   {
     init_class_id(Class_SafePoint);
+    C->add_safepoint_node(this);
   }
 
   JVMState* jvms() const { return _jvms; }
@@ -491,6 +492,10 @@ public:
   }
 
   void disconnect_from_root(PhaseIterGVN *igvn);
+
+  // Are we guaranteed that this node is a safepoint?  Not true for leaf calls and
+  // for some macro nodes whose expansion does not have a safepoint on the fast path.
+  virtual bool guaranteed_safepoint()  { return true; }
 
   // Standard Node stuff
   virtual int            Opcode() const;
@@ -681,8 +686,8 @@ public:
   CallGenerator*  _generator;   // corresponding CallGenerator for some late inline calls
   const char*     _name;        // Printable name, if _method is null
 
-  CallNode(const TypeFunc* tf, address addr, const TypePtr* adr_type, JVMState* jvms = nullptr)
-    : SafePointNode(tf->domain()->cnt(), jvms, adr_type),
+  CallNode(Compile* C, const TypeFunc* tf, address addr, const TypePtr* adr_type, JVMState* jvms = nullptr)
+    : SafePointNode(C, tf->domain()->cnt(), jvms, adr_type),
       _tf(tf),
       _entry_point(addr),
       _cnt(COUNT_UNKNOWN),
@@ -711,9 +716,6 @@ public:
   virtual void        calling_convention(BasicType* sig_bt, VMRegPair* parm_regs, uint argcnt) const;
   virtual Node*       match(const ProjNode* proj, const Matcher* m);
   virtual uint        ideal_reg() const { return NotAMachineReg; }
-  // Are we guaranteed that this node is a safepoint?  Not true for leaf calls and
-  // for some macro nodes whose expansion does not have a safepoint on the fast path.
-  virtual bool        guaranteed_safepoint()  { return true; }
   // For macro nodes, the JVMState gets modified during expansion. If calls
   // use MachConstantBase, it gets modified during matching. So when cloning
   // the node the JVMState must be deep cloned. Default is to shallow clone.
@@ -767,8 +769,8 @@ protected:
   bool    _override_symbolic_info; // Override symbolic call site info from bytecode
   bool    _arg_escape;             // ArgEscape in parameter list
 public:
-  CallJavaNode(const TypeFunc* tf , address addr, ciMethod* method)
-    : CallNode(tf, addr, TypePtr::BOTTOM),
+  CallJavaNode(Compile* C, const TypeFunc* tf , address addr, ciMethod* method)
+    : CallNode(C, tf, addr, TypePtr::BOTTOM),
       _method(method),
       _optimized_virtual(false),
       _method_handle_invoke(false),
@@ -809,15 +811,15 @@ class CallStaticJavaNode : public CallJavaNode {
   virtual uint size_of() const; // Size is bigger
 public:
   CallStaticJavaNode(Compile* C, const TypeFunc* tf, address addr, ciMethod* method)
-    : CallJavaNode(tf, addr, method) {
+    : CallJavaNode(C, tf, addr, method) {
     init_class_id(Class_CallStaticJava);
     if (C->eliminate_boxing() && (method != nullptr) && method->is_boxing_method()) {
       init_flags(Flag_is_macro);
       C->add_macro_node(this);
     }
   }
-  CallStaticJavaNode(const TypeFunc* tf, address addr, const char* name, const TypePtr* adr_type)
-    : CallJavaNode(tf, addr, nullptr) {
+  CallStaticJavaNode(Compile* C, const TypeFunc* tf, address addr, const char* name, const TypePtr* adr_type)
+    : CallJavaNode(C, tf, addr, nullptr) {
     init_class_id(Class_CallStaticJava);
     // This node calls a runtime stub, which often has narrow memory effects.
     _adr_type = adr_type;
@@ -853,8 +855,8 @@ class CallDynamicJavaNode : public CallJavaNode {
   virtual bool cmp( const Node &n ) const;
   virtual uint size_of() const; // Size is bigger
 public:
-  CallDynamicJavaNode(const TypeFunc* tf , address addr, ciMethod* method, int vtable_index)
-    : CallJavaNode(tf,addr,method), _vtable_index(vtable_index) {
+  CallDynamicJavaNode(Compile* C, const TypeFunc* tf , address addr, ciMethod* method, int vtable_index)
+    : CallJavaNode(C,tf,addr,method), _vtable_index(vtable_index) {
     init_class_id(Class_CallDynamicJava);
   }
 
@@ -879,9 +881,9 @@ protected:
   virtual bool cmp( const Node &n ) const;
   virtual uint size_of() const; // Size is bigger
 public:
-  CallRuntimeNode(const TypeFunc* tf, address addr, const char* name,
+  CallRuntimeNode(Compile* C, const TypeFunc* tf, address addr, const char* name,
                   const TypePtr* adr_type, JVMState* jvms = nullptr)
-    : CallNode(tf, addr, adr_type, jvms)
+    : CallNode(C, tf, addr, adr_type, jvms)
   {
     init_class_id(Class_CallRuntime);
     _name = name;
@@ -900,9 +902,9 @@ public:
 // safepoints
 class CallLeafNode : public CallRuntimeNode {
 public:
-  CallLeafNode(const TypeFunc* tf, address addr, const char* name,
+  CallLeafNode(Compile* C, const TypeFunc* tf, address addr, const char* name,
                const TypePtr* adr_type)
-    : CallRuntimeNode(tf, addr, name, adr_type)
+    : CallRuntimeNode(C, tf, addr, name, adr_type)
   {
     init_class_id(Class_CallLeaf);
   }
@@ -918,9 +920,9 @@ public:
 // the generated code
 class CallLeafNoFPNode : public CallLeafNode {
 public:
-  CallLeafNoFPNode(const TypeFunc* tf, address addr, const char* name,
+  CallLeafNoFPNode(Compile* C, const TypeFunc* tf, address addr, const char* name,
                    const TypePtr* adr_type)
-    : CallLeafNode(tf, addr, name, adr_type)
+    : CallLeafNode(C, tf, addr, name, adr_type)
   {
     init_class_id(Class_CallLeafNoFP);
   }
@@ -936,9 +938,9 @@ protected:
   virtual bool cmp( const Node &n ) const;
   virtual uint size_of() const; // Size is bigger
 public:
-  CallLeafVectorNode(const TypeFunc* tf, address addr, const char* name,
-                   const TypePtr* adr_type, uint num_bits)
-    : CallLeafNode(tf, addr, name, adr_type), _num_bits(num_bits)
+  CallLeafVectorNode(Compile* C, const TypeFunc* tf, address addr, const char* name,
+                     const TypePtr* adr_type, uint num_bits)
+    : CallLeafNode(C, tf, addr, name, adr_type), _num_bits(num_bits)
   {
   }
   virtual int   Opcode() const;
@@ -1134,8 +1136,8 @@ protected:
   void set_eliminated_lock_counter() PRODUCT_RETURN;
 
 public:
-  AbstractLockNode(const TypeFunc *tf)
-    : CallNode(tf, nullptr, TypeRawPtr::BOTTOM),
+  AbstractLockNode(Compile* C, const TypeFunc *tf)
+    : CallNode(C, tf, nullptr, TypeRawPtr::BOTTOM),
       _kind(Regular)
   {
 #ifndef PRODUCT
@@ -1216,7 +1218,7 @@ public:
 
   virtual int Opcode() const;
   virtual uint size_of() const; // Size is bigger
-  LockNode(Compile* C, const TypeFunc *tf) : AbstractLockNode( tf ) {
+  LockNode(Compile* C, const TypeFunc *tf) : AbstractLockNode(C, tf) {
     init_class_id(Class_Lock);
     init_flags(Flag_is_macro);
     C->add_macro_node(this);
@@ -1241,7 +1243,7 @@ private:
 public:
   virtual int Opcode() const;
   virtual uint size_of() const; // Size is bigger
-  UnlockNode(Compile* C, const TypeFunc *tf) : AbstractLockNode( tf )
+  UnlockNode(Compile* C, const TypeFunc *tf) : AbstractLockNode(C, tf)
 #ifdef ASSERT
     , _dbg_jvms(nullptr)
 #endif

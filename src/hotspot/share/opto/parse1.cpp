@@ -832,7 +832,7 @@ JVMState* Compile::build_start_state(StartNode* start, const TypeFunc* tf) {
   int        arg_size = tf->domain()->cnt();
   int        max_size = MAX2(arg_size, (int)tf->range()->cnt());
   JVMState*  jvms     = new (this) JVMState(max_size - TypeFunc::Parms);
-  SafePointNode* map  = new SafePointNode(max_size, jvms);
+  SafePointNode* map  = new SafePointNode(C, max_size, jvms);
   record_for_igvn(map);
   assert(arg_size == TypeFunc::Parms + (is_osr_compilation() ? 1 : method()->arg_size()), "correct arg_size");
   Node_Notes* old_nn = default_node_notes();
@@ -1148,7 +1148,7 @@ SafePointNode* Parse::create_entry_map() {
 
   // Create an initial safepoint to hold JVM state during parsing
   JVMState* jvms = new (C) JVMState(method(), _caller->has_method() ? _caller : nullptr);
-  set_map(new SafePointNode(len, jvms));
+  set_map(new SafePointNode(C, len, jvms));
   jvms->set_map(map());
   record_for_igvn(map());
   assert(jvms->endoff() == len, "correct jvms sizing");
@@ -2251,7 +2251,7 @@ void Parse::add_safepoint() {
   kill_dead_locals();
 
   // Clone the JVM State
-  SafePointNode *sfpnt = new SafePointNode(parms, nullptr);
+  SafePointNode *sfpnt = new SafePointNode(C, parms, nullptr);
 
   // Capture memory state BEFORE a SafePoint.  Since we can block at a
   // SafePoint we need our GC state to be safe; i.e. we need all our current

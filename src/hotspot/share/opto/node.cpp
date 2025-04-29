@@ -503,6 +503,9 @@ Node *Node::clone() const {
   if (is_expensive()) {
     C->add_expensive_node(n);
   }
+  if (is_ReachabilityFence()) {
+    C->add_reachability_fence(n);
+  }
   if (for_post_loop_opts_igvn()) {
     // Don't add cloned node to Compile::_for_post_loop_opts_igvn list automatically.
     // If it is applicable, it will happen anyway when the cloned node is registered with IGVN.
@@ -549,19 +552,22 @@ Node *Node::clone() const {
       to[i] = from[i]->clone();
     }
   }
-  if (n->is_Call()) {
-    // CallGenerator is linked to the original node.
-    CallGenerator* cg = n->as_Call()->generator();
-    if (cg != nullptr) {
-      CallGenerator* cloned_cg = cg->with_call_node(n->as_Call());
-      n->as_Call()->set_generator(cloned_cg);
-    }
-  }
   if (n->is_SafePoint()) {
+    C->add_safepoint_node(n);
+
     // Scalar replacement and macro expansion might modify the JVMState.
     // Clone it to make sure it's not shared between SafePointNodes.
     n->as_SafePoint()->clone_jvms(C);
     n->as_SafePoint()->clone_replaced_nodes();
+
+    if (n->is_Call()) {
+      // CallGenerator is linked to the original node.
+      CallGenerator* cg = n->as_Call()->generator();
+      if (cg != nullptr) {
+        CallGenerator* cloned_cg = cg->with_call_node(n->as_Call());
+        n->as_Call()->set_generator(cloned_cg);
+      }
+    }
   }
   Compile::current()->record_modified_node(n);
   return n;                     // Return the clone
@@ -614,6 +620,9 @@ void Node::destruct(PhaseValues* phase) {
   if (is_expensive()) {
     compile->remove_expensive_node(this);
   }
+  if (is_ReachabilityFence()) {
+    compile->remove_reachability_fence(this);
+  }
   if (is_OpaqueTemplateAssertionPredicate()) {
     compile->remove_template_assertion_predicate_opaque(as_OpaqueTemplateAssertionPredicate());
   }
@@ -629,6 +638,7 @@ void Node::destruct(PhaseValues* phase) {
 
   if (is_SafePoint()) {
     as_SafePoint()->delete_replaced_nodes();
+    compile->remove_safepoint_node(this);
 
     if (is_CallStaticJava()) {
       compile->remove_unstable_if_trap(as_CallStaticJava(), false);

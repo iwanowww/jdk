@@ -206,7 +206,7 @@ class StringConcat : public ResourceObj {
       const TypeFunc* call_type = OptoRuntime::uncommon_trap_Type();
       const TypePtr* no_memory_effects = nullptr;
       Compile* C = _stringopts->C;
-      CallStaticJavaNode* call = new CallStaticJavaNode(call_type, call_addr, "uncommon_trap",
+      CallStaticJavaNode* call = new CallStaticJavaNode(C, call_type, call_addr, "uncommon_trap",
                                                         no_memory_effects);
       for (int e = 0; e < TypeFunc::Parms; e++) {
         call->init_req(e, uct->in(e));
@@ -1720,7 +1720,7 @@ void PhaseStringOpts::replace_string_concat(StringConcat* sc) {
   // as a shim for the insertion of the new code.
   JVMState* jvms     = sc->begin()->jvms()->clone_shallow(C);
   uint size = sc->begin()->req();
-  SafePointNode* map = new SafePointNode(size, jvms);
+  SafePointNode* map = new SafePointNode(C, size, jvms);
 
   // copy the control and memory state from the final call into our
   // new starting state.  This allows any preceding tests to feed

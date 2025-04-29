@@ -569,7 +569,7 @@ void PhaseIdealLoop::add_parse_predicate(Deoptimization::DeoptReason reason, Nod
     address call_addr = OptoRuntime::uncommon_trap_blob()->entry_point();
     const TypePtr* no_memory_effects = nullptr;
     JVMState* jvms = sfpt->jvms();
-    CallNode* unc = new CallStaticJavaNode(OptoRuntime::uncommon_trap_Type(), call_addr, "uncommon_trap",
+    CallNode* unc = new CallStaticJavaNode(C, OptoRuntime::uncommon_trap_Type(), call_addr, "uncommon_trap",
                                            no_memory_effects);
 
     Node* mem = nullptr;

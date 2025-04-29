@@ -137,8 +137,8 @@ CallNode* PhaseMacroExpand::make_slow_call(CallNode *oldcall, const TypeFunc* sl
 
   // Slow-path call
  CallNode *call = leaf_name
-   ? (CallNode*)new CallLeafNode      ( slow_call_type, slow_call, leaf_name, TypeRawPtr::BOTTOM )
-   : (CallNode*)new CallStaticJavaNode( slow_call_type, slow_call, OptoRuntime::stub_name(slow_call), TypeRawPtr::BOTTOM );
+   ? (CallNode*)new CallLeafNode      (C, slow_call_type, slow_call, leaf_name, TypeRawPtr::BOTTOM )
+   : (CallNode*)new CallStaticJavaNode(C, slow_call_type, slow_call, OptoRuntime::stub_name(slow_call), TypeRawPtr::BOTTOM );
 
   // Slow path call has no side-effects, uses few values
   copy_predefined_input_for_runtime_call(slow_path, oldcall, call );
@@ -1410,9 +1410,9 @@ void PhaseMacroExpand::expand_allocate_common(
   }
 
   // Generate slow-path call
-  CallNode *call = new CallStaticJavaNode(slow_call_type, slow_call_address,
-                               OptoRuntime::stub_name(slow_call_address),
-                               TypePtr::BOTTOM);
+  CallNode *call = new CallStaticJavaNode(C, slow_call_type, slow_call_address,
+                                          OptoRuntime::stub_name(slow_call_address),
+                                          TypePtr::BOTTOM);
   call->init_req(TypeFunc::Control,   slow_region);
   call->init_req(TypeFunc::I_O,       top());    // does no i/o
   call->init_req(TypeFunc::Memory,    slow_mem); // may gc ptrs
@@ -1673,7 +1673,7 @@ void PhaseMacroExpand::expand_dtrace_alloc_probe(AllocateNode* alloc, Node* oop,
   if (C->env()->dtrace_alloc_probes()) {
     // Slow-path call
     int size = TypeFunc::Parms + 2;
-    CallLeafNode *call = new CallLeafNode(OptoRuntime::dtrace_object_alloc_Type(),
+    CallLeafNode *call = new CallLeafNode(C, OptoRuntime::dtrace_object_alloc_Type(),
                                           CAST_FROM_FN_PTR(address,
                                           static_cast<int (*)(JavaThread*, oopDesc*)>(SharedRuntime::dtrace_object_alloc)),
                                           "dtrace_object_alloc",
@@ -2605,7 +2605,7 @@ bool PhaseMacroExpand::expand_macro_nodes() {
       case Op_ModF: {
         bool is_drem = n->Opcode() == Op_ModD;
         CallNode* mod_macro = n->as_Call();
-        CallNode* call = new CallLeafNode(mod_macro->tf(),
+        CallNode* call = new CallLeafNode(C, mod_macro->tf(),
                                           is_drem ? CAST_FROM_FN_PTR(address, SharedRuntime::drem)
                                                   : CAST_FROM_FN_PTR(address, SharedRuntime::frem),
                                           is_drem ? "drem" : "frem", TypeRawPtr::BOTTOM);

@@ -65,7 +65,7 @@ void GraphKit::gen_stub(address C_function,
   jvms->set_scloff(max_map);
   jvms->set_endoff(max_map);
   {
-    SafePointNode *map = new SafePointNode( max_map, jvms );
+    SafePointNode *map = new SafePointNode(C, max_map, jvms);
     jvms->set_map(map);
     set_jvms(jvms);
     assert(map == this->map(), "kit.map is set");
@@ -164,7 +164,7 @@ void GraphKit::gen_stub(address C_function,
 
   //-----------------------------
   // Make the call node.
-  CallRuntimeNode* call = new CallRuntimeNode(c_sig, C_function, name, TypePtr::BOTTOM, new (C) JVMState(0));
+  CallRuntimeNode* call = new CallRuntimeNode(C, c_sig, C_function, name, TypePtr::BOTTOM, new (C) JVMState(0));
   //-----------------------------
 
   // Fix-up the debug info for the call.
