@@ -634,6 +634,14 @@ void MethodLiveness::BasicBlock::compute_gen_kill_single(ciBytecodeStream *instr
         if (instruction->method()->is_static() == false) {
           load_one(0); // would keep it always alive until return but only for non-static
         }
+
+        int local_idx = (instruction->method()->is_static() ? 0 : 1);
+        for (ciSignatureStream ss(instruction->method()->signature()); !ss.at_return_type(); ss.next()) {
+          if (!ss.type()->is_primitive_type()) {
+            load_one(local_idx);
+          }
+          local_idx += ss.type()->size();
+        }
       }
       break;
 

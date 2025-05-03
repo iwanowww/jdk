@@ -809,7 +809,7 @@ Block* PhaseCFG::insert_anti_dependences(Block* LCA, Node* load, bool verify) {
       continue;
     }
 
-    if (op == Op_MachProj || op == Op_Catch)   continue;
+    if (op == Op_MachProj || op == Op_Catch || op == Op_ReachabilityFence)   continue;
 
     // Compute the alias index.  Loads and stores with different alias
     // indices do not need anti-dependence edges.  Wide MemBar's are

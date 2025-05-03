@@ -2187,14 +2187,22 @@ void Parse::return_current(Node* value) {
     call_register_finalizer();
   }
 
-  if (StressReachabilityFence && !method()->is_static()) {
-    Node* receiver = local(0);
-    if (!receiver->is_top()) {
-      Node* rfence = MemBarNode::make(C, Op_ReachabilityFence, Compile::AliasIdxTop, receiver);
-      rfence->init_req(TypeFunc::Control, control());
-      rfence->init_req(TypeFunc::Memory,  immutable_memory());
-      rfence = _gvn.transform(rfence);
-      set_control(_gvn.transform(new ProjNode(rfence, TypeFunc::Control)));
+  if (StressReachabilityFence) {
+    if (!method()->is_static()) {
+      Node* receiver = local(0);
+      if (!receiver->is_top()) {
+        insert_mem_bar(Op_ReachabilityFence, receiver);
+      }
+    }
+    int local_idx = (method()->is_static() ? 0 : 1);
+    for (ciSignatureStream ss(method()->signature()); !ss.at_return_type(); ss.next()) {
+      if (!ss.type()->is_primitive_type()) {
+        Node* argument = local(local_idx);
+        if (!argument->is_top()) {
+          insert_mem_bar(Op_ReachabilityFence, argument);
+        }
+      }
+      local_idx += ss.type()->size();
     }
   }
 

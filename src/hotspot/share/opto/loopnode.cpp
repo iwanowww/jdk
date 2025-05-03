@@ -4581,6 +4581,139 @@ bool PhaseIdealLoop::process_expensive_nodes() {
 }
 
 //=============================================================================
+//------------------------process_reachability_fences--------------------------
+
+static bool has_immediate_rf(Node* n, Node* referent) {
+  assert(n != nullptr, "");
+  assert(n->is_CFG(), "");
+  for (Node* cur = n->unique_ctrl_out();
+       cur->is_ReachabilityFence();
+       cur = cur->unique_ctrl_out()) { // no dangling control allowed
+    if (cur->in(TypeFunc::Parms) == referent) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool has_safepoints(IdealLoopTree* root) {
+  for (LoopTreeIterator iter(root); !iter.done(); iter.next()) {
+    IdealLoopTree* lpt = iter.current();
+    if (lpt->_has_call || lpt->_has_sfpt) {
+      return true;
+    }
+  }
+  return false; // no safepoints found
+}
+
+bool PhaseIdealLoop::process_reachability_fences() {
+  Compile::TracePhase tp(_t_reachability);
+
+  if (!OptimizeReachabilityFence) {
+    return false;
+  }
+
+  bool progress = false;
+  Unique_Node_List processed_rfs;
+  Node_List worklist;
+  for (int i = 0; i < C->reachability_fences_count(); i++) {
+    Node* rf = C->reachability_fence(i)->as_ReachabilityFence();
+    Node* referent = rf->in(TypeFunc::Parms);
+    if (igvn().type(referent) == TypePtr::NULL_PTR) {
+      continue; // no-op fence
+    }
+    // Look for redundant fences.
+    for (int j = i + 1; j < C->reachability_fences_count(); j++) {
+      Node* other_rf = C->reachability_fence(j)->as_ReachabilityFence();
+      Node* other_referent = other_rf->in(TypeFunc::Parms);
+      assert(rf != other_rf, "");
+      if (igvn().type(other_referent) == TypePtr::NULL_PTR) {
+        continue; // ignore; no-op fence
+      }
+      // Dominating RF is redundant.
+      if (other_referent == referent) {
+        Node* redundant_rf = (is_dominator(other_rf, rf) ? other_rf :
+                             (is_dominator(rf, other_rf) ? rf :
+                             nullptr));
+        if (redundant_rf != nullptr) {
+          igvn().replace_input_of(redundant_rf, TypeFunc::Parms, igvn().makecon(TypePtr::NULL_PTR));
+          if (redundant_rf == rf) {
+            break; // current RF turned into no-op
+          }
+        }
+      }
+    }
+
+    // Move RFs out of loops when possible.
+    for (LoopTreeIterator iter(_ltree_root); !iter.done(); iter.next()) {
+      IdealLoopTree* lpt = iter.current();
+      if (!lpt->is_loop()) {
+        continue;
+      }
+      if (is_member(lpt, rf)) {
+        if (lpt->is_invariant(referent)) {
+          assert(!lpt->is_root(), "");
+          IdealLoopTree* outer_loop = lpt->_parent;
+          if (is_member(outer_loop, rf) && outer_loop->is_invariant(referent)) {
+            continue; // handled in outer loop
+          }
+
+          Node* ctrl_out = nullptr;
+          if (lpt->head()->is_BaseCountedLoop()) {
+            ctrl_out = lpt->head()->as_BaseCountedLoop()->loopexit()->proj_out_or_null(0 /* false */);
+          } else if (lpt->head()->is_OuterStripMinedLoop()) {
+            ctrl_out = lpt->head()->as_OuterStripMinedLoop()->outer_loop_end()->proj_out_or_null(0 /* false */);
+          } else {
+            // TODO: general case: instrument all significant exits (based on safepoint location?)
+          }
+
+          if (ctrl_out != nullptr) {
+            worklist.push(rf);
+            worklist.push(ctrl_out);
+          }
+        } else if (!has_safepoints(lpt)) {
+          // No need to keep the RF when there are no safepoints.
+          igvn().replace_input_of(rf, TypeFunc::Parms, igvn().makecon(TypePtr::NULL_PTR));
+          continue; // current RF turned into no-op
+        }
+      }
+    }
+  }
+
+  while (worklist.size() > 0) {
+    Node* ctrl_out = worklist.pop();
+    Node* rf = worklist.pop();
+    Node* referent = rf->in(TypeFunc::Parms);
+
+    if (igvn().type(referent) != TypePtr::NULL_PTR && !has_immediate_rf(ctrl_out, referent)) {
+      Node* ctrl_end = ctrl_out->unique_ctrl_out();
+
+      Node* new_rf = rf->clone();
+      new_rf->set_req(TypeFunc::Control, ctrl_out);
+
+      IdealLoopTree* lpt = get_loop(ctrl_out);
+
+      register_control(new_rf, lpt, ctrl_out);
+
+      Node* new_rf_proj = new ProjNode(new_rf, TypeFunc::Control);
+      register_control(new_rf_proj, lpt, new_rf);
+
+      igvn().rehash_node_delayed(ctrl_end);
+      ctrl_end->replace_edge(ctrl_out, new_rf_proj);
+
+      igvn().replace_input_of(rf, TypeFunc::Parms, igvn().makecon(TypePtr::NULL_PTR));
+      progress = true;
+    }
+  }
+
+  if (progress) {
+    recompute_dom_depth();
+  }
+
+  return UseNewCode && progress;
+}
+
+//=============================================================================
 //----------------------------build_and_optimize-------------------------------
 // Create a PhaseLoop.  Build the ideal Loop tree.  Map each Ideal Node to
 // its corresponding LoopNode.  If 'optimize' is true, do some loop cleanups.
@@ -4775,6 +4908,9 @@ void PhaseIdealLoop::build_and_optimize() {
       // nodes again.
       C->set_major_progress();
     }
+    if (process_reachability_fences()) {
+      C->set_major_progress();
+    }
     return;
   }
 
@@ -4795,6 +4931,10 @@ void PhaseIdealLoop::build_and_optimize() {
     _ltree_root->dump();
   }
 #endif
+
+  if (process_reachability_fences()) {
+    C->set_major_progress();
+  }
 
   if (skip_loop_opts) {
     C->restore_major_progress(old_progress);
@@ -6899,7 +7039,7 @@ void LoopTreeIterator::next() {
   assert(!done(), "must not be done.");
   if (_curnt->_child != nullptr) {
     _curnt = _curnt->_child;
-  } else if (_curnt->_next != nullptr) {
+  } else if (_curnt != _root && _curnt->_next != nullptr) {
     _curnt = _curnt->_next;
   } else {
     while (_curnt != _root && _curnt->_next == nullptr) {

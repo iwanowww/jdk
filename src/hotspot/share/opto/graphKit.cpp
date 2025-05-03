@@ -3398,12 +3398,19 @@ int GraphKit::next_monitor() {
 // Memory barrier to avoid floating things around
 // The membar serves as a pinch point between both control and all memory slices.
 Node* GraphKit::insert_mem_bar(int opcode, Node* precedent) {
+  bool is_reachability_fence = (opcode == Op_ReachabilityFence);
   MemBarNode* mb = MemBarNode::make(C, opcode, Compile::AliasIdxBot, precedent);
   mb->init_req(TypeFunc::Control, control());
-  mb->init_req(TypeFunc::Memory,  reset_memory());
+  if (is_reachability_fence) {
+    mb->init_req(TypeFunc::Memory, immutable_memory());
+  } else {
+    mb->init_req(TypeFunc::Memory, reset_memory());
+  }
   Node* membar = _gvn.transform(mb);
   set_control(_gvn.transform(new ProjNode(membar, TypeFunc::Control)));
-  set_all_memory_call(membar);
+  if (!is_reachability_fence) {
+    set_all_memory_call(membar);
+  }
   return membar;
 }
 

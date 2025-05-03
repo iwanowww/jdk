@@ -73,6 +73,9 @@
   develop(bool, StressBailout, false,                                       \
           "Perform bailouts randomly at C2 failing() checks")               \
                                                                             \
+  product(bool, OptimizeReachabilityFence, true, DIAGNOSTIC,                \
+          "Randomly inserts ReachabilityFence nodes")                       \
+                                                                            \
   product(bool, StressReachabilityFence, false, DIAGNOSTIC,                 \
           "Randomly inserts ReachabilityFence nodes")                       \
                                                                             \
