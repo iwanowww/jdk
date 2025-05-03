@@ -979,8 +979,8 @@ void PhaseMacroExpand::process_users_of_allocation(CallNode *alloc) {
           }
         }
         _igvn._worklist.push(ac);
-      } else if (use->Opcode() == Op_ReachabilityFence) {
-        use->set_req(TypeFunc::Parms, _igvn.makecon(TypePtr::NULL_PTR)); // reset; redundant fence
+      } else if (use->Opcode() == Op_ReachabilityFence && OptimizeReachabilityFence) {
+        _igvn.replace_input_of(use, TypeFunc::Parms, _igvn.makecon(TypePtr::NULL_PTR)); // reset; redundant fence
       } else {
         eliminate_gc_barrier(use);
       }

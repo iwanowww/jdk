@@ -1458,6 +1458,8 @@ public:
   // execution of the expensive node. Return true if progress.
   bool process_expensive_nodes();
 
+  bool process_reachability_fences();
+
   // Check whether node has become unreachable
   bool is_node_unreachable(Node *n) const {
     return !has_node(n) || n->is_unreachable(_igvn);

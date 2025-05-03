@@ -894,7 +894,7 @@ Block* PhaseCFG::raise_above_anti_dependences(Block* LCA, Node* load, const bool
     assert(!use_mem_state->is_MergeMem(),
            "use_mem_state should be either a store or a memory Phi");
 
-    if (op == Op_MachProj || op == Op_Catch)   continue;
+    if (op == Op_MachProj || op == Op_Catch || op == Op_ReachabilityFence)   continue;
 
     // Compute the alias index. If the use_mem_state has an alias index
     // different from the load's, it is not anti-dependent. Wide MemBar's
