@@ -1113,6 +1113,12 @@ public:
     lazy_update(old_node, new_node);
   }
 
+  void remove_dead_node(Node* dead) {
+    assert(dead->outcnt() == 0 && !dead->is_top(), "node must be dead");
+    _loop_or_ctrl.map(dead->_idx, nullptr); // This node is useless
+    igvn().remove_dead_node(dead);
+  }
+
 private:
 
   // Place 'n' in some loop nest, where 'n' is a CFG node
