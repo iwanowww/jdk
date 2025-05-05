@@ -4606,6 +4606,42 @@ static bool has_safepoints(IdealLoopTree* root) {
   return false; // no safepoints found
 }
 
+static bool is_redundant(Node* rf, PhaseIdealLoop* phase) {
+  Node* referent = rf->in(TypeFunc::Parms);
+  for (int i = 0; i < phase->C->reachability_fences_count(); i++) {
+    Node* other_rf = phase->C->reachability_fence(i);
+    if (rf == other_rf) {
+      continue;
+    }
+    Node* other_referent = other_rf->in(TypeFunc::Parms);
+    if (phase->igvn().type(other_referent) == TypePtr::NULL_PTR) {
+      continue; // ignore; no-op fence
+    }
+    // Dominating RF is redundant.
+    if (other_referent->eqv_uncast(referent)) {
+      // other_referent <== referent <== rf <== other_rf
+      if (phase->is_dominator(phase->get_ctrl(other_referent),
+                              phase->get_ctrl(referent)) &&
+          phase->is_dominator(rf, other_rf)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+static bool clear_rf(Node* rf, PhaseIdealLoop* phase) {
+  Node* referent = rf->in(TypeFunc::Parms);
+  if (phase->igvn().type(referent) != TypePtr::NULL_PTR) {
+    phase->igvn().replace_input_of(rf, TypeFunc::Parms, phase->makecon(TypePtr::NULL_PTR));
+    if (referent->outcnt() == 0) {
+      phase->remove_dead_node(referent);
+    }
+    return true;
+  }
+  return false;
+}
+
 bool PhaseIdealLoop::process_reachability_fences() {
   Compile::TracePhase tp(_t_reachability);
 
@@ -4617,31 +4653,14 @@ bool PhaseIdealLoop::process_reachability_fences() {
   Unique_Node_List processed_rfs;
   Node_List worklist;
   for (int i = 0; i < C->reachability_fences_count(); i++) {
-    Node* rf = C->reachability_fence(i)->as_ReachabilityFence();
+    Node* rf = C->reachability_fence(i);
     Node* referent = rf->in(TypeFunc::Parms);
     if (igvn().type(referent) == TypePtr::NULL_PTR) {
       continue; // no-op fence
     }
-    // Look for redundant fences.
-    for (int j = i + 1; j < C->reachability_fences_count(); j++) {
-      Node* other_rf = C->reachability_fence(j)->as_ReachabilityFence();
-      Node* other_referent = other_rf->in(TypeFunc::Parms);
-      assert(rf != other_rf, "");
-      if (igvn().type(other_referent) == TypePtr::NULL_PTR) {
-        continue; // ignore; no-op fence
-      }
-      // Dominating RF is redundant.
-      if (other_referent == referent) {
-        Node* redundant_rf = (is_dominator(other_rf, rf) ? other_rf :
-                             (is_dominator(rf, other_rf) ? rf :
-                             nullptr));
-        if (redundant_rf != nullptr) {
-          igvn().replace_input_of(redundant_rf, TypeFunc::Parms, igvn().makecon(TypePtr::NULL_PTR));
-          if (redundant_rf == rf) {
-            break; // current RF turned into no-op
-          }
-        }
-      }
+    if (is_redundant(rf, this)) {
+      clear_rf(rf, this);
+      break;
     }
 
     // Move RFs out of loops when possible.
@@ -4673,7 +4692,7 @@ bool PhaseIdealLoop::process_reachability_fences() {
           }
         } else if (!has_safepoints(lpt)) {
           // No need to keep the RF when there are no safepoints.
-          igvn().replace_input_of(rf, TypeFunc::Parms, igvn().makecon(TypePtr::NULL_PTR));
+          clear_rf(rf, this);
           continue; // current RF turned into no-op
         }
       }
@@ -4701,7 +4720,13 @@ bool PhaseIdealLoop::process_reachability_fences() {
       igvn().rehash_node_delayed(ctrl_end);
       ctrl_end->replace_edge(ctrl_out, new_rf_proj);
 
-      igvn().replace_input_of(rf, TypeFunc::Parms, igvn().makecon(TypePtr::NULL_PTR));
+      if (idom(ctrl_end) == ctrl_out) {
+        set_idom(ctrl_end, new_rf_proj, dom_depth(new_rf_proj));
+      } else {
+        assert(ctrl_end->is_Region(), "");
+      }
+
+      clear_rf(rf, this);
       progress = true;
     }
   }
@@ -4709,6 +4734,8 @@ bool PhaseIdealLoop::process_reachability_fences() {
   if (progress) {
     recompute_dom_depth();
   }
+
+  DEBUG_ONLY( if (VerifyLoopOptimizations) { verify(); } );
 
   return UseNewCode && progress;
 }
