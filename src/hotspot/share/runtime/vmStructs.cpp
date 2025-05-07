@@ -708,10 +708,6 @@
      static_field(Abstract_VM_Version,         _vm_security_version,                          int)                                   \
      static_field(Abstract_VM_Version,         _vm_build_number,                              int)                                   \
                                                                                                                                      \
-     NOT_ZERO(X86_ONLY(   static_field(VM_Version,              _features,                      VM_Version::VM_Features)))           \
-     NOT_ZERO(X86_ONLY(nonstatic_field(VM_Version::VM_Features, _features_bitmap[0],            uint64_t)))                          \
-     NOT_ZERO(X86_ONLY(   static_field(VM_Version::VM_Features, _features_bitmap_size_in_bytes, int)))                               \
-                                                                                                                                     \
   /*************************/                                                                                                        \
   /* JVMTI */                                                                                                                        \
   /*************************/                                                                                                        \
@@ -1168,8 +1164,7 @@
   /********************/                                                  \
                                                                           \
   declare_toplevel_type(Abstract_VM_Version)                              \
-  NOT_ZERO(declare_toplevel_type(VM_Version))                             \
-  NOT_ZERO(X86_ONLY(declare_toplevel_type(VM_Version::VM_Features)))      \
+  declare_toplevel_type(VM_Version)                                       \
                                                                           \
   /*************/                                                         \
   /* Arguments */                                                         \
@@ -1722,7 +1717,6 @@
   /**********************/                                                \
   NOT_ZERO(PPC64_ONLY(declare_constant(frame::entry_frame_locals_size)))  \
                                                                           \
-  NOT_ZERO(X86_ONLY(declare_constant(frame::entry_frame_call_wrapper_offset)))      \
   declare_constant(frame::pc_return_offset)                               \
                                                                           \
   /*************/                                                         \
