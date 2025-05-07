@@ -4637,9 +4637,20 @@ static bool clear_rf(Node* rf, PhaseIdealLoop* phase) {
     if (referent->outcnt() == 0) {
       phase->remove_dead_node(referent);
     }
-    return true;
   }
-  return false;
+  phase->lazy_replace(rf->unique_ctrl_out(), rf);
+  phase->lazy_replace(rf, rf->in(0));
+  return true;
+}
+
+static Node* loop_exit(IdealLoopTree* lpt) {
+  if (lpt->head()->is_BaseCountedLoop()) {
+    return lpt->head()->as_BaseCountedLoop()->loopexit()->proj_out_or_null(0 /* false */);
+  } else if (lpt->head()->is_OuterStripMinedLoop()) {
+    return lpt->head()->as_OuterStripMinedLoop()->outer_loop_end()->proj_out_or_null(0 /* false */);
+  } else {
+    return nullptr; // TODO: general case: instrument all significant exits (based on safepoint location?)
+  }
 }
 
 bool PhaseIdealLoop::process_reachability_fences() {
@@ -4655,11 +4666,12 @@ bool PhaseIdealLoop::process_reachability_fences() {
   for (int i = 0; i < C->reachability_fences_count(); i++) {
     Node* rf = C->reachability_fence(i);
     Node* referent = rf->in(TypeFunc::Parms);
+    assert(rf->outcnt() > 0, "dead node");
     if (igvn().type(referent) == TypePtr::NULL_PTR) {
       continue; // no-op fence
     }
     if (is_redundant(rf, this)) {
-      clear_rf(rf, this);
+      progress |= clear_rf(rf, this);
       break;
     }
 
@@ -4673,26 +4685,18 @@ bool PhaseIdealLoop::process_reachability_fences() {
         if (lpt->is_invariant(referent)) {
           assert(!lpt->is_root(), "");
           IdealLoopTree* outer_loop = lpt->_parent;
-          if (is_member(outer_loop, rf) && outer_loop->is_invariant(referent)) {
+          if (is_member(outer_loop, rf) && outer_loop->is_invariant(referent) && loop_exit(outer_loop) != nullptr) {
             continue; // handled in outer loop
           }
 
-          Node* ctrl_out = nullptr;
-          if (lpt->head()->is_BaseCountedLoop()) {
-            ctrl_out = lpt->head()->as_BaseCountedLoop()->loopexit()->proj_out_or_null(0 /* false */);
-          } else if (lpt->head()->is_OuterStripMinedLoop()) {
-            ctrl_out = lpt->head()->as_OuterStripMinedLoop()->outer_loop_end()->proj_out_or_null(0 /* false */);
-          } else {
-            // TODO: general case: instrument all significant exits (based on safepoint location?)
-          }
-
+          Node* ctrl_out = loop_exit(lpt);
           if (ctrl_out != nullptr) {
             worklist.push(rf);
             worklist.push(ctrl_out);
           }
         } else if (!has_safepoints(lpt)) {
           // No need to keep the RF when there are no safepoints.
-          clear_rf(rf, this);
+          progress |= clear_rf(rf, this);
           continue; // current RF turned into no-op
         }
       }
@@ -4726,8 +4730,7 @@ bool PhaseIdealLoop::process_reachability_fences() {
         assert(ctrl_end->is_Region(), "");
       }
 
-      clear_rf(rf, this);
-      progress = true;
+      progress |= clear_rf(rf, this);
     }
   }
 
