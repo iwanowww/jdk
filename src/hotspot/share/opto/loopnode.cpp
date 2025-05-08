@@ -4638,8 +4638,20 @@ static bool clear_rf(Node* rf, PhaseIdealLoop* phase) {
       phase->remove_dead_node(referent);
     }
   }
-  phase->lazy_replace(rf->unique_ctrl_out(), rf);
-  phase->lazy_replace(rf, rf->in(0));
+
+  Node* rf_ctrl_in   = rf->in(0);
+  Node* rf_ctrl_proj = rf->unique_ctrl_out();
+
+  IdealLoopTree* lpt1 = phase->get_loop(rf);
+  phase->lazy_replace(rf, rf_ctrl_in);
+  if (lpt1->_parent != nullptr) {
+    lpt1->_body.yank(rf);
+  }
+  IdealLoopTree* lpt2 = phase->get_loop(rf_ctrl_proj);
+  phase->lazy_replace(rf_ctrl_proj, rf_ctrl_in);
+  if (lpt2->_parent != nullptr) {
+    lpt1->_body.yank(rf_ctrl_proj);
+  }
   return true;
 }
 
@@ -4661,17 +4673,19 @@ bool PhaseIdealLoop::process_reachability_fences() {
   }
 
   bool progress = false;
-  Unique_Node_List processed_rfs;
+  Unique_Node_List redundant_rfs;
   Node_List worklist;
   for (int i = 0; i < C->reachability_fences_count(); i++) {
     Node* rf = C->reachability_fence(i);
     Node* referent = rf->in(TypeFunc::Parms);
     assert(rf->outcnt() > 0, "dead node");
+    assert(!redundant_rfs.member(rf), "redundant");
     if (igvn().type(referent) == TypePtr::NULL_PTR) {
       continue; // no-op fence
     }
     if (is_redundant(rf, this)) {
-      progress |= clear_rf(rf, this);
+      assert(!worklist.contains(rf), "");
+      redundant_rfs.push(rf);
       break;
     }
 
@@ -4691,13 +4705,15 @@ bool PhaseIdealLoop::process_reachability_fences() {
 
           Node* ctrl_out = loop_exit(lpt);
           if (ctrl_out != nullptr) {
+            assert(!redundant_rfs.member(rf), "redundant");
             worklist.push(rf);
             worklist.push(ctrl_out);
           }
         } else if (!has_safepoints(lpt)) {
           // No need to keep the RF when there are no safepoints.
-          progress |= clear_rf(rf, this);
-          continue; // current RF turned into no-op
+          assert(!worklist.contains(rf), "");
+          redundant_rfs.push(rf);
+          break; // current RF turned into no-op
         }
       }
     }
@@ -4729,12 +4745,16 @@ bool PhaseIdealLoop::process_reachability_fences() {
       } else {
         assert(ctrl_end->is_Region(), "");
       }
-
-      progress |= clear_rf(rf, this);
     }
+
+    redundant_rfs.push(rf);
   }
 
-  if (progress) {
+  if (redundant_rfs.size() > 0) {
+    while (redundant_rfs.size() > 0) {
+      Node* rf = redundant_rfs.pop();
+      progress |= clear_rf(rf, this);
+    }
     recompute_dom_depth();
   }
 
