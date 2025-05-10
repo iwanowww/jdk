@@ -640,6 +640,7 @@ public:
 
   Node_List* _safepts;          // List of safepoints in this loop
   Node_List* _required_safept;  // A inner loop cannot delete these safepts;
+  Node_List* _rfs;              // List of reachability fences in this loop
   bool  _allow_optimizations;   // Allow loop optimizations
 
   IdealLoopTree( PhaseIdealLoop* phase, Node *head, Node *tail )
@@ -652,6 +653,7 @@ public:
       _has_range_checks(0), _has_range_checks_computed(0),
       _safepts(nullptr),
       _required_safept(nullptr),
+      _rfs(nullptr),
       _allow_optimizations(true)
   {
     precond(_head != nullptr);
