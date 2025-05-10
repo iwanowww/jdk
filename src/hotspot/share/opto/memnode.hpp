@@ -1290,6 +1290,7 @@ public:
 //------------------------ReachabilityFenceNode--------------------------
 class ReachabilityFenceNode : public MemBarNode {
   Node* post_dominating_fence(PhaseGVN* phase);
+  bool is_redundant(PhaseGVN* phase);
 
 public:
   ReachabilityFenceNode(Compile* C, int alias_idx, Node* precedent)

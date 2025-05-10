@@ -74,7 +74,10 @@
           "Perform bailouts randomly at C2 failing() checks")               \
                                                                             \
   product(bool, OptimizeReachabilityFence, true, DIAGNOSTIC,                \
-          "Randomly inserts ReachabilityFence nodes")                       \
+          "Optimize reachability fences")                                   \
+                                                                            \
+  product(bool, EliminateConstantReachabilityFence, true, DIAGNOSTIC,       \
+          "Eliminate reachability fences on constants")                     \
                                                                             \
   product(bool, StressReachabilityFence, false, DIAGNOSTIC,                 \
           "Randomly inserts ReachabilityFence nodes")                       \

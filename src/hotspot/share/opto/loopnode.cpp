@@ -4338,6 +4338,9 @@ void IdealLoopTree::dump_head() {
   if (_has_call) tty->print(" has_call");
   if (_has_sfpt) tty->print(" has_sfpt");
   if (_rce_candidate) tty->print(" rce");
+  if (_rfs != nullptr && _rfs->size() > 0) {
+    tty->print(" has_rf");
+  }
   if (_safepts != nullptr && _safepts->size() > 0) {
     tty->print(" sfpts={"); _safepts->dump_simple(); tty->print(" }");
   }
@@ -4345,6 +4348,9 @@ void IdealLoopTree::dump_head() {
     tty->print(" req={"); _required_safept->dump_simple(); tty->print(" }");
   }
   if (Verbose) {
+    if (_rfs != nullptr && _rfs->size() > 0) {
+      tty->print(" rfs={"); _rfs->dump_simple(); tty->print(" }");
+    }
     tty->print(" body={"); _body.dump_simple(); tty->print(" }");
   }
   if (_head->is_Loop() && _head->as_Loop()->is_strip_mined()) {
@@ -4608,6 +4614,13 @@ static bool has_safepoints(IdealLoopTree* root) {
 
 static bool is_redundant(Node* rf, PhaseIdealLoop* phase) {
   Node* referent = rf->in(TypeFunc::Parms);
+  const Type* t = phase->igvn().type(referent);
+  if (EliminateConstantReachabilityFence && t->singleton()) {
+    return true; // no-op fence
+  }
+  if (t == TypePtr::NULL_PTR) {
+    return true; // no-op fence
+  }
   for (int i = 0; i < phase->C->reachability_fences_count(); i++) {
     Node* other_rf = phase->C->reachability_fence(i);
     if (rf == other_rf) {
@@ -4635,7 +4648,12 @@ static bool clear_rf(Node* rf, PhaseIdealLoop* phase) {
   if (phase->igvn().type(referent) != TypePtr::NULL_PTR) {
     phase->igvn().replace_input_of(rf, TypeFunc::Parms, phase->makecon(TypePtr::NULL_PTR));
     if (referent->outcnt() == 0) {
+      Node* c = phase->get_ctrl(referent);
+      IdealLoopTree* lpt = phase->get_loop(c);
       phase->remove_dead_node(referent);
+      if (lpt->_parent != nullptr) {
+        lpt->_body.yank(referent);
+      }
     }
   }
 
@@ -4647,6 +4665,9 @@ static bool clear_rf(Node* rf, PhaseIdealLoop* phase) {
   if (lpt1->_parent != nullptr) {
     lpt1->_body.yank(rf);
   }
+  assert(lpt1->_rfs != nullptr, "missing");
+  assert(lpt1->_rfs->contains(rf), "missing");
+  lpt1->_rfs->yank(rf);
   IdealLoopTree* lpt2 = phase->get_loop(rf_ctrl_proj);
   phase->lazy_replace(rf_ctrl_proj, rf_ctrl_in);
   if (lpt2->_parent != nullptr) {
@@ -4680,40 +4701,36 @@ bool PhaseIdealLoop::process_reachability_fences() {
     Node* referent = rf->in(TypeFunc::Parms);
     assert(rf->outcnt() > 0, "dead node");
     assert(!redundant_rfs.member(rf), "redundant");
-    if (igvn().type(referent) == TypePtr::NULL_PTR) {
-      continue; // no-op fence
-    }
     if (is_redundant(rf, this)) {
       assert(!worklist.contains(rf), "");
       redundant_rfs.push(rf);
-      break;
-    }
+    } else {
+      // Move RFs out of loops when possible.
+      for (LoopTreeIterator iter(_ltree_root); !iter.done(); iter.next()) {
+        IdealLoopTree* lpt = iter.current();
+        if (!lpt->is_loop()) {
+          continue;
+        }
+        if (is_member(lpt, rf)) {
+          if (lpt->is_invariant(referent)) {
+            assert(!lpt->is_root(), "");
+            IdealLoopTree* outer_loop = lpt->_parent;
+            if (is_member(outer_loop, rf) && outer_loop->is_invariant(referent) && loop_exit(outer_loop) != nullptr) {
+              continue; // handled in outer loop
+            }
 
-    // Move RFs out of loops when possible.
-    for (LoopTreeIterator iter(_ltree_root); !iter.done(); iter.next()) {
-      IdealLoopTree* lpt = iter.current();
-      if (!lpt->is_loop()) {
-        continue;
-      }
-      if (is_member(lpt, rf)) {
-        if (lpt->is_invariant(referent)) {
-          assert(!lpt->is_root(), "");
-          IdealLoopTree* outer_loop = lpt->_parent;
-          if (is_member(outer_loop, rf) && outer_loop->is_invariant(referent) && loop_exit(outer_loop) != nullptr) {
-            continue; // handled in outer loop
+            Node* ctrl_out = loop_exit(lpt);
+            if (ctrl_out != nullptr) {
+              assert(!redundant_rfs.member(rf), "redundant");
+              worklist.push(rf);
+              worklist.push(ctrl_out);
+            }
+          } else if (!has_safepoints(lpt)) {
+            // No need to keep the RF when there are no safepoints.
+            assert(!worklist.contains(rf), "");
+            redundant_rfs.push(rf);
+            break; // current RF turned into no-op
           }
-
-          Node* ctrl_out = loop_exit(lpt);
-          if (ctrl_out != nullptr) {
-            assert(!redundant_rfs.member(rf), "redundant");
-            worklist.push(rf);
-            worklist.push(ctrl_out);
-          }
-        } else if (!has_safepoints(lpt)) {
-          // No need to keep the RF when there are no safepoints.
-          assert(!worklist.contains(rf), "");
-          redundant_rfs.push(rf);
-          break; // current RF turned into no-op
         }
       }
     }
@@ -5887,6 +5904,11 @@ int PhaseIdealLoop::build_loop_tree_impl(Node* n, int pre_order) {
         // Record all safepoints in this loop.
         if (innermost->_safepts == nullptr) innermost->_safepts = new Node_List();
         innermost->_safepts->push(n);
+      } else if (n->is_ReachabilityFence()) {
+        if (innermost->_rfs == nullptr) {
+          innermost->_rfs = new Node_List();
+        }
+        innermost->_rfs->push(n);
       }
     }
   }

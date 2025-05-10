@@ -4413,6 +4413,19 @@ Node* ReachabilityFenceNode::post_dominating_fence(PhaseGVN* phase) {
   return nullptr;
 }
 
+bool ReachabilityFenceNode::is_redundant(PhaseGVN* phase) {
+  if (OptimizeReachabilityFence) {
+    if (phase->type(in(TypeFunc::Parms)) == TypePtr::NULL_PTR) {
+      return true;
+    }
+    if (EliminateConstantReachabilityFence && phase->type(in(TypeFunc::Parms))->singleton()) {
+      return true;
+    }
+    return (post_dominating_fence(phase) != nullptr);
+  }
+  return false;
+}
+
 Node* ReachabilityFenceNode::Ideal(PhaseGVN* phase, bool can_reshape) {
   Node* n = MemBarNode::Ideal(phase, can_reshape);
   if (n != nullptr) {
@@ -4422,12 +4435,8 @@ Node* ReachabilityFenceNode::Ideal(PhaseGVN* phase, bool can_reshape) {
   if (in(0) != nullptr && in(0)->is_top()) {
     return nullptr;
   }
-  if (OptimizeReachabilityFence) {
-    if (phase->type(in(TypeFunc::Parms)) == TypePtr::NULL_PTR ||
-        post_dominating_fence(phase) != nullptr) {
-      // Redundant fence
-      return TupleNode::make(TypeTuple::MEMBAR, in(0), in(1), in(2), in(3), in(4));
-    }
+  if (is_redundant(phase)) {
+    return TupleNode::make(TypeTuple::MEMBAR, in(0), in(1), in(2), in(3), in(4));
   }
   return nullptr;
 }
