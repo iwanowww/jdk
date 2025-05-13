@@ -3134,3 +3134,43 @@ void BlackholeNode::format(PhaseRegAlloc* ra, outputStream* st) const {
 }
 #endif
 
+Node* ReachabilityFenceNode::post_dominating_fence(PhaseGVN* phase) {
+  Node* n = in(1); // TODO: skip casts
+  for (DUIterator_Fast imax, i = n->fast_outs(imax); i < imax; i++) {
+    Node* use = n->fast_out(i); // TODO: skip through casts
+    if (use != this && use->Opcode() == Op_ReachabilityFence) {
+      if (phase->is_dominator(this, use)) {
+        return use; // found a postdominating fence
+      }
+    }
+  }
+  return nullptr;
+}
+
+bool ReachabilityFenceNode::is_redundant(PhaseGVN* phase) {
+  if (OptimizeReachabilityFence) {
+    const Type* t = phase->type(in(1));
+    if (t == TypePtr::NULL_PTR) {
+      return true;
+    }
+    if (EliminateConstantReachabilityFence && t->singleton()) {
+      return true;
+    }
+    return (post_dominating_fence(phase) != nullptr);
+  }
+  return false;
+}
+
+Node* ReachabilityFenceNode::Ideal(PhaseGVN* phase, bool can_reshape) {
+  if (remove_dead_region(phase, can_reshape)) {
+    return this;
+  }
+  if (in(0) != nullptr && in(0)->is_top()) {
+    return nullptr;
+  }
+  if (is_redundant(phase)) {
+    return TupleNode::make(TypeTuple::MEMBAR, in(0), nullptr, nullptr, nullptr, nullptr);
+  }
+  return nullptr;
+}
+

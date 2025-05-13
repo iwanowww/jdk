@@ -2191,7 +2191,8 @@ void Parse::return_current(Node* value) {
     if (!method()->is_static()) {
       Node* receiver = local(0);
       if (!receiver->is_top()) {
-        insert_mem_bar(Op_ReachabilityFence, receiver);
+        Node* rf = _gvn.transform(new ReachabilityFenceNode(C, control(), receiver));
+        set_control(_gvn.transform(new ProjNode(rf, TypeFunc::Control)));
       }
     }
     int local_idx = (method()->is_static() ? 0 : 1);
@@ -2199,7 +2200,8 @@ void Parse::return_current(Node* value) {
       if (!ss.type()->is_primitive_type()) {
         Node* argument = local(local_idx);
         if (!argument->is_top()) {
-          insert_mem_bar(Op_ReachabilityFence, argument);
+          Node* rf = _gvn.transform(new ReachabilityFenceNode(C, control(), argument));
+          set_control(_gvn.transform(new ProjNode(rf, TypeFunc::Control)));
         }
       }
       local_idx += ss.type()->size();

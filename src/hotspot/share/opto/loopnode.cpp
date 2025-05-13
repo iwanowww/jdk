@@ -4595,7 +4595,7 @@ static bool has_immediate_rf(Node* n, Node* referent) {
   for (Node* cur = n->unique_ctrl_out();
        cur->is_ReachabilityFence();
        cur = cur->unique_ctrl_out()) { // no dangling control allowed
-    if (cur->in(TypeFunc::Parms) == referent) {
+    if (cur->in(1) == referent) {
       return true;
     }
   }
@@ -4613,7 +4613,7 @@ static bool has_safepoints(IdealLoopTree* root) {
 }
 
 static bool is_redundant(Node* rf, PhaseIdealLoop* phase) {
-  Node* referent = rf->in(TypeFunc::Parms);
+  Node* referent = rf->in(1);
   const Type* t = phase->igvn().type(referent);
   if (EliminateConstantReachabilityFence && t->singleton()) {
     return true; // no-op fence
@@ -4626,7 +4626,7 @@ static bool is_redundant(Node* rf, PhaseIdealLoop* phase) {
     if (rf == other_rf) {
       continue;
     }
-    Node* other_referent = other_rf->in(TypeFunc::Parms);
+    Node* other_referent = other_rf->in(1);
     if (phase->igvn().type(other_referent) == TypePtr::NULL_PTR) {
       continue; // ignore; no-op fence
     }
@@ -4644,9 +4644,9 @@ static bool is_redundant(Node* rf, PhaseIdealLoop* phase) {
 }
 
 static bool clear_rf(Node* rf, PhaseIdealLoop* phase) {
-  Node* referent = rf->in(TypeFunc::Parms);
+  Node* referent = rf->in(1);
   if (phase->igvn().type(referent) != TypePtr::NULL_PTR) {
-    phase->igvn().replace_input_of(rf, TypeFunc::Parms, phase->makecon(TypePtr::NULL_PTR));
+    phase->igvn().replace_input_of(rf, 1, phase->makecon(TypePtr::NULL_PTR));
     if (referent->outcnt() == 0) {
       Node* c = phase->get_ctrl(referent);
       IdealLoopTree* lpt = phase->get_loop(c);
@@ -4698,7 +4698,7 @@ bool PhaseIdealLoop::process_reachability_fences() {
   Node_List worklist;
   for (int i = 0; i < C->reachability_fences_count(); i++) {
     Node* rf = C->reachability_fence(i);
-    Node* referent = rf->in(TypeFunc::Parms);
+    Node* referent = rf->in(1);
     assert(rf->outcnt() > 0, "dead node");
     assert(!redundant_rfs.member(rf), "redundant");
     if (is_redundant(rf, this)) {
@@ -4739,7 +4739,7 @@ bool PhaseIdealLoop::process_reachability_fences() {
   while (worklist.size() > 0) {
     Node* ctrl_out = worklist.pop();
     Node* rf = worklist.pop();
-    Node* referent = rf->in(TypeFunc::Parms);
+    Node* referent = rf->in(1);
 
     if (igvn().type(referent) != TypePtr::NULL_PTR && !has_immediate_rf(ctrl_out, referent)) {
       Node* ctrl_end = ctrl_out->unique_ctrl_out();

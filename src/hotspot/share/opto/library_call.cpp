@@ -7019,7 +7019,8 @@ bool LibraryCallKit::inline_reference_clear0(bool is_phantom) {
 //-----------------------inline_reference_reachabilityFence-----------------
 // bool java.lang.ref.Reference.reachabilityFence();
 bool LibraryCallKit::inline_reference_reachabilityFence() {
-  insert_mem_bar(Op_ReachabilityFence, argument(0));
+  Node* rf = _gvn.transform(new ReachabilityFenceNode(C, control(), argument(0)));
+  set_control(_gvn.transform(new ProjNode(rf, TypeFunc::Control)));
   return true;
 }
 
