@@ -222,6 +222,7 @@ Node *PhaseIdealLoop::get_early_ctrl_for_expensive(Node *n, Node* earliest) {
           break;
         }
         assert(parent_ctl->is_Start() || parent_ctl->is_MemBar() || parent_ctl->is_Call() ||
+               parent_ctl->Opcode() == Op_ReachabilityFence ||
                BarrierSet::barrier_set()->barrier_set_c2()->is_gc_barrier_node(parent_ctl), "unexpected node");
         assert(idom(ctl) == parent_ctl, "strange");
         next = idom(parent_ctl);
@@ -4775,9 +4776,88 @@ bool PhaseIdealLoop::process_reachability_fences() {
     recompute_dom_depth();
   }
 
-  DEBUG_ONLY( if (VerifyLoopOptimizations) { verify(); } );
+  DEBUG_ONLY( if (VerifyLoopOptimizations && progress) { verify(); } );
 
   return UseNewCode && progress;
+}
+
+
+static bool sfpt_filter(Node* n) {
+  if (n->is_SafePoint()) {
+    SafePointNode* sfpt = n->as_SafePoint();
+    if (!sfpt->guaranteed_safepoint()) {
+      return false; // not a real safepoint after all
+    } else if (sfpt->is_CallStaticJava() && sfpt->as_CallStaticJava()->is_uncommon_trap()) {
+      return false; // skip uncommon traps
+    }
+    return true;
+  }
+  return false;
+}
+
+// Iterate over CFG, build live range for n, and detect affected safepoints.
+static bool has_interfering_sfpts(Node* rf, PhaseIdealLoop* phase) {
+  ResourceMark rm;
+  Node* referent = rf->in(1);
+  Node* referent_ctrl = phase->get_ctrl(referent);
+  assert(phase->is_dominator(referent_ctrl, rf), "sanity");
+
+  VectorSet visited;
+  visited.set(rf->_idx); // start point
+  visited.set(referent_ctrl->_idx); // end point
+
+  Node_Stack stack(phase->C->live_nodes() >> 2);
+  stack.push(rf, 0);
+  while (stack.is_nonempty()) {
+    Node* cur = stack.node();
+    uint  idx = stack.index();
+    assert(cur != nullptr, "");
+    assert(cur->is_CFG(), "%s", NodeClassNames[cur->Opcode()]);
+
+    uint limit = (cur->is_Region() ? cur->req() : 1);
+    if (idx < limit) {
+      stack.set_index(idx + 1);
+      Node* def = cur->in(idx);
+      if (def == nullptr) {
+        continue; // ignore dead path
+      } else if (!visited.test_set(def->_idx)) { // not visited yet
+        if (sfpt_filter(def)) {
+          assert(phase->is_dominator(referent_ctrl, def), "");
+          return true;
+        }
+        stack.push(def, 0);
+      }
+    } else {
+      stack.pop();
+    }
+  }
+  return false;
+}
+
+bool PhaseIdealLoop::optimize_reachability_fences() {
+  Compile::TracePhase tp(_t_reachability);
+
+  if (!OptimizeReachabilityFence) {
+    return false;
+  }
+
+  bool progress = false;
+  Unique_Node_List redundant_rfs;
+  Node_List worklist;
+  for (int i = 0; i < C->reachability_fences_count(); i++) {
+    Node* rf = C->reachability_fence(i);
+    assert(!is_redundant(rf, this), "");
+    if (!has_interfering_sfpts(rf, this)) {
+      redundant_rfs.push(rf);
+    }
+  }
+
+  while (redundant_rfs.size() > 0) {
+    Node* rf = redundant_rfs.pop();
+    progress |= clear_rf(rf, this);
+  }
+
+  return progress;
 }
 
 //=============================================================================
@@ -4790,7 +4870,7 @@ void PhaseIdealLoop::build_and_optimize() {
   bool do_split_ifs = (_mode == LoopOptsDefault);
   bool skip_loop_opts = (_mode == LoopOptsNone);
   bool do_max_unroll = (_mode == LoopOptsMaxUnroll);
-
+  bool optimize_rfs = (_mode == LoopOptsOptimizeRFs);
 
   int old_progress = C->major_progress();
   uint orig_worklist_size = _igvn._worklist.size();
@@ -4860,8 +4940,9 @@ void PhaseIdealLoop::build_and_optimize() {
   bool stop_early = !C->has_loops() && !skip_loop_opts && !do_split_ifs && !do_max_unroll && !_verify_me &&
           !_verify_only && !bs->is_gc_specific_loop_opts_pass(_mode);
   bool do_expensive_nodes = C->should_optimize_expensive_nodes(_igvn);
+  bool do_reachability_fences = (C->reachability_fences_count() > 0);
   bool strip_mined_loops_expanded = bs->strip_mined_loops_expanded(_mode);
-  if (stop_early && !do_expensive_nodes) {
+  if (stop_early && !do_expensive_nodes && !do_reachability_fences) {
     return;
   }
 
@@ -4967,16 +5048,21 @@ void PhaseIdealLoop::build_and_optimize() {
   eliminate_useless_multiversion_if();
 
   if (stop_early) {
-    assert(do_expensive_nodes, "why are we here?");
-    if (process_expensive_nodes()) {
+    assert(do_expensive_nodes || do_reachability_fences, "why are we here?");
+    if (do_expensive_nodes && process_expensive_nodes()) {
       // If we made some progress when processing expensive nodes then
       // the IGVN may modify the graph in a way that will allow us to
       // make some more progress: we need to try processing expensive
       // nodes again.
       C->set_major_progress();
     }
-    if (process_reachability_fences()) {
-      C->set_major_progress();
+    if (do_reachability_fences) {
+      if (process_reachability_fences()) {
+        C->set_major_progress();
+      }
+      if (optimize_reachability_fences()) {
+        C->set_major_progress();
+      }
     }
     return;
   }
@@ -5024,6 +5110,13 @@ void PhaseIdealLoop::build_and_optimize() {
         }
       }
     }
+
+    C->restore_major_progress(old_progress);
+    return;
+  }
+
+  if (optimize_rfs) {
+    optimize_reachability_fences();
 
     C->restore_major_progress(old_progress);
     return;

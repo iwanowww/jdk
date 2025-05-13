@@ -2518,7 +2518,12 @@ void Compile::Optimize() {
     return;
   }
 
-  if (failing())  return;
+  { // No more loop opts. It is safe to eliminate non-interfering RFs.
+    TracePhase tp(_t_idealLoop);
+    PhaseIdealLoop::optimize(igvn, LoopOptsOptimizeRFs);
+    print_method(PHASE_OPTIMIZE_RF, 2);
+    if (failing())  return;
+  }
 
   C->clear_major_progress(); // ensure that major progress is now clear
 

@@ -1467,6 +1467,7 @@ public:
   bool process_expensive_nodes();
 
   bool process_reachability_fences();
+  bool optimize_reachability_fences();
 
   // Check whether node has become unreachable
   bool is_node_unreachable(Node *n) const {
