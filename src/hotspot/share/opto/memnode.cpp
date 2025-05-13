@@ -4466,28 +4466,6 @@ MemBarNode* MemBarNode::leading_membar() const {
   return mb;
 }
 
-#ifndef PRODUCT
-void ReachabilityFenceNode::format(PhaseRegAlloc* ra, outputStream* st) const {
-  st->print("reachability fence ");
-  bool first = true;
-  for (uint i = 0; i < req(); i++) {
-    Node* n = in(i);
-    if (n != nullptr && OptoReg::is_valid(ra->get_reg_first(n))) {
-      if (first) {
-        first = false;
-      } else {
-        st->print(", ");
-      }
-      char buf[128];
-      ra->dump_register(n, buf, 128);
-      st->print("%s", buf);
-    }
-  }
-  st->cr();
-}
-#endif
-
-
 //===========================InitializeNode====================================
 // SUMMARY:
 // This node acts as a memory barrier on raw memory, after some raw stores.
