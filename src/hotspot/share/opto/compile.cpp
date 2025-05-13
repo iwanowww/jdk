@@ -3908,6 +3908,20 @@ void Compile::final_graph_reshaping_main_switch(Node* n, Final_Reshape_Counts& f
 //------------------------------final_graph_reshaping_walk---------------------
 // Replacing Opaque nodes with their input in final_graph_reshaping_impl(),
 // requires that the walk visits a node's inputs before visiting the node.
+
+static bool has_non_debug_uses(Node* n) {
+  for (DUIterator_Fast imax, i = n->fast_outs(imax); i < imax; i++) {
+    Node* u = n->fast_out(i);
+    if (u->is_Call() && u->as_Call()->has_non_debug_use(n)) {
+      return false;
+    }
+    if (!u->is_SafePoint() && !u->is_ReachabilityFence()) {
+      return false;
+    }
+  }
+  return true;
+}
+
 void Compile::final_graph_reshaping_walk(Node_Stack& nstack, Node* root, Final_Reshape_Counts& frc, Unique_Node_List& dead_nodes) {
   Unique_Node_List sfpt;
 
@@ -3949,6 +3963,20 @@ void Compile::final_graph_reshaping_walk(Node_Stack& nstack, Node* root, Final_R
       (!UseCompressedOops && !UseCompressedClassPointers))
     return;
 
+  // Go over reachability fence nodes to skip DecodeN nodes.
+  for (int i = 0; i < C->reachability_fences_count(); i++) {
+    Node* rf = C->reachability_fence(i);
+    Node* in = rf->in(1);
+    if (in->is_DecodeN()) {
+      if (in->outcnt() == 1 || Matcher::narrow_oop_use_complex_address()) {
+        rf->set_req(1, in->in(1));
+        if (in->outcnt() == 0) {
+          in->disconnect_inputs(this);
+        }
+      }
+    }
+  }
+
   // Go over safepoints nodes to skip DecodeN/DecodeNKlass nodes for debug edges.
   // It could be done for an uncommon traps or any safepoints/calls
   // if the DecodeN/DecodeNKlass node is referenced only in a debug info.
@@ -3962,21 +3990,8 @@ void Compile::final_graph_reshaping_walk(Node_Stack& nstack, Node* root, Final_R
                         n->as_CallStaticJava()->uncommon_trap_request() != 0);
     for (int j = start; j < end; j++) {
       Node* in = n->in(j);
-      if (in->is_DecodeNarrowPtr()) {
-        bool safe_to_skip = true;
-        if (!is_uncommon ) {
-          // Is it safe to skip?
-          for (uint i = 0; i < in->outcnt(); i++) {
-            Node* u = in->raw_out(i);
-            if (!u->is_SafePoint() ||
-                (u->is_Call() && u->as_Call()->has_non_debug_use(n))) {
-              safe_to_skip = false;
-            }
-          }
-        }
-        if (safe_to_skip) {
-          n->set_req(j, in->in(1));
-        }
+      if (in->is_DecodeNarrowPtr() && (is_uncommon || has_non_debug_uses(in))) {
+        n->set_req(j, in->in(1));
         if (in->outcnt() == 0) {
           in->disconnect_inputs(this);
         }
