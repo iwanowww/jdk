@@ -4831,45 +4831,6 @@ bool PhaseIdealLoop::process_reachability_fences() {
   return UseNewCode && progress;
 }
 
-// Iterate over CFG, build live range for n, and detect affected safepoints.
-static bool has_interfering_sfpts(Node* rf, PhaseIdealLoop* phase) {
-  ResourceMark rm;
-  Node* referent = rf->in(1);
-  Node* referent_ctrl = phase->get_ctrl(referent);
-  assert(phase->is_dominator(referent_ctrl, rf), "sanity");
-
-  VectorSet visited;
-  visited.set(rf->_idx); // start point
-  visited.set(referent_ctrl->_idx); // end point
-
-  Node_Stack stack(phase->C->live_nodes() >> 2);
-  stack.push(rf, 0);
-  while (stack.is_nonempty()) {
-    Node* cur = stack.node();
-    uint  idx = stack.index();
-    assert(cur != nullptr, "");
-    assert(cur->is_CFG(), "%s", NodeClassNames[cur->Opcode()]);
-
-    uint limit = (cur->is_Region() ? cur->req() : 1);
-    if (idx < limit) {
-      stack.set_index(idx + 1);
-      Node* def = cur->in(idx);
-      if (def == nullptr) {
-        continue; // ignore dead path
-      } else if (!visited.test_set(def->_idx)) { // not visited yet
-        if (is_significant_sfpt(def)) {
-          assert(phase->is_dominator(referent_ctrl, def), "");
-          return true;
-        }
-        stack.push(def, 0);
-      }
-    } else {
-      stack.pop();
-    }
-  }
-  return false;
-}
-
 // Dominating RF is redundant.
 // other_referent <== referent <== rf <== use
 static bool is_redundant1(Node* rf, PhaseIdealLoop* phase) {
