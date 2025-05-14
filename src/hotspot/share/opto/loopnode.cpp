@@ -4823,12 +4823,11 @@ bool PhaseIdealLoop::process_reachability_fences() {
       Node* rf = redundant_rfs.pop();
       progress |= clear_rf(rf, this);
     }
-    recompute_dom_depth();
   }
 
   DEBUG_ONLY( if (VerifyLoopOptimizations && progress) { verify(); } );
 
-  return UseNewCode && progress;
+  return progress;
 }
 
 // Dominating RF is redundant.
@@ -5146,20 +5145,19 @@ void PhaseIdealLoop::build_and_optimize() {
 
   if (stop_early) {
     assert(do_expensive_nodes || do_reachability_fences, "why are we here?");
+    if (do_reachability_fences) {
+      bool progress = process_reachability_fences();
+      progress |= optimize_reachability_fences();
+      if (progress) {
+        recompute_dom_depth();
+      }
+    }
     if (do_expensive_nodes && process_expensive_nodes()) {
       // If we made some progress when processing expensive nodes then
       // the IGVN may modify the graph in a way that will allow us to
       // make some more progress: we need to try processing expensive
       // nodes again.
       C->set_major_progress();
-    }
-    if (do_reachability_fences) {
-      if (process_reachability_fences()) {
-        C->set_major_progress();
-      }
-      if (optimize_reachability_fences()) {
-        C->set_major_progress();
-      }
     }
     return;
   }
@@ -5183,7 +5181,7 @@ void PhaseIdealLoop::build_and_optimize() {
 #endif
 
   if (process_reachability_fences()) {
-    C->set_major_progress();
+    recompute_dom_depth();
   }
 
   if (skip_loop_opts) {
@@ -5214,7 +5212,6 @@ void PhaseIdealLoop::build_and_optimize() {
 
   if (optimize_rfs) {
     optimize_reachability_fences();
-
     C->restore_major_progress(old_progress);
     return;
   }
