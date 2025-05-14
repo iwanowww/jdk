@@ -3134,6 +3134,17 @@ void BlackholeNode::format(PhaseRegAlloc* ra, outputStream* st) const {
 }
 #endif
 
+//=============================================================================
+
+uint ReachabilityFenceNode::hash() const {
+  return MultiNode::hash() + _bound;
+}
+
+bool ReachabilityFenceNode::cmp( const Node &n ) const {
+  return MultiNode::cmp(n) &&
+         _bound == ((ReachabilityFenceNode&)n)._bound;
+}
+
 Node* ReachabilityFenceNode::post_dominating_fence(PhaseGVN* phase) {
   Node* n = in(1); // TODO: skip casts
   for (DUIterator_Fast imax, i = n->fast_outs(imax); i < imax; i++) {
@@ -3147,6 +3158,21 @@ Node* ReachabilityFenceNode::post_dominating_fence(PhaseGVN* phase) {
   return nullptr;
 }
 
+bool ReachabilityFenceNode::has_immediate_sfpt() const {
+  Node* ctrl = in(0);
+  while (ctrl->is_Proj() || ctrl->is_Catch() || ctrl->is_ReachabilityFence()) {
+    ctrl = ctrl->in(0);
+  }
+  if (ctrl->is_OuterStripMinedLoopEnd()) {
+    ctrl = ctrl->in(0); // look for outer loop safepoint
+  }
+  if (ctrl->is_SafePoint()) {
+    assert(ctrl->_idx == _bound, "");
+    return true;
+  }
+  return false;
+}
+
 bool ReachabilityFenceNode::is_redundant(PhaseGVN* phase) {
   if (OptimizeReachabilityFence) {
     const Type* t = phase->type(in(1));
@@ -3155,6 +3181,9 @@ bool ReachabilityFenceNode::is_redundant(PhaseGVN* phase) {
     }
     if (EliminateConstantReachabilityFence && t->singleton()) {
       return true;
+    }
+    if (_bound && !has_immediate_sfpt()) {
+      return true; // safepoint is gone
     }
     return (post_dominating_fence(phase) != nullptr);
   }
@@ -3175,6 +3204,13 @@ Node* ReachabilityFenceNode::Ideal(PhaseGVN* phase, bool can_reshape) {
 }
 
 #ifndef PRODUCT
+void ReachabilityFenceNode::dump_spec(outputStream* st) const {
+  MultiNode::dump_spec(st);
+  if (_bound) {
+    st->print(" #bound(N%d)", _bound);
+  }
+}
+
 void ReachabilityFenceNode::format(PhaseRegAlloc* ra, outputStream* st) const {
   st->print("reachability fence ");
   bool first = true;

@@ -2563,6 +2563,15 @@ void Compile::Optimize() {
     if (failing()) return;
   }
 
+  if (OptimizeReachabilityFence) {
+    for (int i = 0; i < C->reachability_fences_count(); i++) {
+      Node* rf = C->reachability_fence(i);
+      igvn._worklist.push(rf);
+    }
+    igvn.optimize();
+    if (failing()) return;
+  }
+
   DEBUG_ONLY( _modified_nodes = nullptr; )
 
   assert(igvn._worklist.size() == 0, "not empty");

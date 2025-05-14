@@ -4687,6 +4687,56 @@ static Node* loop_exit(IdealLoopTree* lpt) {
   }
 }
 
+static bool is_significant_sfpt(Node* n) {
+  if (n->is_SafePoint()) {
+    SafePointNode* sfpt = n->as_SafePoint();
+    if (!sfpt->guaranteed_safepoint()) {
+      return false; // not a real safepoint after all
+    } else if (sfpt->is_CallStaticJava() && sfpt->as_CallStaticJava()->is_uncommon_trap()) {
+      return false; // skip uncommon traps
+    }
+    return true;
+  }
+  return false;
+}
+
+// Iterate over CFG, build live range for n, and detect affected safepoints.
+static void enumerate_interfering_sfpts(Node* rf, PhaseIdealLoop* phase, Node_List& safepoints) {
+  Node* referent = rf->in(1);
+  Node* referent_ctrl = phase->get_ctrl(referent);
+  assert(phase->is_dominator(referent_ctrl, rf), "sanity");
+
+  VectorSet visited;
+  visited.set(rf->_idx); // start point
+  visited.set(referent_ctrl->_idx); // end point
+
+  Node_Stack stack(phase->C->live_nodes() >> 2);
+  stack.push(rf, 0);
+  while (stack.is_nonempty()) {
+    Node* cur = stack.node();
+    uint  idx = stack.index();
+    assert(cur != nullptr, "");
+    assert(cur->is_CFG(), "%s", NodeClassNames[cur->Opcode()]);
+
+    uint limit = (cur->is_Region() ? cur->req() : 1);
+    if (idx < limit) {
+      stack.set_index(idx + 1);
+      Node* def = cur->in(idx);
+      if (def == nullptr) {
+        continue; // ignore dead path
+      } else if (!visited.test_set(def->_idx)) { // not visited yet
+        if (is_significant_sfpt(def)) {
+          assert(phase->is_dominator(referent_ctrl, def), "");
+          safepoints.push(def);
+        }
+        stack.push(def, 0);
+      }
+    } else {
+      stack.pop();
+    }
+  }
+}
+
 bool PhaseIdealLoop::process_reachability_fences() {
   Compile::TracePhase tp(_t_reachability);
 
@@ -4781,20 +4831,6 @@ bool PhaseIdealLoop::process_reachability_fences() {
   return UseNewCode && progress;
 }
 
-
-static bool sfpt_filter(Node* n) {
-  if (n->is_SafePoint()) {
-    SafePointNode* sfpt = n->as_SafePoint();
-    if (!sfpt->guaranteed_safepoint()) {
-      return false; // not a real safepoint after all
-    } else if (sfpt->is_CallStaticJava() && sfpt->as_CallStaticJava()->is_uncommon_trap()) {
-      return false; // skip uncommon traps
-    }
-    return true;
-  }
-  return false;
-}
-
 // Iterate over CFG, build live range for n, and detect affected safepoints.
 static bool has_interfering_sfpts(Node* rf, PhaseIdealLoop* phase) {
   ResourceMark rm;
@@ -4821,7 +4857,7 @@ static bool has_interfering_sfpts(Node* rf, PhaseIdealLoop* phase) {
       if (def == nullptr) {
         continue; // ignore dead path
       } else if (!visited.test_set(def->_idx)) { // not visited yet
-        if (sfpt_filter(def)) {
+        if (is_significant_sfpt(def)) {
           assert(phase->is_dominator(referent_ctrl, def), "");
           return true;
         }
@@ -4851,6 +4887,30 @@ static bool is_redundant1(Node* rf, PhaseIdealLoop* phase) {
   return false;
 }
 
+static Node* sfpt_ctrl_out(Node* sfpt, PhaseIdealLoop* phase) {
+  assert(is_significant_sfpt(sfpt), "");
+  if (sfpt->is_Call()) {
+    CallProjections callprojs;
+    sfpt->as_Call()->extract_projections(&callprojs, false /*separate_io_proj*/, false /*do_asserts*/);
+    if (callprojs.fallthrough_catchproj != nullptr) {
+      return callprojs.fallthrough_catchproj;
+    } else if (callprojs.catchall_catchproj != nullptr) {
+      return callprojs.catchall_catchproj; // rethrow stub // TODO: ignore?
+    } else {
+      ShouldNotReachHere();
+    }
+  } else {
+    IdealLoopTree* lpt = phase->get_loop(sfpt);
+    if (lpt->head()->is_OuterStripMinedLoop()) {
+      OuterStripMinedLoopNode* lpt_start = lpt->head()->as_OuterStripMinedLoop();
+      if (lpt_start->outer_safepoint() == sfpt) {
+        return lpt_start->outer_loop_end()->proj_out_or_null(0 /* false */); // TODO: skip/ignore other safepoints?
+      }
+    }
+    return sfpt;
+  }
+}
+
 bool PhaseIdealLoop::optimize_reachability_fences() {
   Compile::TracePhase tp(_t_reachability);
 
@@ -4862,17 +4922,76 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
   Unique_Node_List redundant_rfs;
   Node_List worklist;
   for (int i = 0; i < C->reachability_fences_count(); i++) {
-    Node* rf = C->reachability_fence(i);
+    ReachabilityFenceNode* rf = C->reachability_fence(i)->as_ReachabilityFence();
     assert(!is_redundant(rf, this), "");
-    if (!has_interfering_sfpts(rf, this) || is_redundant1(rf, this)) {
+    if (rf->is_bound()) {
+      assert(rf->has_immediate_sfpt(), "");
+    } else {
+      // Migrate all reachability fences to safepoints.
+      if (!is_redundant1(rf, this)) {
+        Node_List safepoints;
+        enumerate_interfering_sfpts(rf, this, safepoints);
+
+        while (safepoints.size() > 0) {
+          Node* sfpt = safepoints.pop();
+          worklist.push(rf);
+          worklist.push(sfpt);
+        }
+      }
       redundant_rfs.push(rf);
     }
   }
 
-  while (redundant_rfs.size() > 0) {
-    Node* rf = redundant_rfs.pop();
-    progress |= clear_rf(rf, this);
+  while (worklist.size() > 0) {
+    SafePointNode* sfpt = worklist.pop()->as_SafePoint();
+    ReachabilityFenceNode* rf = worklist.pop()->as_ReachabilityFence();
+    Node* referent = rf->in(1);
+    Node* ctrl_out = sfpt_ctrl_out(sfpt, this);
+
+    assert(!is_redundant(rf, this), "");
+
+    if (!has_immediate_rf(ctrl_out, referent)) {
+      Node* ctrl_end = ctrl_out->unique_ctrl_out();
+
+      assert(!rf->is_bound(), "");
+      ReachabilityFenceNode* new_rf = rf->clone()->as_ReachabilityFence();
+      new_rf->set_bound(sfpt);
+      new_rf->set_req(TypeFunc::Control, ctrl_out);
+
+      IdealLoopTree* lpt = get_loop(ctrl_out);
+
+      register_control(new_rf, lpt, ctrl_out);
+
+      Node* new_rf_proj = new ProjNode(new_rf, TypeFunc::Control);
+      register_control(new_rf_proj, lpt, new_rf);
+
+      igvn().rehash_node_delayed(ctrl_end);
+      ctrl_end->replace_edge(ctrl_out, new_rf_proj);
+
+      if (idom(ctrl_end) == ctrl_out) {
+        set_idom(ctrl_end, new_rf_proj, dom_depth(new_rf_proj));
+      } else {
+        assert(ctrl_end->is_Region(), "");
+      }
+
+      assert(new_rf->has_immediate_sfpt(), "");
+    }
   }
+
+  if (redundant_rfs.size() > 0) {
+    while (redundant_rfs.size() > 0) {
+      Node* rf = redundant_rfs.pop();
+      progress |= clear_rf(rf, this);
+    }
+  }
+
+#ifdef ASSERT
+  for (int i = 0; i < C->reachability_fences_count(); i++) {
+    ReachabilityFenceNode* rf = C->reachability_fence(i)->as_ReachabilityFence();
+    assert(rf->is_bound(), "");
+    assert(rf->has_immediate_sfpt(), "");
+  }
+#endif // ASSERT
 
   return progress;
 }
