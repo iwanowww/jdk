@@ -4834,6 +4834,23 @@ static bool has_interfering_sfpts(Node* rf, PhaseIdealLoop* phase) {
   return false;
 }
 
+// Dominating RF is redundant.
+// other_referent <== referent <== rf <== use
+static bool is_redundant1(Node* rf, PhaseIdealLoop* phase) {
+  for (Node* referent = rf->in(1);
+       referent != nullptr;
+       referent = (referent->is_ConstraintCast() ? referent->in(1) : nullptr)) {
+    for (DUIterator_Fast imax, i = referent->fast_outs(imax); i < imax; i++) {
+      Node* use = referent->fast_out(i);
+      Node* use_ctrl = phase->ctrl_or_self(use);
+      if (use != rf && phase->is_dominator(rf, use_ctrl)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 bool PhaseIdealLoop::optimize_reachability_fences() {
   Compile::TracePhase tp(_t_reachability);
 
@@ -4847,7 +4864,7 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
   for (int i = 0; i < C->reachability_fences_count(); i++) {
     Node* rf = C->reachability_fence(i);
     assert(!is_redundant(rf, this), "");
-    if (!has_interfering_sfpts(rf, this)) {
+    if (!has_interfering_sfpts(rf, this) || is_redundant1(rf, this)) {
       redundant_rfs.push(rf);
     }
   }
