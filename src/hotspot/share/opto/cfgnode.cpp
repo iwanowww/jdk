@@ -661,6 +661,7 @@ Node *RegionNode::Ideal(PhaseGVN *phase, bool can_reshape) {
         Node* outer_sfpt = as_CountedLoop()->outer_safepoint();
         Node* outer_out = as_CountedLoop()->outer_loop_exit();
         if (outer_sfpt != nullptr && outer_out != nullptr) {
+          igvn->remove_bound_reachability_fences(outer_sfpt->as_SafePoint(), igvn->makecon(TypePtr::NULL_PTR), outer_out);
           Node* in = outer_sfpt->in(0);
           igvn->replace_node(outer_out, in);
           LoopNode* outer = as_CountedLoop()->outer_loop();
@@ -3163,7 +3164,7 @@ Node* ReachabilityFenceNode::immediate_sfpt() const {
   while (ctrl->is_Proj() || ctrl->is_Catch() || ctrl->is_ReachabilityFence() || ctrl->Opcode() == Op_Tuple) {
     ctrl = ctrl->in(0);
   }
-  if (ctrl->is_OuterStripMinedLoopEnd()) {
+  if (ctrl->is_OuterStripMinedLoopEnd() || ctrl->is_BaseCountedLoopEnd()) {
     ctrl = ctrl->in(0); // look for outer loop safepoint
   }
   if (ctrl->is_SafePoint()) {

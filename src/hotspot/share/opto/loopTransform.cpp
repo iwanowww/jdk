@@ -3958,6 +3958,9 @@ bool PhaseIdealLoop::intrinsify_fill(IdealLoopTree* lpt) {
     Node* outer_sfpt = head->outer_safepoint();
     Node* in = outer_sfpt->in(0);
     Node* outer_out = head->outer_loop_exit();
+    _igvn.remove_bound_reachability_fences(outer_sfpt->as_SafePoint(),
+                                           _igvn.makecon(TypePtr::NULL_PTR),
+                                           outer_out);
     lazy_replace(outer_out, in);
     _igvn.replace_input_of(outer_sfpt, 0, C->top());
   }

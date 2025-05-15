@@ -2563,14 +2563,16 @@ void Compile::Optimize() {
     if (failing()) return;
   }
 
-  if (OptimizeReachabilityFence) {
+#ifdef ASSERT
+  if (C->reachability_fences_count() > 0) {
     for (int i = 0; i < C->reachability_fences_count(); i++) {
-      Node* rf = C->reachability_fence(i);
-      igvn._worklist.push(rf);
+      ReachabilityFenceNode* rf = C->reachability_fence(i)->as_ReachabilityFence();
+      assert(rf->outcnt() > 0, "dead node");
+      assert(rf->is_bound(), "");
+      assert(rf->has_immediate_sfpt(), "");
     }
-    igvn.optimize();
-    if (failing()) return;
   }
+#endif // ASSERT
 
   DEBUG_ONLY( _modified_nodes = nullptr; )
 

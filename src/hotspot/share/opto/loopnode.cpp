@@ -4784,8 +4784,6 @@ bool PhaseIdealLoop::process_reachability_fences() {
     Node* rf = worklist.pop();
     Node* referent = rf->in(1);
 
-    assert(!is_redundant(rf, this), "");
-
     if (!has_immediate_rf(ctrl_out, referent)) {
       Node* ctrl_end = ctrl_out->unique_ctrl_out();
 
@@ -4795,6 +4793,10 @@ bool PhaseIdealLoop::process_reachability_fences() {
       IdealLoopTree* lpt = get_loop(ctrl_out);
 
       register_control(new_rf, lpt, ctrl_out);
+      if (lpt->_rfs == nullptr) {
+        lpt->_rfs = new Node_List();
+      }
+      lpt->_rfs->push(new_rf);
 
       Node* new_rf_proj = new ProjNode(new_rf, TypeFunc::Control);
       register_control(new_rf_proj, lpt, new_rf);
@@ -4810,6 +4812,16 @@ bool PhaseIdealLoop::process_reachability_fences() {
     }
 
     redundant_rfs.push(rf);
+  }
+
+  // Prune freshly added fences.
+  for (int i = 0; i < C->reachability_fences_count(); i++) {
+    Node* rf = C->reachability_fence(i);
+    Node* referent = rf->in(1);
+    assert(rf->outcnt() > 0, "dead node");
+    if (!redundant_rfs.member(rf) && is_redundant(rf, this)) {
+      redundant_rfs.push(rf);
+    }
   }
 
   if (redundant_rfs.size() > 0) {
@@ -4918,6 +4930,7 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
 
         while (safepoints.size() > 0) {
           Node* sfpt = safepoints.pop();
+          // TODO: sfpt can already have debug/non-debug dependency on the referent
           worklist.push(rf);
           worklist.push(sfpt);
         }
@@ -4931,8 +4944,6 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
     ReachabilityFenceNode* rf = worklist.pop()->as_ReachabilityFence();
     Node* referent = rf->in(1);
 
-    assert(!is_redundant(rf, this), "");
-
     if (!has_immediate_rf(sfpt, referent, this)) {
       Node* ctrl_out = sfpt_ctrl_out(sfpt, this);
       Node* ctrl_end = ctrl_out->unique_ctrl_out();
@@ -4945,6 +4956,10 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
       IdealLoopTree* lpt = get_loop(ctrl_out);
 
       register_control(new_rf, lpt, ctrl_out);
+      if (lpt->_rfs == nullptr) {
+        lpt->_rfs = new Node_List();
+      }
+      lpt->_rfs->push(new_rf);
 
       Node* new_rf_proj = new ProjNode(new_rf, TypeFunc::Control);
       register_control(new_rf_proj, lpt, new_rf);
@@ -4969,11 +4984,34 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
     }
   }
 
+  assert(redundant_rfs.size() == 0, "");
+
+  // Prune freshly added fences.
+  for (int i = 0; i < C->reachability_fences_count(); i++) {
+    Node* rf = C->reachability_fence(i);
+    Node* referent = rf->in(1);
+    assert(rf->outcnt() > 0, "dead node");
+    if (!redundant_rfs.member(rf) && is_redundant1(rf, this)) {
+      redundant_rfs.push(rf);
+    }
+  }
+
+  if (redundant_rfs.size() > 0) {
+    while (redundant_rfs.size() > 0) {
+      Node* rf = redundant_rfs.pop();
+      progress |= clear_rf(rf, this);
+    }
+  }
+
+  assert(redundant_rfs.size() == 0, "");
+
 #ifdef ASSERT
   for (int i = 0; i < C->reachability_fences_count(); i++) {
     ReachabilityFenceNode* rf = C->reachability_fence(i)->as_ReachabilityFence();
+    assert(rf->outcnt() > 0, "dead node");
     assert(rf->is_bound(), "");
     assert(rf->has_immediate_sfpt(), "");
+    assert(!is_redundant1(rf, this), "redundant fence");
   }
 #endif // ASSERT
 
