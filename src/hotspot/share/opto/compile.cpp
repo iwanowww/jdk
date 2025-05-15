@@ -4019,6 +4019,8 @@ static Node* sfpt_ctrl_out(Node* sfpt) {
       return callprojs.fallthrough_catchproj;
     } else if (callprojs.catchall_catchproj != nullptr) {
       return callprojs.catchall_catchproj; // rethrow stub // TODO: ignore?
+    } else if (callprojs.fallthrough_proj != nullptr) {
+      return callprojs.fallthrough_proj; // no exceptions thrown
     } else {
       ShouldNotReachHere();
     }
