@@ -750,17 +750,12 @@ public:
 
 //------------------------ReachabilityFenceNode--------------------------
 class ReachabilityFenceNode : public MultiNode {
-  virtual uint hash() const;
-  virtual bool cmp( const Node &n ) const;
-  virtual uint size_of() const { return sizeof(*this); }
-
-  uint _bound;
   Node* post_dominating_fence(PhaseGVN* phase);
   bool is_redundant(PhaseGVN* phase);
 
 public:
   ReachabilityFenceNode(Compile* C, Node* ctrl, Node* referent)
-      : MultiNode(1), _bound(0) {
+      : MultiNode(1) {
     init_class_id(Class_ReachabilityFence);
     init_req(TypeFunc::Control, ctrl);
     add_req(referent);
@@ -775,17 +770,9 @@ public:
     // for blackhole inputs.
     return RegMask::All;
   }
-  bool  is_bound() const { return (_bound > 0); }
-  void set_bound(Node* n) {
-    _bound = n->_idx;
-  }
-  Node*    immediate_sfpt() const;
-  bool has_immediate_sfpt() const {
-    return (immediate_sfpt() != nullptr);
-  }
+
   virtual Node* Ideal(PhaseGVN* phase, bool can_reshape);
 #ifndef PRODUCT
-  virtual void dump_spec(outputStream* st) const;
   virtual void format(PhaseRegAlloc* ra, outputStream* st) const;
   virtual void emit(C2_MacroAssembler* masm, PhaseRegAlloc* ra) const;
 #endif

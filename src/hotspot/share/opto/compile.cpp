@@ -2563,17 +2563,6 @@ void Compile::Optimize() {
     if (failing()) return;
   }
 
-#ifdef ASSERT
-  if (C->reachability_fences_count() > 0) {
-    for (int i = 0; i < C->reachability_fences_count(); i++) {
-      ReachabilityFenceNode* rf = C->reachability_fence(i)->as_ReachabilityFence();
-      assert(rf->outcnt() > 0, "dead node");
-      assert(rf->is_bound(), "");
-      assert(rf->has_immediate_sfpt(), "");
-    }
-  }
-#endif // ASSERT
-
   DEBUG_ONLY( _modified_nodes = nullptr; )
 
   assert(igvn._worklist.size() == 0, "not empty");
@@ -2594,7 +2583,7 @@ void Compile::Optimize() {
  // to remove hashes to unlock nodes for modifications.
  C->node_hash()->clear();
 
- // A method with only infinite loops has no edges entering loops from root
+  // A method with only infinite loops has no edges entering loops from root
  {
    TracePhase tp(_t_graphReshaping);
    if (final_graph_reshaping()) {
@@ -4011,6 +4000,48 @@ void Compile::final_graph_reshaping_walk(Node_Stack& nstack, Node* root, Final_R
   }
 }
 
+static int nof_extra_inputs(SafePointNode* sfpt) {
+  if (sfpt->is_Call()) {
+    address entry = sfpt->as_Call()->entry_point();
+    if (entry == OptoRuntime::new_array_Java() ||
+        entry == OptoRuntime::new_array_nozero_Java()) {
+      return 1; // valid_length_test_input
+    }
+  }
+  return 0; // no extra edges
+}
+
+static bool is_significant_sfpt(Node* n) {
+  if (n->is_SafePoint()) {
+    SafePointNode* sfpt = n->as_SafePoint();
+    if (!sfpt->guaranteed_safepoint()) {
+      return false; // not a real safepoint after all
+    } else if (sfpt->is_CallStaticJava() && sfpt->as_CallStaticJava()->is_uncommon_trap()) {
+      return false; // skip uncommon traps
+    }
+    return true;
+  }
+  return false;
+}
+
+static Node* sfpt_ctrl_out(Node* sfpt) {
+  if (sfpt->is_Call()) {
+    CallProjections callprojs;
+    sfpt->as_Call()->extract_projections(&callprojs, false /*separate_io_proj*/, false /*do_asserts*/);
+    if (callprojs.fallthrough_catchproj != nullptr) {
+      return callprojs.fallthrough_catchproj;
+    } else if (callprojs.catchall_catchproj != nullptr) {
+      return callprojs.catchall_catchproj; // rethrow stub // TODO: ignore?
+    } else {
+      ShouldNotReachHere();
+    }
+  } else if (sfpt->unique_ctrl_out()->is_OuterStripMinedLoopEnd()) {
+    return sfpt->unique_ctrl_out()->as_OuterStripMinedLoopEnd()->proj_out_or_null(0 /* false */); // outer_loop_exit()
+  } else {
+    return sfpt;
+  }
+}
+
 //------------------------------final_graph_reshaping--------------------------
 // Final Graph Reshaping.
 //
@@ -4055,6 +4086,30 @@ bool Compile::final_graph_reshaping() {
   assert(OptimizeExpensiveOps || expensive_count() == 0, "optimization off but list non empty?");
   for (int i = 0; i < expensive_count(); i++) {
     _expensive_nodes.at(i)->set_req(0, nullptr);
+  }
+
+  // Expand reachability fences from safepoint info.
+  for (int i = 0; i < C->safepoint_nodes_count(); i++) {
+    SafePointNode* sfpt = C->safepoint_node_at(i)->as_SafePoint();
+
+    int off = nof_extra_inputs(sfpt);
+    if (sfpt->jvms() != nullptr && sfpt->req() > (sfpt->jvms()->oopoff() + off)) {
+      assert(is_significant_sfpt(sfpt), "");
+      Node* ctrl_out = sfpt_ctrl_out(sfpt);
+      Node* ctrl_end = ctrl_out->unique_ctrl_out();
+
+      while (sfpt->req() > sfpt->jvms()->oopoff() + off) {
+        int idx = sfpt->req() - 1;
+        Node* referent = sfpt->in(idx);
+        sfpt->del_req(idx);
+
+        ReachabilityFenceNode* new_rf = new ReachabilityFenceNode(C, ctrl_out, referent);
+        Node* new_rf_proj = new ProjNode(new_rf, TypeFunc::Control);
+
+        ctrl_end->replace_edge(ctrl_out, new_rf_proj);
+        ctrl_end = new_rf;
+      }
+    }
   }
 
   Final_Reshape_Counts frc;

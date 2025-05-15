@@ -661,7 +661,6 @@ Node *RegionNode::Ideal(PhaseGVN *phase, bool can_reshape) {
         Node* outer_sfpt = as_CountedLoop()->outer_safepoint();
         Node* outer_out = as_CountedLoop()->outer_loop_exit();
         if (outer_sfpt != nullptr && outer_out != nullptr) {
-          igvn->remove_bound_reachability_fences(outer_sfpt->as_SafePoint(), igvn->makecon(TypePtr::NULL_PTR), outer_out);
           Node* in = outer_sfpt->in(0);
           igvn->replace_node(outer_out, in);
           LoopNode* outer = as_CountedLoop()->outer_loop();
@@ -3137,15 +3136,6 @@ void BlackholeNode::format(PhaseRegAlloc* ra, outputStream* st) const {
 
 //=============================================================================
 
-uint ReachabilityFenceNode::hash() const {
-  return MultiNode::hash() + _bound;
-}
-
-bool ReachabilityFenceNode::cmp( const Node &n ) const {
-  return MultiNode::cmp(n) &&
-         _bound == ((ReachabilityFenceNode&)n)._bound;
-}
-
 Node* ReachabilityFenceNode::post_dominating_fence(PhaseGVN* phase) {
   Node* n = in(1); // TODO: skip casts
   for (DUIterator_Fast imax, i = n->fast_outs(imax); i < imax; i++) {
@@ -3155,20 +3145,6 @@ Node* ReachabilityFenceNode::post_dominating_fence(PhaseGVN* phase) {
         return use; // found a postdominating fence
       }
     }
-  }
-  return nullptr;
-}
-
-Node* ReachabilityFenceNode::immediate_sfpt() const {
-  Node* ctrl = in(0);
-  while (ctrl->is_Proj() || ctrl->is_Catch() || ctrl->is_ReachabilityFence() || ctrl->Opcode() == Op_Tuple) {
-    ctrl = ctrl->in(0);
-  }
-  if (ctrl->is_OuterStripMinedLoopEnd() || ctrl->is_BaseCountedLoopEnd()) {
-    ctrl = ctrl->in(0); // look for outer loop safepoint
-  }
-  if (ctrl->is_SafePoint()) {
-    return ctrl;
   }
   return nullptr;
 }
@@ -3197,18 +3173,10 @@ Node* ReachabilityFenceNode::Ideal(PhaseGVN* phase, bool can_reshape) {
   if (is_redundant(phase)) {
     return TupleNode::make(TypeTuple::MEMBAR, in(0), nullptr, nullptr, nullptr, nullptr);
   }
-  assert(has_immediate_sfpt() || !is_bound(), "");
   return nullptr;
 }
 
 #ifndef PRODUCT
-void ReachabilityFenceNode::dump_spec(outputStream* st) const {
-  MultiNode::dump_spec(st);
-  if (_bound) {
-    st->print(" #bound(N%d)", _bound);
-  }
-}
-
 static void rf_desc(outputStream* st, const ReachabilityFenceNode* rf, PhaseRegAlloc* ra) {
   char buf[50];
   ra->dump_register(rf->in(1), buf, sizeof(buf));
