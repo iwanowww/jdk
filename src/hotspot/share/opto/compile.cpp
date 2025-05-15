@@ -4011,19 +4011,6 @@ static int nof_extra_inputs(SafePointNode* sfpt) {
   return 0; // no extra edges
 }
 
-static bool is_significant_sfpt(Node* n) {
-  if (n->is_SafePoint()) {
-    SafePointNode* sfpt = n->as_SafePoint();
-    if (!sfpt->guaranteed_safepoint()) {
-      return false; // not a real safepoint after all
-    } else if (sfpt->is_CallStaticJava() && sfpt->as_CallStaticJava()->is_uncommon_trap()) {
-      return false; // skip uncommon traps
-    }
-    return true;
-  }
-  return false;
-}
-
 static Node* sfpt_ctrl_out(Node* sfpt) {
   if (sfpt->is_Call()) {
     CallProjections callprojs;
@@ -4041,6 +4028,21 @@ static Node* sfpt_ctrl_out(Node* sfpt) {
     return sfpt;
   }
 }
+
+#ifdef ASSERT
+static bool is_significant_sfpt(Node* n) {
+  if (n->is_SafePoint()) {
+    SafePointNode* sfpt = n->as_SafePoint();
+    if (!sfpt->guaranteed_safepoint()) {
+      return false; // not a real safepoint after all
+    } else if (sfpt->is_CallStaticJava() && sfpt->as_CallStaticJava()->is_uncommon_trap()) {
+      return false; // skip uncommon traps
+    }
+    return true;
+  }
+  return false;
+}
+#endif // ASSERT
 
 //------------------------------final_graph_reshaping--------------------------
 // Final Graph Reshaping.
