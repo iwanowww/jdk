@@ -3922,84 +3922,6 @@ static bool has_non_debug_uses(Node* n) {
   return true;
 }
 
-void Compile::final_graph_reshaping_walk(Node_Stack& nstack, Node* root, Final_Reshape_Counts& frc, Unique_Node_List& dead_nodes) {
-  Unique_Node_List sfpt;
-
-  frc._visited.set(root->_idx); // first, mark node as visited
-  uint cnt = root->req();
-  Node *n = root;
-  uint  i = 0;
-  while (true) {
-    if (i < cnt) {
-      // Place all non-visited non-null inputs onto stack
-      Node* m = n->in(i);
-      ++i;
-      if (m != nullptr && !frc._visited.test_set(m->_idx)) {
-        if (m->is_SafePoint() && m->as_SafePoint()->jvms() != nullptr) {
-          // compute worst case interpreter size in case of a deoptimization
-          update_interpreter_frame_size(m->as_SafePoint()->jvms()->interpreter_frame_size());
-
-          sfpt.push(m);
-        }
-        cnt = m->req();
-        nstack.push(n, i); // put on stack parent and next input's index
-        n = m;
-        i = 0;
-      }
-    } else {
-      // Now do post-visit work
-      final_graph_reshaping_impl(n, frc, dead_nodes);
-      if (nstack.is_empty())
-        break;             // finished
-      n = nstack.node();   // Get node from stack
-      cnt = n->req();
-      i = nstack.index();
-      nstack.pop();        // Shift to the next node on stack
-    }
-  }
-
-  // Skip next transformation if compressed oops are not used.
-  if ((UseCompressedOops && !Matcher::gen_narrow_oop_implicit_null_checks()) ||
-      (!UseCompressedOops && !UseCompressedClassPointers))
-    return;
-
-  // Go over reachability fence nodes to skip DecodeN nodes.
-  for (int i = 0; i < C->reachability_fences_count(); i++) {
-    Node* rf = C->reachability_fence(i);
-    Node* in = rf->in(1);
-    if (in->is_DecodeN()) {
-      if (in->outcnt() == 1 || Matcher::narrow_oop_use_complex_address()) {
-        rf->set_req(1, in->in(1));
-        if (in->outcnt() == 0) {
-          in->disconnect_inputs(this);
-        }
-      }
-    }
-  }
-
-  // Go over safepoints nodes to skip DecodeN/DecodeNKlass nodes for debug edges.
-  // It could be done for an uncommon traps or any safepoints/calls
-  // if the DecodeN/DecodeNKlass node is referenced only in a debug info.
-  while (sfpt.size() > 0) {
-    n = sfpt.pop();
-    JVMState *jvms = n->as_SafePoint()->jvms();
-    assert(jvms != nullptr, "sanity");
-    int start = jvms->debug_start();
-    int end   = n->req();
-    bool is_uncommon = (n->is_CallStaticJava() &&
-                        n->as_CallStaticJava()->uncommon_trap_request() != 0);
-    for (int j = start; j < end; j++) {
-      Node* in = n->in(j);
-      if (in->is_DecodeNarrowPtr() && (is_uncommon || has_non_debug_uses(in))) {
-        n->set_req(j, in->in(1));
-        if (in->outcnt() == 0) {
-          in->disconnect_inputs(this);
-        }
-      }
-    }
-  }
-}
-
 static int nof_extra_inputs(SafePointNode* sfpt) {
   if (sfpt->is_Call()) {
     address entry = sfpt->as_Call()->entry_point();
@@ -4046,6 +3968,108 @@ static bool is_significant_sfpt(Node* n) {
 }
 #endif // ASSERT
 
+void Compile::final_graph_reshaping_walk(Node_Stack& nstack, Node* root, Final_Reshape_Counts& frc, Unique_Node_List& dead_nodes) {
+  Unique_Node_List sfpt;
+
+  frc._visited.set(root->_idx); // first, mark node as visited
+  uint cnt = root->req();
+  Node *n = root;
+  uint  i = 0;
+  while (true) {
+    if (i < cnt) {
+      // Place all non-visited non-null inputs onto stack
+      Node* m = n->in(i);
+      ++i;
+      if (m != nullptr && !frc._visited.test_set(m->_idx)) {
+        if (m->is_SafePoint() && m->as_SafePoint()->jvms() != nullptr) {
+          // compute worst case interpreter size in case of a deoptimization
+          update_interpreter_frame_size(m->as_SafePoint()->jvms()->interpreter_frame_size());
+
+          sfpt.push(m);
+        }
+        cnt = m->req();
+        nstack.push(n, i); // put on stack parent and next input's index
+        n = m;
+        i = 0;
+      }
+    } else {
+      // Now do post-visit work
+      final_graph_reshaping_impl(n, frc, dead_nodes);
+      if (nstack.is_empty())
+        break;             // finished
+      n = nstack.node();   // Get node from stack
+      cnt = n->req();
+      i = nstack.index();
+      nstack.pop();        // Shift to the next node on stack
+    }
+  }
+
+  // Expand reachability fences from safepoint info.
+  for (uint i = 0; i < sfpt.size(); i++) {
+    SafePointNode* n = sfpt.at(i)->as_SafePoint();
+
+    int off = nof_extra_inputs(n);
+    if (n->jvms() != nullptr && n->req() > (n->jvms()->oopoff() + off)) {
+      assert(is_significant_sfpt(n), "");
+      Node* ctrl_out = sfpt_ctrl_out(n);
+      Node* ctrl_end = ctrl_out->unique_ctrl_out();
+
+      while (n->req() > n->jvms()->oopoff() + off) {
+        int idx = n->req() - 1;
+        Node* referent = n->in(idx);
+        n->del_req(idx);
+
+        ReachabilityFenceNode* new_rf = new ReachabilityFenceNode(C, ctrl_out, referent);
+        Node* new_rf_proj = new ProjNode(new_rf, TypeFunc::Control);
+
+        ctrl_end->replace_edge(ctrl_out, new_rf_proj);
+        ctrl_end = new_rf;
+      }
+    }
+  }
+
+  // Skip next transformation if compressed oops are not used.
+  if ((UseCompressedOops && !Matcher::gen_narrow_oop_implicit_null_checks()) ||
+      (!UseCompressedOops && !UseCompressedClassPointers))
+    return;
+
+  // Go over reachability fence nodes to skip DecodeN nodes.
+  for (int i = 0; i < C->reachability_fences_count(); i++) {
+    Node* rf = C->reachability_fence(i);
+    Node* in = rf->in(1);
+    if (in->is_DecodeN()) {
+      if (in->outcnt() == 1 || Matcher::narrow_oop_use_complex_address()) {
+        rf->set_req(1, in->in(1));
+        if (in->outcnt() == 0) {
+          in->disconnect_inputs(this);
+        }
+      }
+    }
+  }
+
+  // Go over safepoints nodes to skip DecodeN/DecodeNKlass nodes for debug edges.
+  // It could be done for an uncommon traps or any safepoints/calls
+  // if the DecodeN/DecodeNKlass node is referenced only in a debug info.
+  while (sfpt.size() > 0) {
+    n = sfpt.pop();
+    JVMState *jvms = n->as_SafePoint()->jvms();
+    assert(jvms != nullptr, "sanity");
+    int start = jvms->debug_start();
+    int end   = n->req();
+    bool is_uncommon = (n->is_CallStaticJava() &&
+                        n->as_CallStaticJava()->uncommon_trap_request() != 0);
+    for (int j = start; j < end; j++) {
+      Node* in = n->in(j);
+      if (in->is_DecodeNarrowPtr() && (is_uncommon || has_non_debug_uses(in))) {
+        n->set_req(j, in->in(1));
+        if (in->outcnt() == 0) {
+          in->disconnect_inputs(this);
+        }
+      }
+    }
+  }
+}
+
 //------------------------------final_graph_reshaping--------------------------
 // Final Graph Reshaping.
 //
@@ -4090,30 +4114,6 @@ bool Compile::final_graph_reshaping() {
   assert(OptimizeExpensiveOps || expensive_count() == 0, "optimization off but list non empty?");
   for (int i = 0; i < expensive_count(); i++) {
     _expensive_nodes.at(i)->set_req(0, nullptr);
-  }
-
-  // Expand reachability fences from safepoint info.
-  for (int i = 0; i < C->safepoint_nodes_count(); i++) {
-    SafePointNode* sfpt = C->safepoint_node_at(i)->as_SafePoint();
-
-    int off = nof_extra_inputs(sfpt);
-    if (sfpt->jvms() != nullptr && sfpt->req() > (sfpt->jvms()->oopoff() + off)) {
-      assert(is_significant_sfpt(sfpt), "");
-      Node* ctrl_out = sfpt_ctrl_out(sfpt);
-      Node* ctrl_end = ctrl_out->unique_ctrl_out();
-
-      while (sfpt->req() > sfpt->jvms()->oopoff() + off) {
-        int idx = sfpt->req() - 1;
-        Node* referent = sfpt->in(idx);
-        sfpt->del_req(idx);
-
-        ReachabilityFenceNode* new_rf = new ReachabilityFenceNode(C, ctrl_out, referent);
-        Node* new_rf_proj = new ProjNode(new_rf, TypeFunc::Control);
-
-        ctrl_end->replace_edge(ctrl_out, new_rf_proj);
-        ctrl_end = new_rf;
-      }
-    }
   }
 
   Final_Reshape_Counts frc;
