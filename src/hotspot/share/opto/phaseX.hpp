@@ -584,6 +584,8 @@ public:
   bool is_dominator(Node *d, Node *n) { return is_dominator_helper(d, n, false); }
   bool no_dependent_zero_check(Node* n) const;
 
+  void remove_bound_reachability_fences(SafePointNode* sfpt, Node* null_con, Node* outer_loop_exit = nullptr);
+
 #ifndef PRODUCT
   static bool is_verify_def_use() {
     // '-XX:VerifyIterativeGVN=1'

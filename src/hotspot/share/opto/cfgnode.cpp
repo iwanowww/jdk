@@ -3158,19 +3158,18 @@ Node* ReachabilityFenceNode::post_dominating_fence(PhaseGVN* phase) {
   return nullptr;
 }
 
-bool ReachabilityFenceNode::has_immediate_sfpt() const {
+Node* ReachabilityFenceNode::immediate_sfpt() const {
   Node* ctrl = in(0);
-  while (ctrl->is_Proj() || ctrl->is_Catch() || ctrl->is_ReachabilityFence()) {
+  while (ctrl->is_Proj() || ctrl->is_Catch() || ctrl->is_ReachabilityFence() || ctrl->Opcode() == Op_Tuple) {
     ctrl = ctrl->in(0);
   }
   if (ctrl->is_OuterStripMinedLoopEnd()) {
     ctrl = ctrl->in(0); // look for outer loop safepoint
   }
   if (ctrl->is_SafePoint()) {
-    assert(ctrl->_idx == _bound, "");
-    return true;
+    return ctrl;
   }
-  return false;
+  return nullptr;
 }
 
 bool ReachabilityFenceNode::is_redundant(PhaseGVN* phase) {
@@ -3181,9 +3180,6 @@ bool ReachabilityFenceNode::is_redundant(PhaseGVN* phase) {
     }
     if (EliminateConstantReachabilityFence && t->singleton()) {
       return true;
-    }
-    if (_bound && !has_immediate_sfpt()) {
-      return true; // safepoint is gone
     }
     return (post_dominating_fence(phase) != nullptr);
   }
@@ -3200,6 +3196,7 @@ Node* ReachabilityFenceNode::Ideal(PhaseGVN* phase, bool can_reshape) {
   if (is_redundant(phase)) {
     return TupleNode::make(TypeTuple::MEMBAR, in(0), nullptr, nullptr, nullptr, nullptr);
   }
+  assert(has_immediate_sfpt() || !is_bound(), "");
   return nullptr;
 }
 
@@ -3211,22 +3208,21 @@ void ReachabilityFenceNode::dump_spec(outputStream* st) const {
   }
 }
 
+static void rf_desc(outputStream* st, const ReachabilityFenceNode* rf, PhaseRegAlloc* ra) {
+  char buf[50];
+  ra->dump_register(rf->in(1), buf, sizeof(buf));
+  st->print("reachability fence [%s]", buf);
+}
+
 void ReachabilityFenceNode::format(PhaseRegAlloc* ra, outputStream* st) const {
-  st->print("reachability fence ");
-  bool first = true;
-  for (uint i = 0; i < req(); i++) {
-    Node* n = in(i);
-    if (n != nullptr && OptoReg::is_valid(ra->get_reg_first(n))) {
-      if (first) {
-        first = false;
-      } else {
-        st->print(", ");
-      }
-      char buf[128];
-      ra->dump_register(n, buf, 128);
-      st->print("%s", buf);
-    }
-  }
-  st->cr();
+  rf_desc(st, this, ra);
+}
+
+void ReachabilityFenceNode::emit(C2_MacroAssembler* masm, PhaseRegAlloc* ra) const {
+  ResourceMark rm;
+  stringStream ss;
+  rf_desc(&ss, this, ra);
+  const char* desc = masm->code_string(ss.freeze());
+  masm->block_comment(desc);
 }
 #endif

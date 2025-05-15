@@ -1803,6 +1803,26 @@ bool PhaseIterGVN::no_dependent_zero_check(Node* n) const {
   return true;
 }
 
+void PhaseIterGVN::remove_bound_reachability_fences(SafePointNode* sfpt, Node* null_con, Node* outer_loop_exit) {
+  Node* ctrl_out = sfpt;
+  if (sfpt->unique_ctrl_out()->is_OuterStripMinedLoopEnd()) {
+    ctrl_out = sfpt->unique_ctrl_out()->as_OuterStripMinedLoopEnd()->proj_out_or_null(0 /* false */); // outer_loop_exit()
+  }
+  assert(ctrl_out == outer_loop_exit || outer_loop_exit == nullptr, "");
+  for (Node* cur = ctrl_out->unique_ctrl_out();
+       cur->is_ReachabilityFence() || cur->is_Proj() || (cur->Opcode() == Op_Tuple);
+       cur = cur->unique_ctrl_out()) { // no dangling control allowed
+    if (cur->is_ReachabilityFence()) {
+      if (cur->as_ReachabilityFence()->is_bound()) {
+        assert(cur->as_ReachabilityFence()->immediate_sfpt() == sfpt, "");
+        replace_input_of(cur, 1, null_con);
+      }
+    } else {
+      assert(cur->is_Proj(), "");
+    }
+  }
+}
+
 //=============================================================================
 #ifndef PRODUCT
 uint PhaseCCP::_total_invokes   = 0;

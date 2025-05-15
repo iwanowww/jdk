@@ -779,12 +779,15 @@ public:
   void set_bound(Node* n) {
     _bound = n->_idx;
   }
-  bool has_immediate_sfpt() const;
-
+  Node*    immediate_sfpt() const;
+  bool has_immediate_sfpt() const {
+    return (immediate_sfpt() != nullptr);
+  }
   virtual Node* Ideal(PhaseGVN* phase, bool can_reshape);
 #ifndef PRODUCT
-  virtual void dump_spec(outputStream *st) const;
+  virtual void dump_spec(outputStream* st) const;
   virtual void format(PhaseRegAlloc* ra, outputStream* st) const;
+  virtual void emit(C2_MacroAssembler* masm, PhaseRegAlloc* ra) const;
 #endif
 };
 
