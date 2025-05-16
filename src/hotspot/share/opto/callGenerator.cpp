@@ -262,7 +262,7 @@ JVMState* VirtualCallGenerator::generate(JVMState* jvms) {
          "no vtable calls if +UseInlineCaches ");
   address target = SharedRuntime::get_resolve_virtual_call_stub();
   // Normal inline cache used for call
-  CallDynamicJavaNode* call = new CallDynamicJavaNode(kit.C, tf(), target, method(), _vtable_index);
+  CallDynamicJavaNode* call = new CallDynamicJavaNode(tf(), target, method(), _vtable_index);
   if (is_inlined_method_handle_intrinsic(jvms, method())) {
     // To be able to issue a direct call (optimized virtual or virtual)
     // and skip a call to MH.linkTo*/invokeBasic adapter, additional information
@@ -639,7 +639,7 @@ void CallGenerator::do_late_inline_helper() {
     JVMState* old_jvms = call->jvms();
     JVMState* jvms = old_jvms->clone_shallow(C);
     uint size = call->req();
-    SafePointNode* map = new SafePointNode(C, size, jvms);
+    SafePointNode* map = new SafePointNode(size, jvms);
     for (uint i1 = 0; i1 < size; i1++) {
       map->init_req(i1, call->in(i1));
     }

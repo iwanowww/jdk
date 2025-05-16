@@ -4656,7 +4656,7 @@ LibraryCallKit::generate_method_call(vmIntrinsicID method_id, bool is_virtual, b
        assert(vtable_index >= 0 || vtable_index == Method::nonvirtual_vtable_index,
               "bad index %d", vtable_index);
     }
-    slow_call = new CallDynamicJavaNode(C, tf,
+    slow_call = new CallDynamicJavaNode(tf,
                           SharedRuntime::get_resolve_virtual_call_stub(),
                           method, vtable_index);
   } else {  // neither virtual nor static:  opt_virtual
@@ -5462,7 +5462,7 @@ JVMState* LibraryCallKit::arraycopy_restore_alloc_state(AllocateArrayNode* alloc
 SafePointNode* LibraryCallKit::create_safepoint_with_state_before_array_allocation(const AllocateArrayNode* alloc) const {
   JVMState* old_jvms = alloc->jvms()->clone_shallow(C);
   uint size = alloc->req();
-  SafePointNode* sfpt = new SafePointNode(C, size, old_jvms);
+  SafePointNode* sfpt = new SafePointNode(size, old_jvms);
   old_jvms->set_map(sfpt);
   for (uint i = 0; i < size; i++) {
     sfpt->init_req(i, alloc->in(i));

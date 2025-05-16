@@ -42,7 +42,7 @@
 
 #include <math.h>
 
-ModFloatingNode::ModFloatingNode(Compile* C, const TypeFunc* tf, const char* name) : CallLeafNode(C, tf, nullptr, name, TypeRawPtr::BOTTOM) {
+ModFloatingNode::ModFloatingNode(Compile* C, const TypeFunc* tf, const char* name) : CallLeafNode(tf, nullptr, name, TypeRawPtr::BOTTOM) {
   add_flag(Flag_is_macro);
   C->add_macro_node(this);
 }

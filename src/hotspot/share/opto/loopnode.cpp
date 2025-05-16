@@ -222,7 +222,7 @@ Node *PhaseIdealLoop::get_early_ctrl_for_expensive(Node *n, Node* earliest) {
           break;
         }
         assert(parent_ctl->is_Start() || parent_ctl->is_MemBar() || parent_ctl->is_Call() ||
-               parent_ctl->Opcode() == Op_ReachabilityFence ||
+               parent_ctl->is_ReachabilityFence() ||
                BarrierSet::barrier_set()->barrier_set_c2()->is_gc_barrier_node(parent_ctl), "unexpected node");
         assert(idom(ctl) == parent_ctl, "strange");
         next = idom(parent_ctl);
@@ -570,7 +570,7 @@ void PhaseIdealLoop::add_parse_predicate(Deoptimization::DeoptReason reason, Nod
     address call_addr = OptoRuntime::uncommon_trap_blob()->entry_point();
     const TypePtr* no_memory_effects = nullptr;
     JVMState* jvms = sfpt->jvms();
-    CallNode* unc = new CallStaticJavaNode(C, OptoRuntime::uncommon_trap_Type(), call_addr, "uncommon_trap",
+    CallNode* unc = new CallStaticJavaNode(OptoRuntime::uncommon_trap_Type(), call_addr, "uncommon_trap",
                                            no_memory_effects);
 
     Node* mem = nullptr;

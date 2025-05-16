@@ -377,8 +377,7 @@ class Compile : public Phase {
   // of Template Assertion Predicates themselves.
   GrowableArray<OpaqueTemplateAssertionPredicateNode*>  _template_assertion_predicate_opaques;
   GrowableArray<Node*>  _expensive_nodes;       // List of nodes that are expensive to compute and that we'd better not let the GVN freely common
-  GrowableArray<Node*>  _safepoint_nodes;       // List of safepoint nodes
-  GrowableArray<Node*>  _reachability_fences;   // List of reachability fence nodes
+  GrowableArray<Node*>  _reachability_fences;   // List of reachability fences
   GrowableArray<Node*>  _for_post_loop_igvn;    // List of nodes for IGVN after loop opts are over
   GrowableArray<Node*>  _for_merge_stores_igvn; // List of nodes for IGVN merge stores
   GrowableArray<UnstableIfTrap*> _unstable_if_traps;        // List of ifnodes after IGVN
@@ -706,9 +705,6 @@ public:
 
   Node*         expensive_node(int idx)   const { return _expensive_nodes.at(idx); }
 
-  Node*         safepoint_node_at(int idx) const { return _safepoint_nodes.at(idx); }
-  int           safepoint_nodes_count()    const { return _safepoint_nodes.length(); }
-
   Node*         reachability_fence(int idx) const { return _reachability_fences.at(idx); }
   int           reachability_fences_count() const { return _reachability_fences.length(); }
 
@@ -731,11 +727,6 @@ public:
   void add_expensive_node(Node* n);
   void remove_expensive_node(Node* n) {
     _expensive_nodes.remove_if_existing(n);
-  }
-
-  void add_safepoint_node(Node* n);
-  void remove_safepoint_node(Node* n) {
-    _safepoint_nodes.remove_if_existing(n);
   }
 
   void add_reachability_fence(Node* n);
