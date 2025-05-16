@@ -3915,52 +3915,6 @@ static bool has_non_debug_uses(Node* n) {
   return true;
 }
 
-static int nof_extra_inputs(SafePointNode* sfpt) {
-  if (sfpt->is_Call()) {
-    address entry = sfpt->as_Call()->entry_point();
-    if (entry == OptoRuntime::new_array_Java() ||
-        entry == OptoRuntime::new_array_nozero_Java()) {
-      return 1; // valid_length_test_input
-    }
-  }
-  return 0; // no extra edges
-}
-
-static Node* sfpt_ctrl_out(Node* sfpt) {
-  if (sfpt->is_Call()) {
-    CallProjections callprojs;
-    sfpt->as_Call()->extract_projections(&callprojs, false /*separate_io_proj*/, false /*do_asserts*/);
-    if (callprojs.fallthrough_catchproj != nullptr) {
-      return callprojs.fallthrough_catchproj;
-    } else if (callprojs.catchall_catchproj != nullptr) {
-      return callprojs.catchall_catchproj; // rethrow stub // TODO: ignore?
-    } else if (callprojs.fallthrough_proj != nullptr) {
-      return callprojs.fallthrough_proj; // no exceptions thrown
-    } else {
-      ShouldNotReachHere();
-    }
-  } else if (sfpt->unique_ctrl_out()->is_OuterStripMinedLoopEnd()) {
-    return sfpt->unique_ctrl_out()->as_OuterStripMinedLoopEnd()->proj_out_or_null(0 /* false */); // outer_loop_exit()
-  } else {
-    return sfpt;
-  }
-}
-
-#ifdef ASSERT
-static bool is_significant_sfpt(Node* n) {
-  if (n->is_SafePoint()) {
-    SafePointNode* sfpt = n->as_SafePoint();
-    if (!sfpt->guaranteed_safepoint()) {
-      return false; // not a real safepoint after all
-    } else if (sfpt->is_CallStaticJava() && sfpt->as_CallStaticJava()->is_uncommon_trap()) {
-      return false; // skip uncommon traps
-    }
-    return true;
-  }
-  return false;
-}
-#endif // ASSERT
-
 void Compile::final_graph_reshaping_walk(Node_Stack& nstack, Node* root, Final_Reshape_Counts& frc, Unique_Node_List& dead_nodes) {
   Unique_Node_List sfpt;
 
@@ -3997,41 +3951,19 @@ void Compile::final_graph_reshaping_walk(Node_Stack& nstack, Node* root, Final_R
     }
   }
 
-  // Expand reachability fences from safepoint info.
-  for (uint i = 0; i < sfpt.size(); i++) {
-    SafePointNode* n = sfpt.at(i)->as_SafePoint();
-
-    int off = nof_extra_inputs(n);
-    if (n->jvms() != nullptr && n->req() > (n->jvms()->oopoff() + off)) {
-      assert(is_significant_sfpt(n), "");
-      Node* ctrl_out = sfpt_ctrl_out(n);
-      Node* ctrl_end = ctrl_out->unique_ctrl_out();
-
-      while (n->req() > n->jvms()->oopoff() + off) {
-        int idx = n->req() - 1;
-        Node* referent = n->in(idx);
-        n->del_req(idx);
-
-        ReachabilityFenceNode* new_rf = new ReachabilityFenceNode(C, ctrl_out, referent);
-        Node* new_rf_proj = new ProjNode(new_rf, TypeFunc::Control);
-
-        ctrl_end->replace_edge(ctrl_out, new_rf_proj);
-        ctrl_end = new_rf;
-      }
-    }
-  }
+  expand_reachability_fences(sfpt);
 
   // Skip next transformation if compressed oops are not used.
   if ((UseCompressedOops && !Matcher::gen_narrow_oop_implicit_null_checks()) ||
       (!UseCompressedOops && !UseCompressedClassPointers))
     return;
 
-  // Go over reachability fence nodes to skip DecodeN nodes.
+  // Go over reachability fence nodes to skip DecodeN nodes for referents.
   for (int i = 0; i < C->reachability_fences_count(); i++) {
     Node* rf = C->reachability_fence(i);
     Node* in = rf->in(1);
     if (in->is_DecodeN()) {
-      if (in->outcnt() == 1 || Matcher::narrow_oop_use_complex_address()) {
+      if (!has_non_debug_uses(in) || Matcher::narrow_oop_use_complex_address()) {
         rf->set_req(1, in->in(1));
         if (in->outcnt() == 0) {
           in->disconnect_inputs(this);
@@ -4842,11 +4774,6 @@ void Compile::add_expensive_node(Node * n) {
     // OptimizeExpensiveOps is off.
     n->set_req(0, nullptr);
   }
-}
-
-void Compile::add_reachability_fence(Node *n) {
-  assert(n->is_ReachabilityFence(), "");
-  _reachability_fences.append(n);
 }
 
 /**

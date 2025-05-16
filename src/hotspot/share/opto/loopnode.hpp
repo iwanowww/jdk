@@ -1117,7 +1117,12 @@ public:
 
   void remove_dead_node(Node* dead) {
     assert(dead->outcnt() == 0 && !dead->is_top(), "node must be dead");
+    Node* c = get_ctrl(dead);
+    IdealLoopTree* lpt = get_loop(c);
     _loop_or_ctrl.map(dead->_idx, nullptr); // This node is useless
+    if (!lpt->is_root()) {
+      lpt->_body.yank(dead);
+    }
     igvn().remove_dead_node(dead);
   }
 
@@ -1466,8 +1471,8 @@ public:
   // execution of the expensive node. Return true if progress.
   bool process_expensive_nodes();
 
-  bool process_reachability_fences();
   bool optimize_reachability_fences();
+  bool eliminate_reachability_fences();
 
   // Check whether node has become unreachable
   bool is_node_unreachable(Node *n) const {

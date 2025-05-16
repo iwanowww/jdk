@@ -4466,6 +4466,7 @@ MemBarNode* MemBarNode::leading_membar() const {
   return mb;
 }
 
+
 //===========================InitializeNode====================================
 // SUMMARY:
 // This node acts as a memory barrier on raw memory, after some raw stores.

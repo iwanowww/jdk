@@ -631,10 +631,10 @@ void MethodLiveness::BasicBlock::compute_gen_kill_single(ciBytecodeStream *instr
         load_one(0);
       }
       if (StressReachabilityFence) {
+        // Keep all oop arguments alive until method return.
         if (instruction->method()->is_static() == false) {
-          load_one(0); // would keep it always alive until return but only for non-static
+          load_one(0);
         }
-
         int local_idx = (instruction->method()->is_static() ? 0 : 1);
         for (ciSignatureStream ss(instruction->method()->signature()); !ss.at_return_type(); ss.next()) {
           if (!ss.type()->is_primitive_type()) {

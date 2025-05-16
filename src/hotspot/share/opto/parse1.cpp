@@ -2188,21 +2188,14 @@ void Parse::return_current(Node* value) {
   }
 
   if (StressReachabilityFence) {
+    // Keep all oop arguments alive until method return.
     if (!method()->is_static()) {
-      Node* receiver = local(0);
-      if (!receiver->is_top()) {
-        Node* rf = _gvn.transform(new ReachabilityFenceNode(C, control(), receiver));
-        set_control(_gvn.transform(new ProjNode(rf, TypeFunc::Control)));
-      }
+      insert_reachability_fence(local(0));
     }
     int local_idx = (method()->is_static() ? 0 : 1);
     for (ciSignatureStream ss(method()->signature()); !ss.at_return_type(); ss.next()) {
       if (!ss.type()->is_primitive_type()) {
-        Node* argument = local(local_idx);
-        if (!argument->is_top()) {
-          Node* rf = _gvn.transform(new ReachabilityFenceNode(C, control(), argument));
-          set_control(_gvn.transform(new ProjNode(rf, TypeFunc::Control)));
-        }
+        insert_reachability_fence(local(local_idx));
       }
       local_idx += ss.type()->size();
     }

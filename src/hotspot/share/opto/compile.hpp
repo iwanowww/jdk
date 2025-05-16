@@ -729,7 +729,10 @@ public:
     _expensive_nodes.remove_if_existing(n);
   }
 
-  void add_reachability_fence(Node* n);
+  void add_reachability_fence(Node *n) {
+    _reachability_fences.append(n);
+  }
+
   void remove_reachability_fence(Node* n) {
     _reachability_fences.remove_if_existing(n);
   }
@@ -1283,6 +1286,8 @@ public:
 
   // Definitions of pd methods
   static void pd_compiler2_init();
+
+  void expand_reachability_fences(Unique_Node_List& safepoints);
 
   // Static parse-time type checking logic for gen_subtype_check:
   enum SubTypeCheckResult { SSC_always_false, SSC_always_true, SSC_easy_test, SSC_full_test };

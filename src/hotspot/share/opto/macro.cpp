@@ -1411,8 +1411,8 @@ void PhaseMacroExpand::expand_allocate_common(
 
   // Generate slow-path call
   CallNode *call = new CallStaticJavaNode(slow_call_type, slow_call_address,
-                                          OptoRuntime::stub_name(slow_call_address),
-                                          TypePtr::BOTTOM);
+                               OptoRuntime::stub_name(slow_call_address),
+                               TypePtr::BOTTOM);
   call->init_req(TypeFunc::Control,   slow_region);
   call->init_req(TypeFunc::I_O,       top());    // does no i/o
   call->init_req(TypeFunc::Memory,    slow_mem); // may gc ptrs

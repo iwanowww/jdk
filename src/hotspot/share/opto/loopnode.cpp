@@ -4588,323 +4588,6 @@ bool PhaseIdealLoop::process_expensive_nodes() {
 }
 
 //=============================================================================
-//------------------------process_reachability_fences--------------------------
-
-static bool is_significant_sfpt(Node* n) {
-  if (n->is_SafePoint()) {
-    SafePointNode* sfpt = n->as_SafePoint();
-    if (!sfpt->guaranteed_safepoint()) {
-      return false; // not a real safepoint after all
-    } else if (sfpt->is_CallStaticJava() && sfpt->as_CallStaticJava()->is_uncommon_trap()) {
-      return false; // skip uncommon traps
-    }
-    return true;
-  }
-  return false;
-}
-
-static bool has_immediate_rf(Node* ctrl, Node* referent) {
-  assert(ctrl != nullptr, "");
-  assert(ctrl->is_CFG(), "");
-
-  for (Node* cur = ctrl->unique_ctrl_out();
-       cur->is_ReachabilityFence();
-       cur = cur->unique_ctrl_out()) { // no dangling control allowed
-    if (cur->in(1) == referent) {
-      return true;
-    }
-  }
-  return false;
-}
-
-static bool has_safepoints(IdealLoopTree* root) {
-  for (LoopTreeIterator iter(root); !iter.done(); iter.next()) {
-    IdealLoopTree* lpt = iter.current();
-    if (lpt->_has_call || lpt->_has_sfpt) {
-      return true;
-    }
-  }
-  return false; // no safepoints found
-}
-
-static bool is_redundant(Node* rf, PhaseIdealLoop* phase) {
-  Node* referent = rf->in(1);
-  const Type* t = phase->igvn().type(referent);
-  if (EliminateConstantReachabilityFence && t->singleton()) {
-    return true; // no-op fence
-  }
-  if (t == TypePtr::NULL_PTR) {
-    return true; // no-op fence
-  }
-  for (int i = 0; i < phase->C->reachability_fences_count(); i++) {
-    Node* other_rf = phase->C->reachability_fence(i);
-    if (rf == other_rf) {
-      continue;
-    }
-    Node* other_referent = other_rf->in(1);
-    if (phase->igvn().type(other_referent) == TypePtr::NULL_PTR) {
-      continue; // ignore; no-op fence
-    }
-    // Dominating RF is redundant.
-    if (other_referent->eqv_uncast(referent)) {
-      // other_referent <== referent <== rf <== other_rf
-      if (phase->is_dominator(phase->get_ctrl(other_referent),
-                              phase->get_ctrl(referent)) &&
-          phase->is_dominator(rf, other_rf)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-static bool clear_rf(Node* rf, PhaseIdealLoop* phase) {
-  Node* referent = rf->in(1);
-  if (phase->igvn().type(referent) != TypePtr::NULL_PTR) {
-    phase->igvn().replace_input_of(rf, 1, phase->makecon(TypePtr::NULL_PTR));
-    if (referent->outcnt() == 0) {
-      Node* c = phase->get_ctrl(referent);
-      IdealLoopTree* lpt = phase->get_loop(c);
-      phase->remove_dead_node(referent);
-      if (lpt->_parent != nullptr) {
-        lpt->_body.yank(referent);
-      }
-    }
-  }
-
-  Node* rf_ctrl_in   = rf->in(0);
-  Node* rf_ctrl_proj = rf->unique_ctrl_out();
-
-  IdealLoopTree* lpt1 = phase->get_loop(rf);
-  phase->lazy_replace(rf, rf_ctrl_in);
-  if (lpt1->_parent != nullptr) {
-    lpt1->_body.yank(rf);
-  }
-  assert(lpt1->_rfs != nullptr, "missing");
-  assert(lpt1->_rfs->contains(rf), "missing");
-  lpt1->_rfs->yank(rf);
-  IdealLoopTree* lpt2 = phase->get_loop(rf_ctrl_proj);
-  phase->lazy_replace(rf_ctrl_proj, rf_ctrl_in);
-  if (lpt2->_parent != nullptr) {
-    lpt1->_body.yank(rf_ctrl_proj);
-  }
-  return true;
-}
-
-static Node* counted_loop_exit(IdealLoopTree* lpt) {
-  if (lpt->head()->is_BaseCountedLoop()) {
-    return lpt->head()->as_BaseCountedLoop()->loopexit()->proj_out_or_null(0 /* false */);
-  } else if (lpt->head()->is_OuterStripMinedLoop()) {
-    return lpt->head()->as_OuterStripMinedLoop()->outer_loop_exit();
-  } else {
-    return nullptr; // TODO: general case: instrument all significant exits (based on safepoint location?)
-  }
-}
-
-bool PhaseIdealLoop::process_reachability_fences() {
-  Compile::TracePhase tp(_t_reachability);
-
-  if (!OptimizeReachabilityFence) {
-    return false;
-  }
-
-  bool progress = false;
-  Unique_Node_List redundant_rfs;
-  Node_List worklist;
-  for (int i = 0; i < C->reachability_fences_count(); i++) {
-    Node* rf = C->reachability_fence(i);
-    Node* referent = rf->in(1);
-    assert(rf->outcnt() > 0, "dead node");
-    assert(!redundant_rfs.member(rf), "redundant");
-    if (is_redundant(rf, this)) {
-      assert(!worklist.contains(rf), "");
-      redundant_rfs.push(rf);
-    } else {
-      // Move RFs out of loops when possible.
-      for (LoopTreeIterator iter(_ltree_root); !iter.done(); iter.next()) {
-        IdealLoopTree* lpt = iter.current();
-        if (!lpt->is_loop()) {
-          continue;
-        }
-        if (is_member(lpt, rf)) {
-          if (lpt->is_invariant(referent)) {
-            assert(!lpt->is_root(), "");
-            IdealLoopTree* outer_loop = lpt->_parent;
-            if (is_member(outer_loop, rf) && outer_loop->is_invariant(referent) && counted_loop_exit(outer_loop) != nullptr) {
-              continue; // handled in outer loop
-            }
-
-            Node* ctrl_out = counted_loop_exit(lpt);
-            if (ctrl_out != nullptr) {
-              assert(!redundant_rfs.member(rf), "redundant");
-              worklist.push(rf);
-              worklist.push(ctrl_out);
-            }
-          } else if (!has_safepoints(lpt)) {
-            // No need to keep the RF when there are no safepoints.
-            assert(!worklist.contains(rf), "");
-            redundant_rfs.push(rf);
-            break; // current RF turned into no-op
-          }
-        }
-      }
-    }
-  }
-
-  while (worklist.size() > 0) {
-    Node* ctrl_out = worklist.pop();
-    Node* rf = worklist.pop();
-    Node* referent = rf->in(1);
-
-    if (!has_immediate_rf(ctrl_out, referent)) {
-      Node* ctrl_end = ctrl_out->unique_ctrl_out();
-
-      Node* new_rf = rf->clone();
-      new_rf->set_req(TypeFunc::Control, ctrl_out);
-
-      IdealLoopTree* lpt = get_loop(ctrl_out);
-
-      register_control(new_rf, lpt, ctrl_out);
-      if (lpt->_rfs == nullptr) {
-        lpt->_rfs = new Node_List();
-      }
-      lpt->_rfs->push(new_rf);
-
-      Node* new_rf_proj = new ProjNode(new_rf, TypeFunc::Control);
-      register_control(new_rf_proj, lpt, new_rf);
-
-      igvn().rehash_node_delayed(ctrl_end);
-      ctrl_end->replace_edge(ctrl_out, new_rf_proj);
-
-      if (idom(ctrl_end) == ctrl_out) {
-        set_idom(ctrl_end, new_rf_proj, dom_depth(new_rf_proj));
-      } else {
-        assert(ctrl_end->is_Region(), "");
-      }
-    }
-
-    redundant_rfs.push(rf);
-  }
-
-  // Prune freshly added fences.
-  for (int i = 0; i < C->reachability_fences_count(); i++) {
-    Node* rf = C->reachability_fence(i);
-    Node* referent = rf->in(1);
-    assert(rf->outcnt() > 0, "dead node");
-    if (!redundant_rfs.member(rf) && is_redundant(rf, this)) {
-      redundant_rfs.push(rf);
-    }
-  }
-
-  if (redundant_rfs.size() > 0) {
-    while (redundant_rfs.size() > 0) {
-      Node* rf = redundant_rfs.pop();
-      progress |= clear_rf(rf, this);
-    }
-  }
-
-  DEBUG_ONLY( if (VerifyLoopOptimizations && progress) { verify(); } );
-
-  return progress;
-}
-
-//----------------------------optimize_reachability_fences-------------------------------
-
-// Dominating RF is redundant.
-// other_referent <== referent <== rf <== use
-static bool is_redundant1(Node* rf, PhaseIdealLoop* phase) {
-  for (Node* referent = rf->in(1);
-       referent != nullptr;
-       referent = (referent->is_ConstraintCast() ? referent->in(1) : nullptr)) {
-    for (DUIterator_Fast imax, i = referent->fast_outs(imax); i < imax; i++) {
-      Node* use = referent->fast_out(i);
-      Node* use_ctrl = phase->ctrl_or_self(use);
-      if (use != rf && phase->is_dominator(rf, use_ctrl)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-// Iterate over CFG, build live range for n, and detect affected safepoints.
-static void enumerate_interfering_sfpts(Node* rf, PhaseIdealLoop* phase, Node_List& safepoints) {
-  Node* referent = rf->in(1);
-  Node* referent_ctrl = phase->get_ctrl(referent);
-  assert(phase->is_dominator(referent_ctrl, rf), "sanity");
-
-  VectorSet visited;
-  visited.set(rf->_idx); // start point
-  visited.set(referent_ctrl->_idx); // end point
-
-  Node_Stack stack(phase->C->live_nodes() >> 2);
-  stack.push(rf, 0);
-  while (stack.is_nonempty()) {
-    Node* cur = stack.node();
-    uint  idx = stack.index();
-    assert(cur != nullptr, "");
-    assert(cur->is_CFG(), "%s", NodeClassNames[cur->Opcode()]);
-
-    uint limit = (cur->is_Region() ? cur->req() : 1);
-    if (idx < limit) {
-      stack.set_index(idx + 1);
-      Node* def = cur->in(idx);
-      if (def == nullptr) {
-        continue; // ignore dead path
-      } else if (!visited.test_set(def->_idx)) { // not visited yet
-        if (is_significant_sfpt(def)) {
-          assert(phase->is_dominator(referent_ctrl, def), "");
-          safepoints.push(def);
-        }
-        stack.push(def, 0);
-      }
-    } else {
-      stack.pop();
-    }
-  }
-}
-
-bool PhaseIdealLoop::optimize_reachability_fences() {
-  Compile::TracePhase tp(_t_reachability);
-
-  if (!OptimizeReachabilityFence) {
-    return false;
-  }
-
-  bool progress = false;
-  Unique_Node_List redundant_rfs;
-  Node_List worklist;
-  for (int i = 0; i < C->reachability_fences_count(); i++) {
-    ReachabilityFenceNode* rf = C->reachability_fence(i)->as_ReachabilityFence();
-    assert(!is_redundant(rf, this), "");
-    // Migrate all reachability fences to safepoints.
-    if (!is_redundant1(rf, this)) {
-      Node_List safepoints;
-      enumerate_interfering_sfpts(rf, this, safepoints);
-
-      while (safepoints.size() > 0) {
-        Node* sfpt = safepoints.pop();
-        // TODO: sfpt can already have debug/non-debug dependency on the referent
-        sfpt->add_req(rf->in(1));
-        igvn()._worklist.push(sfpt);
-      }
-    }
-    redundant_rfs.push(rf);
-  }
-
-  if (redundant_rfs.size() > 0) {
-    while (redundant_rfs.size() > 0) {
-      Node* rf = redundant_rfs.pop();
-      progress |= clear_rf(rf, this);
-    }
-  }
-
-  assert(C->reachability_fences_count() == 0, "");
-  DEBUG_ONLY( if (VerifyLoopOptimizations && progress) { verify(); } );
-  return progress;
-}
-
-//=============================================================================
 //----------------------------build_and_optimize-------------------------------
 // Create a PhaseLoop.  Build the ideal Loop tree.  Map each Ideal Node to
 // its corresponding LoopNode.  If 'optimize' is true, do some loop cleanups.
@@ -5094,10 +4777,11 @@ void PhaseIdealLoop::build_and_optimize() {
   if (stop_early) {
     assert(do_expensive_nodes || do_reachability_fences, "why are we here?");
     if (do_reachability_fences) {
-      bool progress = process_reachability_fences();
-      progress |= optimize_reachability_fences();
+      bool progress = optimize_reachability_fences();
+      progress |= eliminate_reachability_fences();
       if (progress) {
         recompute_dom_depth();
+        DEBUG_ONLY( if (VerifyLoopOptimizations) { verify(); } );
       }
     }
     if (do_expensive_nodes && process_expensive_nodes()) {
@@ -5128,8 +4812,9 @@ void PhaseIdealLoop::build_and_optimize() {
   }
 #endif
 
-  if (process_reachability_fences()) {
+  if (optimize_reachability_fences()) {
     recompute_dom_depth();
+    DEBUG_ONLY( if (VerifyLoopOptimizations) { verify(); } );
   }
 
   if (skip_loop_opts) {
@@ -5159,7 +4844,7 @@ void PhaseIdealLoop::build_and_optimize() {
   }
 
   if (optimize_rfs) {
-    optimize_reachability_fences();
+    eliminate_reachability_fences();
     C->restore_major_progress(old_progress);
     return;
   }

@@ -618,7 +618,7 @@ void CallGenerator::do_late_inline_helper() {
   } else {
     if (call->req() > endoff) {
       assert(OptimizeReachabilityFence, "");
-      return; // FIXME: migrate reachability fences to new call?
+      return; // keep the original call node as the holder of reachability info
     }
   }
 

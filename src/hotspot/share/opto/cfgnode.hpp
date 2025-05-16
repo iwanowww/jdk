@@ -748,34 +748,5 @@ public:
 #endif
 };
 
-//------------------------ReachabilityFenceNode--------------------------
-class ReachabilityFenceNode : public MultiNode {
-  Node* post_dominating_fence(PhaseGVN* phase);
-  bool is_redundant(PhaseGVN* phase);
-
-public:
-  ReachabilityFenceNode(Compile* C, Node* ctrl, Node* referent)
-      : MultiNode(1) {
-    init_class_id(Class_ReachabilityFence);
-    init_req(TypeFunc::Control, ctrl);
-    add_req(referent);
-    C->add_reachability_fence(this);
-  }
-  virtual int   Opcode() const;
-  virtual uint ideal_reg() const { return 0; } // not matched in the AD file
-  virtual const Type* bottom_type() const { return TypeTuple::MEMBAR; }
-  const RegMask &in_RegMask(uint idx) const {
-    // Fake the incoming arguments mask for blackholes: accept all registers
-    // and all stack slots. This would avoid any redundant register moves
-    // for blackhole inputs.
-    return RegMask::All;
-  }
-
-  virtual Node* Ideal(PhaseGVN* phase, bool can_reshape);
-#ifndef PRODUCT
-  virtual void format(PhaseRegAlloc* ra, outputStream* st) const;
-  virtual void emit(C2_MacroAssembler* masm, PhaseRegAlloc* ra) const;
-#endif
-};
 
 #endif // SHARE_OPTO_CFGNODE_HPP
