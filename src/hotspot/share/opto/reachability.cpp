@@ -173,6 +173,21 @@ static bool remove_reachability_fence(Node* rf, PhaseIdealLoop* phase) {
 //======================================================================
 //---------------------------- Phase 1 ---------------------------------
 
+#ifdef ASSERT
+static bool has_redundant_rfs(PhaseIdealLoop* phase, Unique_Node_List& ignored_rfs, bool cfg_only) {
+  for (int i = 0; i < phase->C->reachability_fences_count(); i++) {
+    Node* rf = phase->C->reachability_fence(i);
+    Node* referent = rf->in(1);
+    assert(rf->outcnt() > 0, "dead node");
+    if (!ignored_rfs.member(rf) &&
+        is_redundant(rf, referent, phase, phase->igvn(), cfg_only)) {
+      return true;
+    }
+  }
+  return false;
+}
+#endif // ASSERT
+
 static Node* counted_loop_exit(IdealLoopTree* lpt) {
   if (lpt->is_loop()) {
     if (lpt->head()->is_BaseCountedLoop()) {
@@ -221,24 +236,21 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
     }
   }
 
+  assert(!has_redundant_rfs(this, redundant_rfs, true /*cfg_only*/), "");
+
   while (worklist.size() > 0) {
     Node* ctrl_out = worklist.pop();
     Node* referent = worklist.pop();
-
-    if (!is_redundant(ctrl_out, referent, this, igvn(), true /*cfg_only*/)) {
+    if (is_redundant(ctrl_out, referent, this, igvn(), true /*cfg_only*/)) {
+      // Redundancy is determined by dominance relation.
+      // Sometimes it becomes evident that an RF is redundant
+      // once it is moved out of the loop.
+    } else {
       insert_reachability_fence(ctrl_out, referent, this);
     }
   }
 
-  // Look for redundant fences once again.
-  for (int i = 0; i < C->reachability_fences_count(); i++) {
-    Node* rf = C->reachability_fence(i);
-    Node* referent = rf->in(1);
-    assert(rf->outcnt() > 0, "dead node");
-    if (!redundant_rfs.member(rf) && is_redundant(rf, referent, this, igvn(), true /*cfg_only*/)) {
-      redundant_rfs.push(rf);
-    }
-  }
+  assert(!has_redundant_rfs(this, redundant_rfs, true /*cfg_only*/), "");
 
   if (redundant_rfs.size() > 0) {
     while (redundant_rfs.size() > 0) {
@@ -246,6 +258,9 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
       progress |= remove_reachability_fence(rf, this);
     }
   }
+
+  assert(redundant_rfs.size() == 0, "");
+  assert(!has_redundant_rfs(this, redundant_rfs, true /*cfg_only*/), "");
 
   return progress;
 }
@@ -332,12 +347,19 @@ bool PhaseIdealLoop::eliminate_reachability_fences() {
         Node* sfpt = safepoints.pop();
         assert(is_dominator(get_ctrl(referent), sfpt), "");
         if (!has_input(sfpt, referent)) {
-          sfpt->add_req(referent);
-          igvn()._worklist.push(sfpt);
+          worklist.push(sfpt);
+          worklist.push(referent);
         }
       }
     }
     redundant_rfs.push(rf);
+  }
+
+  while (worklist.size() > 0) {
+    Node* referent = worklist.pop();
+    Node* sfpt     = worklist.pop();
+    sfpt->add_req(referent);
+    igvn()._worklist.push(sfpt);
   }
 
   if (redundant_rfs.size() > 0) {
