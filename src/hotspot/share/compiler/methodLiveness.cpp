@@ -585,16 +585,12 @@ void MethodLiveness::BasicBlock::compute_gen_kill_single(ciBytecodeStream *instr
     case Bytecodes::_ifgt:
     case Bytecodes::_ifle:
     case Bytecodes::_tableswitch:
-    case Bytecodes::_ireturn:
-    case Bytecodes::_freturn:
     case Bytecodes::_if_icmpeq:
     case Bytecodes::_if_icmpne:
     case Bytecodes::_if_icmplt:
     case Bytecodes::_if_icmpge:
     case Bytecodes::_if_icmpgt:
     case Bytecodes::_if_icmple:
-    case Bytecodes::_lreturn:
-    case Bytecodes::_dreturn:
     case Bytecodes::_if_acmpeq:
     case Bytecodes::_if_acmpne:
     case Bytecodes::_jsr:
@@ -614,7 +610,6 @@ void MethodLiveness::BasicBlock::compute_gen_kill_single(ciBytecodeStream *instr
     case Bytecodes::_arraylength:
     case Bytecodes::_instanceof:
     case Bytecodes::_athrow:
-    case Bytecodes::_areturn:
     case Bytecodes::_monitorenter:
     case Bytecodes::_monitorexit:
     case Bytecodes::_ifnull:
@@ -630,6 +625,11 @@ void MethodLiveness::BasicBlock::compute_gen_kill_single(ciBytecodeStream *instr
         // for the receiver if needed, so keep it alive.
         load_one(0);
       }
+    case Bytecodes::_lreturn:
+    case Bytecodes::_dreturn:
+    case Bytecodes::_freturn:
+    case Bytecodes::_ireturn:
+    case Bytecodes::_areturn:
       if (StressReachabilityFence) {
         // Keep all oop arguments alive until method return.
         if (instruction->method()->is_static() == false) {
