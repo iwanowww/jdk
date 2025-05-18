@@ -1471,9 +1471,6 @@ public:
   // execution of the expensive node. Return true if progress.
   bool process_expensive_nodes();
 
-  bool optimize_reachability_fences();
-  bool eliminate_reachability_fences();
-
   // Check whether node has become unreachable
   bool is_node_unreachable(Node *n) const {
     return !has_node(n) || n->is_unreachable(_igvn);
@@ -1488,6 +1485,17 @@ public:
   void do_unswitching(IdealLoopTree* loop, Node_List& old_new);
 
   IfNode* find_unswitch_candidate(const IdealLoopTree* loop) const;
+
+ private:
+  bool is_redundant_rf(Node* rf, bool cfg_only);
+  bool find_redundant_rfs(Unique_Node_List& redundant_rfs);
+
+  bool optimize_reachability_fences();
+  bool eliminate_reachability_fences();
+
+#ifdef ASSERT
+  bool has_redundant_rfs(Unique_Node_List& ignored_rfs, bool cfg_only);
+#endif // ASSERT
 
  private:
   static bool has_control_dependencies_from_predicates(LoopNode* head);

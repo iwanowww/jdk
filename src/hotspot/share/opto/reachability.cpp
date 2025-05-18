@@ -31,9 +31,9 @@
 #include "opto/regalloc.hpp"
 #include "opto/runtime.hpp"
 
-// Dominating RF is redundant.
+// RF is redundant when there's another
 // other_referent <== referent <== ctrl <== use
-static bool is_redundant(Node* ctrl, Node* referent, PhaseIdealLoop* phase, PhaseGVN& gvn, bool cfg_only) {
+static bool is_redundant_rf_helper(Node* ctrl, Node* referent, PhaseIdealLoop* phase, PhaseGVN& gvn, bool cfg_only) {
   const Type* t = gvn.type(referent);
   if (EliminateConstantReachabilityFence && t->singleton()) {
     return true; // no-op fence
@@ -74,7 +74,7 @@ Node* ReachabilityFenceNode::Ideal(PhaseGVN* phase, bool can_reshape) {
   if (in(0) != nullptr && in(0)->is_top()) {
     return nullptr;
   }
-  if (is_redundant(this, in(1), nullptr, *phase, true /*cfg_only*/)) {
+  if (is_redundant_rf_helper(this, in(1), nullptr, *phase, true /*cfg_only*/)) {
     return TupleNode::make(TypeTuple::MEMBAR, in(0), nullptr, nullptr, nullptr, nullptr);
   }
   return nullptr;
@@ -174,13 +174,69 @@ static bool remove_reachability_fence(Node* rf, PhaseIdealLoop* phase) {
 //---------------------------- Phase 1 ---------------------------------
 
 #ifdef ASSERT
-static bool has_redundant_rfs(PhaseIdealLoop* phase, Unique_Node_List& ignored_rfs, bool cfg_only) {
+static void dump_rfs_on(outputStream* st, PhaseIdealLoop* phase, Unique_Node_List& ignored_rfs, bool cfg_only) {
   for (int i = 0; i < phase->C->reachability_fences_count(); i++) {
     Node* rf = phase->C->reachability_fence(i);
     Node* referent = rf->in(1);
+    bool detected = ignored_rfs.member(rf);
+    bool redundant = is_redundant_rf_helper(rf, referent, phase, phase->igvn(), cfg_only);
+
+    st->print(" %3d: %s%s ", i, (redundant ? "R" : " "), (detected ? "D" : " "));
+    rf->dump("", false, st);
+    st->cr();
+
+    st->print("         ");
+    referent->dump("", false, st);
+    st->cr();
+    if (redundant != detected) {
+      for (Node* cur = referent;
+           cur != nullptr;
+           cur = (cur->is_ConstraintCast() ? cur->in(1) : nullptr)) {
+        bool first = true;
+        for (DUIterator_Fast imax, i = cur->fast_outs(imax); i < imax; i++) {
+          Node* use = cur->fast_out(i);
+          if (cfg_only && !use->is_CFG()) {
+            continue; // skip non-CFG uses
+          }
+          if (use != rf) {
+            if (phase != nullptr) {
+              Node* use_ctrl = (cfg_only ? use : phase->ctrl_or_self(use));
+              if (phase->is_dominator(rf, use_ctrl)) {
+                if (first) {
+                  st->print("=====REF "); cur->dump("", false, st); st->cr();
+                  first = false;
+                }
+                st->print("     DDD "); use_ctrl->dump("", false, st); st->cr();
+                if (use != use_ctrl) {
+                  st->print("         "); use->dump("", false, st); st->cr();
+                }
+              }
+            } else {
+              assert(cfg_only, "");
+              if (phase->igvn().is_dominator(rf, use)) {
+                if (first) {
+                  st->print("=====REF "); cur->dump("", false, st); st->cr();
+                  first = false;
+                }
+                st->print("     DDD "); use->dump("", false, st); st->cr();
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+bool PhaseIdealLoop::has_redundant_rfs(Unique_Node_List& ignored_rfs, bool cfg_only) {
+  for (int i = 0; i < C->reachability_fences_count(); i++) {
+    Node* rf = C->reachability_fence(i);
+    Node* referent = rf->in(1);
     assert(rf->outcnt() > 0, "dead node");
-    if (!ignored_rfs.member(rf) &&
-        is_redundant(rf, referent, phase, phase->igvn(), cfg_only)) {
+    if (ignored_rfs.member(rf)) {
+      continue; // skip
+    } else if (is_redundant_rf(rf, cfg_only)) {
+      dump_rfs_on(tty, this, ignored_rfs, cfg_only);
       return true;
     }
   }
@@ -200,6 +256,25 @@ static Node* counted_loop_exit(IdealLoopTree* lpt) {
   return nullptr;
 }
 
+bool PhaseIdealLoop::is_redundant_rf(Node* rf, bool cfg_only) {
+  assert(rf->is_ReachabilityFence(), "");
+  Node* referent = rf->in(1);
+  return is_redundant_rf_helper(rf, referent, this, igvn(), cfg_only);
+}
+
+bool PhaseIdealLoop::find_redundant_rfs(Unique_Node_List& redundant_rfs) {
+  bool found = false;
+  for (int i = 0; i < C->reachability_fences_count(); i++) {
+    Node* rf = C->reachability_fence(i);
+    Node* referent = rf->in(1);
+    assert(rf->outcnt() > 0, "dead node");
+    if (!redundant_rfs.member(rf) && is_redundant_rf(rf, true /*cfg_only*/)) {
+      redundant_rfs.push(rf);
+    }
+  }
+  return found;
+}
+
 bool PhaseIdealLoop::optimize_reachability_fences() {
   Compile::TracePhase tp(_t_reachability);
 
@@ -207,20 +282,17 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
     return false;
   }
 
-  bool progress = false;
   Unique_Node_List redundant_rfs;
+  find_redundant_rfs(redundant_rfs);
+
   Node_List worklist;
   for (int i = 0; i < C->reachability_fences_count(); i++) {
     Node* rf = C->reachability_fence(i);
-    Node* referent = rf->in(1);
-    assert(rf->outcnt() > 0, "dead node");
-    assert(!redundant_rfs.member(rf), "redundant");
-    if (is_redundant(rf, referent, this, igvn(), true /*cfg_only*/)) {
-      assert(!worklist.contains(rf), "");
-      redundant_rfs.push(rf);
-    } else {
+    if (!redundant_rfs.member(rf)) {
       // Move RFs out of counted loops when possible.
       IdealLoopTree* lpt = get_loop(rf);
+      Node* referent = rf->in(1);
+
       if (lpt->is_invariant(referent) && counted_loop_exit(lpt) != nullptr) {
         // Switch to the outermost loop.
         for (IdealLoopTree* outer_loop = lpt->_parent;
@@ -236,22 +308,20 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
     }
   }
 
-  assert(!has_redundant_rfs(this, redundant_rfs, true /*cfg_only*/), "");
-
+  // Populate RFs outside counted loops.
   while (worklist.size() > 0) {
     Node* ctrl_out = worklist.pop();
     Node* referent = worklist.pop();
-    if (is_redundant(ctrl_out, referent, this, igvn(), true /*cfg_only*/)) {
-      // Redundancy is determined by dominance relation.
-      // Sometimes it becomes evident that an RF is redundant
-      // once it is moved out of the loop.
-    } else {
-      insert_reachability_fence(ctrl_out, referent, this);
-    }
+    insert_reachability_fence(ctrl_out, referent, this);
   }
 
-  assert(!has_redundant_rfs(this, redundant_rfs, true /*cfg_only*/), "");
+  // Redundancy is determined by dominance relation.
+  // Sometimes it becomes evident that an RF is redundant once it is moved out of the loop.
+  // Also, newly introduced RF can make some existing RFs redundant.
+  find_redundant_rfs(redundant_rfs);
 
+  // Eliminate redundant RFs.
+  bool progress = false;
   if (redundant_rfs.size() > 0) {
     while (redundant_rfs.size() > 0) {
       Node* rf = redundant_rfs.pop();
@@ -260,7 +330,7 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
   }
 
   assert(redundant_rfs.size() == 0, "");
-  assert(!has_redundant_rfs(this, redundant_rfs, true /*cfg_only*/), "");
+  assert(!has_redundant_rfs(redundant_rfs, true /*cfg_only*/), "");
 
   return progress;
 }
@@ -268,6 +338,8 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
 //======================================================================
 //---------------------------- Phase 2 ---------------------------------
 
+// Linearly traverse CFG upwards starting at n until first merge point.
+// All encountered safepoints are recorded in safepoints list.
 static void linear_traversal(Node* n, Node_Stack& worklist, VectorSet& visited, Node_List& safepoints) {
   for (Node* ctrl = n; ctrl != nullptr; ctrl = ctrl->in(0)) {
     assert(ctrl->is_CFG(), "");
@@ -285,6 +357,7 @@ static void linear_traversal(Node* n, Node_Stack& worklist, VectorSet& visited, 
 }
 
 // Enumerate all safepoints which are reachable from the RF to its referent through CFG.
+// Start at rf node and traverse CFG upwards until referent's control node is reached.
 static void enumerate_interfering_sfpts(Node* rf, PhaseIdealLoop* phase, Node_List& safepoints) {
   Node* referent = rf->in(1);
   Node* referent_ctrl = phase->get_ctrl(referent);
@@ -313,15 +386,6 @@ static void enumerate_interfering_sfpts(Node* rf, PhaseIdealLoop* phase, Node_Li
   }
 }
 
-static bool has_input(Node* n, Node* m) {
-  for (uint i = 0; i < n->req(); i++) {
-    if (n->in(i) == m) {
-      return true;
-    }
-  }
-  return false;
-}
-
 // Phase 2: migrate reachability info to safepoints.
 // All RFs are replaced with edges from corresponding referents to interfering safepoints.
 // Interfering safepoints are safepoint nodes which are reachable from the RF to its referent through CFG.
@@ -332,21 +396,20 @@ bool PhaseIdealLoop::eliminate_reachability_fences() {
     return false;
   }
 
-  bool progress = false;
   Unique_Node_List redundant_rfs;
   Node_List worklist;
   for (int i = 0; i < C->reachability_fences_count(); i++) {
     ReachabilityFenceNode* rf = C->reachability_fence(i)->as_ReachabilityFence();
-    Node* referent = rf->in(1);
-    assert(!is_redundant(rf, referent, this, igvn(), true /*cfg_only*/), "");
-    if (!is_redundant(rf, referent, this, igvn(), false /*cfg_only*/)) {
+    assert(!is_redundant_rf(rf, true /*cfg_only*/), "missed");
+    if (!is_redundant_rf(rf, false /*cfg_only*/)) {
       Node_List safepoints;
       enumerate_interfering_sfpts(rf, this, safepoints);
 
+      Node* referent = rf->in(1);
       while (safepoints.size() > 0) {
         Node* sfpt = safepoints.pop();
         assert(is_dominator(get_ctrl(referent), sfpt), "");
-        if (!has_input(sfpt, referent)) {
+        if (sfpt->find_edge(referent) == -1) {
           worklist.push(sfpt);
           worklist.push(referent);
         }
@@ -362,6 +425,7 @@ bool PhaseIdealLoop::eliminate_reachability_fences() {
     igvn()._worklist.push(sfpt);
   }
 
+  bool progress = false;
   if (redundant_rfs.size() > 0) {
     while (redundant_rfs.size() > 0) {
       Node* rf = redundant_rfs.pop();
@@ -387,6 +451,7 @@ static int nof_extra_inputs(SafePointNode* sfpt) {
   return 0; // no extra edges
 }
 
+// Find a point in CFG right after sfpt to insert a reachability fence.
 static Node* sfpt_ctrl_out(Node* sfpt) {
   if (sfpt->is_Call()) {
     CallProjections callprojs;
