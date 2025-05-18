@@ -370,6 +370,9 @@ void Parse::load_interpreter_state(Node* osr_buf) {
       continue;
     }
     set_local(index, check_interpreter_type(l, type, bad_type_exit));
+    if (StressReachabilityFence && type->isa_oopptr() != nullptr) {
+      _stress_rf_hook->add_req(local(index));
+    }
   }
 
   for (index = 0; index < sp(); index++) {
@@ -378,6 +381,9 @@ void Parse::load_interpreter_state(Node* osr_buf) {
     if (l->is_top())  continue;  // nothing here
     const Type *type = osr_block->stack_type_at(index);
     set_stack(index, check_interpreter_type(l, type, bad_type_exit));
+    if (StressReachabilityFence && type->isa_oopptr() != nullptr) {
+      _stress_rf_hook->add_req(stack(index));
+    }
   }
 
   if (bad_type_exit->control()->req() > 1) {
@@ -412,6 +418,7 @@ Parse::Parse(JVMState* caller, ciMethod* parse_method, float expected_uses)
   _wrote_stable = false;
   _wrote_fields = false;
   _alloc_with_final_or_stable = nullptr;
+  _stress_rf_hook = (StressReachabilityFence ? new Node(1) : nullptr);
   _block = nullptr;
   _first_return = true;
   _replaced_nodes_for_exceptions = false;
@@ -643,6 +650,11 @@ Parse::Parse(JVMState* caller, ciMethod* parse_method, float expected_uses)
 
   if (log)  log->done("parse nodes='%d' live='%d' memory='%zu'",
                       C->unique(), C->live_nodes(), C->node_arena()->used());
+
+  if (StressReachabilityFence) {
+    _stress_rf_hook->destruct(&_gvn);
+    _stress_rf_hook = nullptr;
+  }
 }
 
 //---------------------------do_all_blocks-------------------------------------
@@ -1199,6 +1211,17 @@ void Parse::do_method_entry() {
 
   if (C->env()->dtrace_method_probes()) {
     make_dtrace_method_entry(method());
+  }
+
+  if (StressReachabilityFence) {
+    // Keep all oop arguments alive until method return.
+    int max_locals = jvms()->loc_size();
+    for (int idx = 0; idx < max_locals; idx++) {
+      Node* loc = local(idx);
+      if (loc->bottom_type()->isa_oopptr() != nullptr) {
+        _stress_rf_hook->add_req(loc);
+      }
+    }
   }
 
 #ifdef ASSERT
@@ -2189,15 +2212,10 @@ void Parse::return_current(Node* value) {
 
   if (StressReachabilityFence) {
     // Keep all oop arguments alive until method return.
-    if (!method()->is_static()) {
-      insert_reachability_fence(local(0));
-    }
-    int local_idx = (method()->is_static() ? 0 : 1);
-    for (ciSignatureStream ss(method()->signature()); !ss.at_return_type(); ss.next()) {
-      if (!ss.type()->is_primitive_type()) {
-        insert_reachability_fence(local(local_idx));
-      }
-      local_idx += ss.type()->size();
+    for (uint i = 1; i < _stress_rf_hook->req(); i++) {
+      Node* referent = _stress_rf_hook->in(i);
+      assert(referent->bottom_type()->isa_oopptr(), "%s", Type::str(referent->bottom_type()));
+      insert_reachability_fence(referent);
     }
   }
 

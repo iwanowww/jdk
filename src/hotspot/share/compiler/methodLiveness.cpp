@@ -31,7 +31,6 @@
 #include "interpreter/bytecodes.hpp"
 #include "memory/allocation.inline.hpp"
 #include "memory/resourceArea.hpp"
-#include "opto/c2_globals.hpp"
 #include "utilities/bitMap.inline.hpp"
 
 // The MethodLiveness class performs a simple liveness analysis on a method
@@ -585,12 +584,16 @@ void MethodLiveness::BasicBlock::compute_gen_kill_single(ciBytecodeStream *instr
     case Bytecodes::_ifgt:
     case Bytecodes::_ifle:
     case Bytecodes::_tableswitch:
+    case Bytecodes::_ireturn:
+    case Bytecodes::_freturn:
     case Bytecodes::_if_icmpeq:
     case Bytecodes::_if_icmpne:
     case Bytecodes::_if_icmplt:
     case Bytecodes::_if_icmpge:
     case Bytecodes::_if_icmpgt:
     case Bytecodes::_if_icmple:
+    case Bytecodes::_lreturn:
+    case Bytecodes::_dreturn:
     case Bytecodes::_if_acmpeq:
     case Bytecodes::_if_acmpne:
     case Bytecodes::_jsr:
@@ -610,6 +613,7 @@ void MethodLiveness::BasicBlock::compute_gen_kill_single(ciBytecodeStream *instr
     case Bytecodes::_arraylength:
     case Bytecodes::_instanceof:
     case Bytecodes::_athrow:
+    case Bytecodes::_areturn:
     case Bytecodes::_monitorenter:
     case Bytecodes::_monitorexit:
     case Bytecodes::_ifnull:
@@ -624,24 +628,6 @@ void MethodLiveness::BasicBlock::compute_gen_kill_single(ciBytecodeStream *instr
         // return from Object.init implicitly registers a finalizer
         // for the receiver if needed, so keep it alive.
         load_one(0);
-      }
-    case Bytecodes::_lreturn:
-    case Bytecodes::_dreturn:
-    case Bytecodes::_freturn:
-    case Bytecodes::_ireturn:
-    case Bytecodes::_areturn:
-      if (StressReachabilityFence) {
-        // Keep all oop arguments alive until method return.
-        if (instruction->method()->is_static() == false) {
-          load_one(0);
-        }
-        int local_idx = (instruction->method()->is_static() ? 0 : 1);
-        for (ciSignatureStream ss(instruction->method()->signature()); !ss.at_return_type(); ss.next()) {
-          if (!ss.type()->is_primitive_type()) {
-            load_one(local_idx);
-          }
-          local_idx += ss.type()->size();
-        }
       }
       break;
 
