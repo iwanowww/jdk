@@ -371,7 +371,11 @@ void Parse::load_interpreter_state(Node* osr_buf) {
     }
     set_local(index, check_interpreter_type(l, type, bad_type_exit));
     if (StressReachabilityFence && type->isa_oopptr() != nullptr) {
-      _stress_rf_hook->add_req(local(index));
+      Node* loc = local(index);
+      if (loc->bottom_type() != TypePtr::NULL_PTR) {
+        assert(loc->bottom_type()->isa_oopptr() != nullptr, "%s", Type::str(loc->bottom_type()));
+        _stress_rf_hook->add_req(loc);
+      }
     }
   }
 
@@ -382,7 +386,11 @@ void Parse::load_interpreter_state(Node* osr_buf) {
     const Type *type = osr_block->stack_type_at(index);
     set_stack(index, check_interpreter_type(l, type, bad_type_exit));
     if (StressReachabilityFence && type->isa_oopptr() != nullptr) {
-      _stress_rf_hook->add_req(stack(index));
+      Node* stk = stack(index);
+      if (stk->bottom_type() != TypePtr::NULL_PTR) {
+        assert(stk->bottom_type()->isa_oopptr() != nullptr, "%s", Type::str(stk->bottom_type()));
+        _stress_rf_hook->add_req(stk);
+      }
     }
   }
 
