@@ -261,8 +261,9 @@ uint TailJumpNode::match_edge(uint idx) const {
 }
 
 //=============================================================================
-JVMState::JVMState(ciMethod* method, JVMState* caller) :
-  _method(method) {
+JVMState::JVMState(ciMethod* method, ciInstance* instance, JVMState* caller) :
+  _method(method),
+  _instance(instance) {
   assert(method != nullptr, "must be valid call site");
   _bci = InvocationEntryBci;
   _reexecute = Reexecute_Undefined;
@@ -278,7 +279,8 @@ JVMState::JVMState(ciMethod* method, JVMState* caller) :
   _sp = 0;
 }
 JVMState::JVMState(int stack_size) :
-  _method(nullptr) {
+  _method(nullptr),
+  _instance(nullptr) {
   _bci = InvocationEntryBci;
   _reexecute = Reexecute_Undefined;
   DEBUG_ONLY(_map = (SafePointNode*)-1);
@@ -603,7 +605,7 @@ void dump_jvms(JVMState* jvms) {
 
 //--------------------------clone_shallow--------------------------------------
 JVMState* JVMState::clone_shallow(Compile* C) const {
-  JVMState* n = has_method() ? new (C) JVMState(_method, _caller) : new (C) JVMState(0);
+  JVMState* n = has_method() ? new (C) JVMState(_method, _instance, _caller) : new (C) JVMState(0);
   n->set_bci(_bci);
   n->_reexecute = _reexecute;
   n->set_locoff(_locoff);

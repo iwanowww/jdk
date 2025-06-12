@@ -58,7 +58,7 @@ InlineTree::InlineTree(Compile* c,
 #endif
   if (caller_jvms != nullptr) {
     // Keep a private copy of the caller_jvms:
-    _caller_jvms = new (C) JVMState(caller_jvms->method(), caller_tree->caller_jvms());
+    _caller_jvms = new (C) JVMState(caller_jvms->method(), caller_jvms->instance(), caller_tree->caller_jvms());
     _caller_jvms->set_bci(caller_jvms->bci());
     assert(!caller_jvms->should_reexecute(), "there should be no reexecute bytecode with inlining");
     assert(_caller_jvms->same_calls_as(caller_jvms), "consistent JVMS");
@@ -446,15 +446,34 @@ bool InlineTree::try_to_inline(ciMethod* callee_method, ciMethod* caller_method,
       }
     }
     // count callers of current method and callee
-    Node* callee_argument0 = is_compiled_lambda_form ? jvms->map()->argument(jvms, 0)->uncast() : nullptr;
+    ciObject* callee_recv = nullptr;
+    if (is_compiled_lambda_form) {
+      Node* recv = jvms->map()->argument(jvms, 0);
+      assert(recv == nullptr || !recv->is_top(), "");
+      if (recv->Opcode() == Op_ConP) {
+        const TypeOopPtr* recv_toop = recv->bottom_type()->isa_oopptr();
+        if (recv_toop != nullptr) {
+          callee_recv = recv_toop->const_oop();
+          if (!callee_recv->is_instance()) {
+            ttyLocker ttyl;
+            callee_recv->print(tty); tty->cr();
+            callee_method->print(tty);
+            jvms->dump_on(tty);
+            fatal("not an instance");
+          }
+        }
+      }
+    }
     for (JVMState* j = jvms->caller(); j != nullptr && j->has_method(); j = j->caller()) {
       if (j->method() == callee_method) {
         if (is_compiled_lambda_form) {
           // Since compiled lambda forms are heavily reused we allow recursive inlining.  If it is truly
           // a recursion (using the same "receiver") we limit inlining otherwise we can easily blow the
           // compiler stack.
-          Node* caller_argument0 = j->map()->argument(j, 0)->uncast();
-          if (caller_argument0 == callee_argument0) {
+          ciInstance* caller_recv = j->instance();
+          assert(caller_recv != nullptr || j->depth() == 1 ||
+                 !j->caller()->method()->is_compiled_lambda_form(), "");
+          if (caller_recv == callee_recv || caller_recv == nullptr) {
             inline_level++;
           }
         } else {

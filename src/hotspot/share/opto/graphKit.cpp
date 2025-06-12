@@ -299,7 +299,7 @@ JVMState* GraphKit::transfer_exceptions_into_jvms() {
       DEBUG_ONLY(verify_map());
     } else {
       // ...or created from scratch
-      JVMState* jvms = new (C) JVMState(_method, nullptr);
+      JVMState* jvms = new (C) JVMState(_method, nullptr, nullptr);
       jvms->set_bci(_bci);
       jvms->set_sp(_sp);
       jvms->set_map(new SafePointNode(TypeFunc::Parms, jvms));

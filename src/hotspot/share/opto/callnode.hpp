@@ -217,6 +217,7 @@ private:
   int               _bci;       // Byte Code Index of this JVM point
   ReexecuteState    _reexecute; // Whether this bytecode need to be re-executed
   ciMethod*         _method;    // Method Pointer
+  ciInstance*       _instance;  // Receiver instance Pointer (for inlined shared lambda forms)
   SafePointNode*    _map;       // Map node associated with this scope
 public:
   friend class Compile;
@@ -229,7 +230,7 @@ public:
   void operator delete( void * ) { } // fast deallocation
 
   // Create a new JVMState, ready for abstract interpretation.
-  JVMState(ciMethod* method, JVMState* caller);
+  JVMState(ciMethod* method, ciInstance* instance, JVMState* caller);
   JVMState(int stack_size);  // root state; has a null method
 
   // Access functions for the JVM
@@ -259,6 +260,7 @@ public:
   bool  is_reexecute_undefined() const { return _reexecute==Reexecute_Undefined; }
   bool              has_method() const { return _method != nullptr; }
   ciMethod*             method() const { assert(has_method(), ""); return _method; }
+  ciInstance*         instance() const { assert(has_method(), ""); return _instance; }
   JVMState*             caller() const { return _caller; }
   SafePointNode*           map() const { return _map; }
   uint                   depth() const { return _depth; }
@@ -383,24 +385,34 @@ public:
  public:
   // Functionality from old debug nodes which has changed
   Node *local(JVMState* jvms, uint idx) const {
-    verify_input(jvms, jvms->locoff() + idx);
-    return in(jvms->locoff() + idx);
+    uint loc_idx = jvms->locoff() + idx;
+    assert(jvms->is_loc(loc_idx), "not a local slot");
+    verify_input(jvms, loc_idx);
+    return in(loc_idx);
   }
   Node *stack(JVMState* jvms, uint idx) const {
-    verify_input(jvms, jvms->stkoff() + idx);
-    return in(jvms->stkoff() + idx);
+    uint stk_idx = jvms->stkoff() + idx;
+    assert(jvms->is_stk(stk_idx), "not a stack slot");
+    verify_input(jvms, stk_idx);
+    return in(stk_idx);
   }
   Node *argument(JVMState* jvms, uint idx) const {
-    verify_input(jvms, jvms->argoff() + idx);
+    uint arg_idx = jvms->argoff() + idx;
+    assert(jvms->is_stk(arg_idx), "not an argument slot");
+    verify_input(jvms, arg_idx);
     return in(jvms->argoff() + idx);
   }
   Node *monitor_box(JVMState* jvms, uint idx) const {
     assert(verify_jvms(jvms), "jvms must match");
-    return in(jvms->monitor_box_offset(idx));
+    uint mon_box_idx = jvms->monitor_box_offset(idx);
+    assert(jvms->is_monitor_box(mon_box_idx), "not a monitor box offset");
+    return in(mon_box_idx);
   }
   Node *monitor_obj(JVMState* jvms, uint idx) const {
     assert(verify_jvms(jvms), "jvms must match");
-    return in(jvms->monitor_obj_offset(idx));
+    uint mon_obj_idx = jvms->monitor_obj_offset(idx);
+    assert(jvms->is_mon(mon_obj_idx) && !jvms->is_monitor_box(mon_obj_idx), "not a monitor obj offset");
+    return in(mon_obj_idx);
   }
 
   void  set_local(JVMState* jvms, uint idx, Node *c);

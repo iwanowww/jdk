@@ -838,7 +838,7 @@ JVMState* Compile::build_start_state(StartNode* start, const TypeFunc* tf) {
   Node_Notes* old_nn = default_node_notes();
   if (old_nn != nullptr && has_method()) {
     Node_Notes* entry_nn = old_nn->clone(this);
-    JVMState* entry_jvms = new(this) JVMState(method(), old_nn->jvms());
+    JVMState* entry_jvms = new(this) JVMState(method(), nullptr, old_nn->jvms());
     entry_jvms->set_offsets(0);
     entry_jvms->set_bci(entry_bci());
     entry_nn->set_jvms(entry_jvms);
@@ -865,7 +865,7 @@ Node_Notes* Parse::make_node_notes(Node_Notes* caller_nn) {
   if (caller_nn == nullptr)  return nullptr;
   Node_Notes* nn = caller_nn->clone(C);
   JVMState* caller_jvms = nn->jvms();
-  JVMState* jvms = new (C) JVMState(method(), caller_jvms);
+  JVMState* jvms = new (C) JVMState(method(), nullptr, caller_jvms);
   jvms->set_offsets(0);
   jvms->set_bci(_entry_bci);
   nn->set_jvms(jvms);
@@ -1147,7 +1147,19 @@ SafePointNode* Parse::create_entry_map() {
   assert(method() != nullptr, "parser must have a method");
 
   // Create an initial safepoint to hold JVM state during parsing
-  JVMState* jvms = new (C) JVMState(method(), _caller->has_method() ? _caller : nullptr);
+  ciInstance* instance = nullptr;
+  if (method()->is_compiled_lambda_form() && _caller->has_method()) {
+    Node* recv = _caller->map()->argument(_caller, 0);
+    assert(recv != nullptr && !recv->is_top(), "");
+    if (recv->Opcode() == Op_ConP) {
+      const TypeOopPtr* recv_toop = recv->bottom_type()->isa_oopptr();
+      if (recv_toop != nullptr) {
+        instance = recv_toop->const_oop()->as_instance();
+      }
+    }
+    assert(instance != nullptr || depth() == 1 || !_caller->method()->is_compiled_lambda_form(), "");
+  }
+  JVMState* jvms = new (C) JVMState(method(), instance, _caller->has_method() ? _caller : nullptr);
   set_map(new SafePointNode(len, jvms));
   jvms->set_map(map());
   record_for_igvn(map());
