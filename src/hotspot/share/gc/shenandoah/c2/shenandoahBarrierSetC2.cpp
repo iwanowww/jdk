@@ -820,7 +820,7 @@ bool ShenandoahBarrierSetC2::expand_barriers(Compile* C, PhaseIterGVN& igvn) con
 }
 
 bool ShenandoahBarrierSetC2::optimize_loops(PhaseIdealLoop* phase, LoopOptsMode mode, VectorSet& visited, Node_Stack& nstack, Node_List& worklist) const {
-  if (mode == LoopOptsShenandoahExpand) {
+  if (mode == PostLoopOptsShenandoahExpand) {
     assert(UseShenandoahGC, "only for shenandoah");
     ShenandoahBarrierC2Support::pin_and_expand(phase);
     return true;

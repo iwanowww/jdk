@@ -1878,7 +1878,8 @@ void Compile::process_for_post_loop_opts_igvn(PhaseIterGVN& igvn) {
   if (has_loops() || _loop_opts_cnt > 0) {
     print_method(PHASE_AFTER_LOOP_OPTS, 2);
   }
-  C->set_post_loop_opts_phase(); // no more loop opts allowed
+
+  assert(C->post_loop_opts_phase(), ""); // no more loop opts allowed
 
   assert(!C->major_progress(), "not cleared");
 
@@ -2264,6 +2265,10 @@ bool Compile::optimize_loops(PhaseIterGVN& igvn, LoopOptsMode mode) {
       if (major_progress()) print_method(PHASE_PHASEIDEALLOOP_ITERATIONS, 2);
     }
   }
+  if (mode == LoopOptsDefaultFinal) {
+    // Final round of loop optimizations is over. No more optimization passes are allowed.
+    C->set_post_loop_opts_phase();
+  }
   return true;
 }
 
@@ -2511,12 +2516,14 @@ void Compile::Optimize() {
     return;
   }
 
-  // No more loop opts. It is safe to get rid of all reachability fence nodes
+  assert(C->post_loop_opts_phase(), ""); // no more loop optimizations allowed
+
+  // Once loop optimizations are over, it is safe to get rid of all reachability fence nodes now
   // and migrate reachability edges to safepoints.
   if (OptimizeReachabilityFences && _reachability_fences.length() > 0) {
     TracePhase tp1(_t_idealLoop);
     TracePhase tp2(_t_reachability);
-    PhaseIdealLoop::optimize(igvn, LoopOptsEliminateRFs);
+    PhaseIdealLoop::optimize(igvn, PostLoopOptsEliminateReachabilityFences);
     print_method(PHASE_ELIMINATE_REACHABILITY_FENCES, 2);
     if (failing())  return;
     assert(_reachability_fences.length() == 0 || PreserveReachabilityFencesOnConstants, "no RF nodes allowed");

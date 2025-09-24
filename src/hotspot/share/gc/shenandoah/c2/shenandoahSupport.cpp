@@ -46,15 +46,9 @@
 bool ShenandoahBarrierC2Support::expand(Compile* C, PhaseIterGVN& igvn) {
   ShenandoahBarrierSetC2State* state = ShenandoahBarrierSetC2::bsc2()->state();
   if (state->load_reference_barriers_count() > 0) {
-    assert(C->post_loop_opts_phase(), "no loop opts allowed");
-    C->reset_post_loop_opts_phase(); // ... but we know what we are doing
     C->clear_major_progress();
-    PhaseIdealLoop::optimize(igvn, LoopOptsShenandoahExpand);
+    PhaseIdealLoop::optimize(igvn, PostLoopOptsShenandoahExpand);
     if (C->failing()) return false;
-    C->process_for_post_loop_opts_igvn(igvn);
-    if (C->failing()) return false;
-
-    C->set_post_loop_opts_phase(); // now for real!
   }
   return true;
 }

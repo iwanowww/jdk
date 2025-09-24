@@ -107,10 +107,10 @@ enum LoopOptsMode {
   LoopOptsDefaultFinal,
   LoopOptsNone,
   LoopOptsMaxUnroll,
-  LoopOptsEliminateRFs,
-  LoopOptsShenandoahExpand,
   LoopOptsSkipSplitIf,
-  LoopOptsVerify
+  LoopOptsVerify,
+  PostLoopOptsEliminateReachabilityFences,
+  PostLoopOptsShenandoahExpand
 };
 
 // The type of all node counts and indexes.
@@ -771,7 +771,6 @@ public:
 
   bool       post_loop_opts_phase() { return _post_loop_opts_phase;  }
   void   set_post_loop_opts_phase() { _post_loop_opts_phase = true;  }
-  void reset_post_loop_opts_phase() { _post_loop_opts_phase = false; }
 
 #ifdef ASSERT
   bool       phase_verify_ideal_loop() const { return _phase_verify_ideal_loop; }
