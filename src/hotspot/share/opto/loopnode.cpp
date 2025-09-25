@@ -5130,21 +5130,6 @@ void PhaseIdealLoop::build_and_optimize() {
     return;
   }
 
-  if (do_eliminate_reachability_fences) {
-    if (optimize_reachability_fences()) {
-      recompute_dom_depth();
-      DEBUG_ONLY( if (VerifyLoopOptimizations) { verify(); } );
-    }
-    if (eliminate_reachability_fences()) {
-      recompute_dom_depth();
-      DEBUG_ONLY( if (VerifyLoopOptimizations) { verify(); } );
-    }
-    return;
-  }
-
-  assert(!C->post_loop_opts_phase(), "required");
-  assert(!do_eliminate_reachability_fences, "sanity");
-
   // Some parser-inserted loop predicates could never be used by loop
   // predication or they were moved away from loop during some optimizations.
   // For example, peeling. Eliminate them before next loop optimizations.
@@ -5167,6 +5152,17 @@ void PhaseIdealLoop::build_and_optimize() {
     recompute_dom_depth();
     DEBUG_ONLY( if (VerifyLoopOptimizations) { verify(); } );
   }
+
+  if (do_eliminate_reachability_fences) {
+    assert(C->post_loop_opts_phase(), "required");
+    if (eliminate_reachability_fences()) {
+      recompute_dom_depth();
+      DEBUG_ONLY( if (VerifyLoopOptimizations) { verify(); } );
+    }
+    return;
+  }
+
+  assert(!C->post_loop_opts_phase(), "required");
 
   if (skip_loop_opts) {
     C->restore_major_progress(old_progress);
