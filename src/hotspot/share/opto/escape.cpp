@@ -1226,11 +1226,12 @@ bool ConnectionGraph::reduce_phi_on_safepoints_helper(Node* ophi, Node* cast, No
   GrowableArray<Node*> non_debug_edges_worklist;
   for (uint spi = 0; spi < safepoints.size(); spi++) {
     SafePointNode* sfpt = safepoints.at(spi)->as_SafePoint();
-    JVMState *jvms      = sfpt->jvms();
-    uint merge_idx      = (sfpt->req() - jvms->scloff());
-    int debug_start     = jvms->debug_start();
 
     sfpt->remove_non_debug_edges(non_debug_edges_worklist);
+
+    JVMState* jvms  = sfpt->jvms();
+    uint merge_idx  = (sfpt->req() - jvms->scloff());
+    int debug_start = jvms->debug_start();
 
     SafePointScalarMergeNode* smerge = new SafePointScalarMergeNode(merge_t, merge_idx);
     smerge->init_req(0, _compile->root());
