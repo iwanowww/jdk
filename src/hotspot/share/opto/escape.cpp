@@ -1243,7 +1243,9 @@ bool ConnectionGraph::reduce_phi_on_safepoints_helper(Node* ophi, Node* cast, No
     //  (1) A copy of the original pointer to NSR objects.
     //  (2) A selector, used to decide if we need to rematerialize an object
     //      or use the pointer to a NSR object.
-    // See more details of these fields in the declaration of SafePointScalarMergeNode
+    // See more details of these fields in the declaration of SafePointScalarMergeNode.
+    // It is safe to include them into debug info straight away since create_scalarized_object_description()
+    // will include all newly added inputs into debug info anyway.
     sfpt->add_req(nsr_merge_pointer);
     sfpt->add_req(selector);
     sfpt->jvms()->set_endoff(sfpt->req());
