@@ -32,7 +32,7 @@
 #include "opto/runtime.hpp"
 
 /*
- * Reference::reachabilityFence support.
+ * java.lang.ref.Reference::reachabilityFence support.
  *
  * Reachability Fence (RF) ensures that the given object (referent) remains strongly reachable
  * regardless of any optimizing transformations the virtual machine may perform that might otherwise
