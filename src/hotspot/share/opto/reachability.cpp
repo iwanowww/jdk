@@ -101,12 +101,6 @@ static bool is_redundant_rf_helper(ReachabilityFenceNode* rf, PhaseIdealLoop* ph
   if (!PreserveReachabilityFencesOnConstants && t->singleton()) {
     return true; // no-op fence: constants are strongly reachable
   }
-  if (referent->is_Proj() && referent->in(0)->is_CallJava()) {
-    ciMethod* m = referent->in(0)->as_CallJava()->method();
-    if (m != nullptr && m->is_boxing_method()) {
-      return true; // ignore fences on boxed primitives produced by valueOf methods
-    }
-  }
   for (Node* cur = referent;
        cur != nullptr;
        cur = (cur->is_ConstraintCast() ? cur->in(1) : nullptr)) {
