@@ -119,12 +119,12 @@ static bool is_redundant_rf_helper(ReachabilityFenceNode* rf, PhaseIdealLoop* ph
         if (phase != nullptr) {
           Node* use_ctrl = (rf_only ? use : phase->ctrl_or_self(use));
           if (phase->is_dominator(rf, use_ctrl)) {
-            return true; // redundant fence: dominates another reachabilty fence with the same referent
+            return true; // redundant fence: dominates another reachability fence with the same referent
           }
         } else {
           assert(use->is_ReachabilityFence(), "only RFs during GVN");
           if (gvn.is_dominator(rf, use)) {
-            return true; // redundant fence: dominates another reachabilty fence with the same referent
+            return true; // redundant fence: dominates another reachability fence with the same referent
           }
         }
       }
