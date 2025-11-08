@@ -211,7 +211,7 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
 
   assert(OptimizeReachabilityFences, "required");
 
-  ResourceMark rm;
+  // ResourceMark rm; // NB! not safe because insert_rf may trigger _idom reallocation
   Unique_Node_List redundant_rfs;
   GrowableArray<Pair<Node*,Node*>> worklist;
   for (int i = 0; i < C->reachability_fences_count(); i++) {
