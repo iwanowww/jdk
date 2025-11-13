@@ -897,7 +897,7 @@ public:
   Node*        immutable_memory();
 
   uint         ignored_for_inlining_node_count() const { return _ignored_for_inlining_node_count; }
-  void         inc_ignored_for_inlining_node_count() { _ignored_for_inlining_node_count++; }
+  void         inc_ignored_for_inlining_node_count(uint cnt) { _ignored_for_inlining_node_count += cnt; }
 
   Node*        recent_alloc_ctl() const    { return _recent_alloc_ctl; }
   Node*        recent_alloc_obj() const    { return _recent_alloc_obj; }
