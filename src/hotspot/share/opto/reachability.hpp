@@ -51,6 +51,7 @@ public:
     init_req(TypeFunc::Control, ctrl);
     add_req(referent);
     C->add_reachability_fence(this);
+    C->inc_ignored_for_inlining_node_count(); // ignore reachability fences in inlining heuristics
   }
   virtual int  Opcode() const;
   virtual bool is_CFG() const { return true; }

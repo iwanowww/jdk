@@ -404,6 +404,7 @@ class Compile : public Phase {
   uint                  _dead_node_count;       // Number of dead nodes; VectorSet::Size() is O(N).
                                                 // So use this to keep count and make the call O(1).
   VectorSet             _dead_node_list;        // Set of dead nodes
+  uint                  _ignored_for_inlining_node_count; // number of ideal nodes ignored by inlining heuristics
   DEBUG_ONLY(Unique_Node_List* _modified_nodes;)   // List of nodes which inputs were modified
   DEBUG_ONLY(bool       _phase_optimize_finished;) // Used for live node verification while creating new nodes
 
@@ -895,6 +896,9 @@ public:
   void         verify_start(StartNode* s) const NOT_DEBUG_RETURN;
   Node*        immutable_memory();
 
+  uint         ignored_for_inlining_node_count() const { return _ignored_for_inlining_node_count; }
+  void         inc_ignored_for_inlining_node_count() { _ignored_for_inlining_node_count++; }
+
   Node*        recent_alloc_ctl() const    { return _recent_alloc_ctl; }
   Node*        recent_alloc_obj() const    { return _recent_alloc_obj; }
   void         set_recent_alloc(Node* ctl, Node* obj) {
@@ -1099,7 +1103,7 @@ public:
 
   bool over_inlining_cutoff() const {
     if (!inlining_incrementally()) {
-      return unique() > (uint)NodeCountInliningCutoff;
+      return (unique() - _ignored_for_inlining_node_count) > (uint)NodeCountInliningCutoff;
     } else {
       // Give some room for incremental inlining algorithm to "breathe"
       // and avoid thrashing when live node count is close to the limit.
