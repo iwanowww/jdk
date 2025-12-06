@@ -38,8 +38,7 @@ public class CPUFeatures {
     private static final Set<String> features = getCPUFeatures();
 
     private static Set<String> getCPUFeatures() {
-        String featuresString = VectorSupport.getCPUFeatures();
-        debug(featuresString);
+        String featuresString = VM.getCPUFeatures();
 
         if (featuresString.equals("")) return Set.of();
 
