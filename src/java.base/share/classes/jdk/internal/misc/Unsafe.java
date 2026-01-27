@@ -711,26 +711,24 @@ public final class Unsafe {
     /** @see #getInt(Object, long) */
     @ForceInline
     public boolean getBoolean(Object o, long offset) {
-        return byte2bool(boolTrunc((byte)getPrimitiveBitsMO(MO_PLAIN, BT_BOOLEAN, o, offset)));
+        return byte2bool((byte) getPrimitiveBitsMO(MO_PLAIN, BT_BOOLEAN, o, offset));
     }
 
     /** Special-access version. */
     @ForceInline
     public boolean getBooleanMO(byte memoryOrder, Object o, long offset) {
-        return byte2bool(boolTrunc((byte)getPrimitiveBitsMO(memoryOrder, BT_BOOLEAN, o, offset)));
+        return byte2bool((byte) getPrimitiveBitsMO(memoryOrder, BT_BOOLEAN, o, offset));
     }
 
     /** @see #putInt(Object, long, int) */
     @ForceInline
     public void    putBoolean(Object o, long offset, boolean x) {
-        putPrimitiveBitsMO(MO_PLAIN, BT_BOOLEAN, o, offset, bool2byte(x));
+        putBooleanMO(MO_PLAIN, o, offset, x);
     }
 
     /** Special-access version. */
-    @ForceInline
-    public void    putBooleanMO(byte memoryOrder, Object o, long offset, boolean x) {
-        putPrimitiveBitsMO(memoryOrder, BT_BOOLEAN, o, offset, bool2byte(x));
-    }
+    @IntrinsicCandidate
+    public native void putBooleanMO(byte memoryOrder, Object o, long offset, boolean x);
 
     /** @see #getInt(Object, long) */
     @ForceInline
@@ -3925,7 +3923,7 @@ public final class Unsafe {
     /** Release version of {@link #putBooleanVolatile(Object, long, boolean)} */
     @ForceInline
     public final void putBooleanRelease(Object o, long offset, boolean x) {
-        putPrimitiveBitsMO(MO_RELEASE, BT_BOOLEAN, o, offset, bool2byte(x));
+        putBooleanMO(MO_RELEASE, o, offset, x);
     }
 
     /** Release version of {@link #putByteVolatile(Object, long, byte)} */
@@ -4035,7 +4033,7 @@ public final class Unsafe {
     /** Opaque version of {@link #putBooleanVolatile(Object, long, boolean)} */
     @ForceInline
     public final void putBooleanOpaque(Object o, long offset, boolean x) {
-        putPrimitiveBitsMO(MO_OPAQUE, BT_BOOLEAN, o, offset, bool2byte(x));
+        putBooleanMO(MO_OPAQUE, o, offset, x);
     }
 
     /** Opaque version of {@link #putByteVolatile(Object, long, byte)} */

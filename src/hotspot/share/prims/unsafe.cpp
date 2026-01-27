@@ -459,6 +459,21 @@ UNSAFE_ENTRY_SCOPED(void, Unsafe_PutPrimitiveBitsMO(JNIEnv *env, jobject unsafe,
   }
 } UNSAFE_END
 
+UNSAFE_ENTRY(void, Unsafe_PutBooleanMO(JNIEnv *env, jobject unsafe,
+                                       jbyte memory_order,
+                                       jobject obj, jlong offset, jboolean x)) {
+  assert(vmIntrinsics::is_valid_memory_order(memory_order & ~vmIntrinsics::UNSAFE_MO_UNALIGNED,
+                                             vmIntrinsics::UNSAFE_MO_ACQUIRE),
+         "bad MO bits from Java: 0x%02x", memory_order & 0xFF);
+  auto ma = MemoryAccess(thread, obj, offset, T_BOOLEAN);
+  if ((memory_order & vmIntrinsics::UNSAFE_MO_PLAIN) != 0) {
+    ma.put(x & 1);
+  } else {
+    // MO_VOLATILE is a conservative approximation for acquire & release
+    ma.put_volatile(x & 1);
+  }
+} UNSAFE_END
+
 UNSAFE_LEAF(void, Unsafe_FullFence(JNIEnv *env, jobject unsafe)) {
   OrderAccess::fence();
 } UNSAFE_END
@@ -1016,6 +1031,7 @@ static JNINativeMethod jdk_internal_misc_Unsafe_methods[] = {
     {CC "getReferenceMO",           CC  "(B" OBJ "J)" OBJ "",  FN_PTR(Unsafe_GetReferenceMO)},
     {CC "getPrimitiveBitsMONative", CC "(BB" OBJ "J)" "J",     FN_PTR(Unsafe_GetPrimitiveBitsMO)},
     {CC "putReferenceMO",           CC  "(B" OBJ "J" OBJ ")V", FN_PTR(Unsafe_PutReferenceMO)},
+    {CC "putBooleanMO",             CC  "(B" OBJ "J" "Z" ")V", FN_PTR(Unsafe_PutBooleanMO)},
     {CC "putPrimitiveBitsMONative", CC "(BB" OBJ "J" "J" ")V", FN_PTR(Unsafe_PutPrimitiveBitsMO)},
 
     {CC "compareAndSetReferenceMO",                CC  "(B" OBJ "J" OBJ "" OBJ ")" "Z", FN_PTR(Unsafe_CompareAndSetReferenceMO)},

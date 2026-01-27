@@ -3697,7 +3697,7 @@ bool GraphBuilder::try_inline_polymorphic_intrinsic(ciMethod* callee, bool ignor
     case vmIntrinsics::PP_MO:
       intcon = state()->stack_at_inc(prefix_end)->type()->as_IntConstant();
       if (intcon != nullptr)  mo = intcon->value() & 0xFF;
-      bt = T_OBJECT;  // getReferenceMO etc.
+      bt = (id == vmIntrinsics::_putBooleanMO ? T_BOOLEAN : T_OBJECT);  // getReferenceMO etc.
       break;
     case vmIntrinsics::PP_MO_BT:
       intcon = state()->stack_at_inc(prefix_end)->type()->as_IntConstant();
@@ -3733,6 +3733,7 @@ bool GraphBuilder::try_inline_polymorphic_intrinsic(ciMethod* callee, bool ignor
     case vmIntrinsics::_getAndSetReferenceMO:
     case vmIntrinsics::_getReferenceMO:
     case vmIntrinsics::_putReferenceMO:
+    case vmIntrinsics::_putBooleanMO:
       // every atomic, even a "plain" one, must be fully aligned
       // also references are always aligned
       mo = vmIntrinsics::UNSAFE_MO_VOLATILE;
@@ -3767,6 +3768,12 @@ bool GraphBuilder::try_inline_polymorphic_intrinsic(ciMethod* callee, bool ignor
     assert(t == T_OBJECT, "");    // and fall through
     assert(op == vmIntrinsics::OP_NONE, "");
   case vmIntrinsics::_putPrimitiveBitsMO:
+    append_unsafe_put(callee, (vmIntrinsics::MemoryOrder)mo, t, prefix_size);
+    return true;
+
+  case vmIntrinsics::_putBooleanMO:
+    assert(t == T_BOOLEAN, "");
+    assert(op == vmIntrinsics::OP_NONE, "");
     append_unsafe_put(callee, (vmIntrinsics::MemoryOrder)mo, t, prefix_size);
     return true;
 
@@ -4583,9 +4590,14 @@ void GraphBuilder::append_unsafe_CAS(ciMethod* callee,
 // This makes it easier for common code to handle both
 // references and primitives.
 Value GraphBuilder::adjust_unsafe_container(Value x, BasicType from, BasicType to) {
-  if (from == T_OBJECT || to == T_OBJECT) {
+  if (from == T_OBJECT || to == T_OBJECT ) {
     // T_OBJECT does not mix with anything else; just return it
     assert(x->type()->is_object(), "");
+    return x;
+  }
+  if (to == T_BOOLEAN) {
+    // T_BOOLEAN does not mix with anything else; just return it
+    assert(x->type()->is_int(), "");
     return x;
   }
   assert(x->type()->tag() == as_ValueType(from)->tag(), "");

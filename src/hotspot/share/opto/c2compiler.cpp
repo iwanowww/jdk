@@ -578,6 +578,7 @@ bool C2Compiler::is_intrinsic_supported_nv(vmIntrinsics::ID id) {
   case vmIntrinsics::_putCharStringU:
   case vmIntrinsics::_getReferenceMO:
   case vmIntrinsics::_putReferenceMO:
+  case vmIntrinsics::_putBooleanMO:
   case vmIntrinsics::_getPrimitiveBitsMO:
   case vmIntrinsics::_putPrimitiveBitsMO:
   case vmIntrinsics::_loadFence:

@@ -77,6 +77,7 @@ vmIntrinsics::polymorphic_prefix(vmIntrinsics::ID id) {
     switch (id) {
     case _getReferenceMO:
     case _putReferenceMO:
+    case _putBooleanMO:
     case _compareAndSetReferenceMO:
     case _compareAndExchangeReferenceMO:
     case _getAndSetReferenceMO:
@@ -367,6 +368,7 @@ bool vmIntrinsics::disabled_by_jvm_flags(vmIntrinsics::ID id) {
   case vmIntrinsics::_putPrimitiveBitsMO:
   case vmIntrinsics::_getReferenceMO:
   case vmIntrinsics::_putReferenceMO:
+  case vmIntrinsics::_putBooleanMO:
   case vmIntrinsics::_compareAndSetPrimitiveBitsMO:
   case vmIntrinsics::_compareAndExchangePrimitiveBitsMO:
   case vmIntrinsics::_compareAndSetReferenceMO:

@@ -717,6 +717,9 @@ class methodHandle;
   do_intrinsic(_putPrimitiveBitsMO, jdk_internal_misc_Unsafe, putPrimitiveBitsMO_name, putPrimitiveBitsMO_signature, F_PI) \
    do_name(     putPrimitiveBitsMO_name,                                "putPrimitiveBitsMO")                           \
    do_signature(putPrimitiveBitsMO_signature,                           "(BBLjava/lang/Object;JJ)V")                    \
+  do_intrinsic(_putBooleanMO,     jdk_internal_misc_Unsafe, putBooleanMO_name, putBooleanMO_signature, F_PI)            \
+   do_name(     putBooleanMO_name,                                      "putBooleanMO")                                 \
+   do_signature(putBooleanMO_signature,                                 "(BLjava/lang/Object;JZ)V")                     \
   do_intrinsic(_getReferenceMO,     jdk_internal_misc_Unsafe, getReferenceMO_name, getReferenceMO_signature, F_PI)      \
    do_name(     getReferenceMO_name,                                    "getReferenceMO")                               \
    do_signature(getReferenceMO_signature,                               "(BLjava/lang/Object;J)Ljava/lang/Object;")     \
