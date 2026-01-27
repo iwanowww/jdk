@@ -4453,7 +4453,7 @@ public final class Unsafe {
     /** Release version of {@link #putBooleanVolatile(Object, long, boolean)} */
     @ForceInline
     public final void putBooleanRelease(Object o, long offset, boolean x) {
-        putBooleanMO(MO_RELEASE, o, offset, x);
+        putPrimitiveBitsMO(MO_RELEASE, BT_BOOLEAN, o, offset, bool2byte(x));
     }
 
     /** Release version of {@link #putByteVolatile(Object, long, byte)} */
@@ -4575,7 +4575,7 @@ public final class Unsafe {
     /** Opaque version of {@link #putBooleanVolatile(Object, long, boolean)} */
     @ForceInline
     public final void putBooleanOpaque(Object o, long offset, boolean x) {
-        putBooleanMO(MO_OPAQUE, o, offset, x);
+        putPrimitiveBitsMO(MO_OPAQUE, BT_BOOLEAN, o, offset, bool2byte(x));
     }
 
     /** Opaque version of {@link #putByteVolatile(Object, long, byte)} */
@@ -5087,7 +5087,6 @@ public final class Unsafe {
     public final long getAndBitwiseXorLongAcquire(Object o, long offset, long mask) {
         return getAndOperatePrimitiveBitsMO(MO_ACQUIRE, BT_LONG, OP_BITXOR, o, offset, mask);
     }
-
 
 
     /**
