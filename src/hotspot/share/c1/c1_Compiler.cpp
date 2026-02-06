@@ -168,6 +168,7 @@ bool Compiler::is_intrinsic_supported_nv(vmIntrinsics::ID id) {
   case vmIntrinsics::_dpow:
   case vmIntrinsics::_fmaD:
   case vmIntrinsics::_fmaF:
+  case vmIntrinsics::_putBooleanMO:
   case vmIntrinsics::_getPrimitiveBitsMO:
   case vmIntrinsics::_putPrimitiveBitsMO:
   case vmIntrinsics::_getReferenceMO:

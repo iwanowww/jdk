@@ -266,7 +266,7 @@ bool LibraryCallKit::try_to_inline(int predicate) {
     switch (pfx) {
     case vmIntrinsics::PP_MO:
       moc = argument(next_arg++)->find_int_con(-1);
-      bt = T_OBJECT;  // getReferenceMO etc.
+      bt = (id == vmIntrinsics::_putBooleanMO ? T_BOOLEAN : T_OBJECT);  // getReferenceMO etc.
       break;
     case vmIntrinsics::PP_MO_BT:
       moc = argument(next_arg++)->find_int_con(-1);
@@ -291,6 +291,7 @@ bool LibraryCallKit::try_to_inline(int predicate) {
       switch (id) {
       case vmIntrinsics::_getReferenceMO:
       case vmIntrinsics::_putReferenceMO:
+      case vmIntrinsics::_putBooleanMO:
       case vmIntrinsics::_compareAndSetPrimitiveBitsMO:
       case vmIntrinsics::_compareAndExchangePrimitiveBitsMO:
       case vmIntrinsics::_compareAndSetReferenceMO:
@@ -408,6 +409,7 @@ bool LibraryCallKit::try_to_inline(int predicate) {
   case vmIntrinsics::_getReferenceMO:           // fall through:
   case vmIntrinsics::_getPrimitiveBitsMO:       // fall through:
   case vmIntrinsics::_putReferenceMO:           // fall through:
+  case vmIntrinsics::_putBooleanMO:             // fall through:
   case vmIntrinsics::_putPrimitiveBitsMO:       return inline_unsafe_access(id, mo, bt, prefix_size);
 
   case vmIntrinsics::_compareAndSetReferenceMO:         // fall through:
@@ -2317,6 +2319,7 @@ bool LibraryCallKit::inline_unsafe_access(vmIntrinsics::ID id,
                                           BasicType type,
                                           int prefix_size) {
   const bool is_store = (id == vmIntrinsics::_putReferenceMO ||
+                         id == vmIntrinsics::_putBooleanMO ||
                          id == vmIntrinsics::_putPrimitiveBitsMO);
   if (callee()->is_static())  return false;  // caller must have the capability!
   const bool unaligned = (mo & vmIntrinsics::UNSAFE_MO_UNALIGNED) != 0;
@@ -2326,8 +2329,12 @@ bool LibraryCallKit::inline_unsafe_access(vmIntrinsics::ID id,
   guarantee( is_store || mo != vmIntrinsics::UNSAFE_MO_RELEASE, "Release accesses can be produced only for stores");
   assert(type != T_OBJECT || !unaligned, "unaligned access not supported with object type");
 
-  BasicType utype = type == T_OBJECT ? T_OBJECT : T_LONG;
-  const bool type_is_narrow_int = type != T_OBJECT && !is_double_word_type(type);
+  BasicType utype = type == T_OBJECT ? T_OBJECT :
+                    (type == T_BOOLEAN && is_store) ? T_BOOLEAN :
+                    T_LONG;
+  const bool needs_conversion = (type != T_OBJECT) &&
+                                !is_double_word_type(type) &&
+                                !(type == T_BOOLEAN && is_store);
 
   if (is_reference_type(type)) {
     decorators |= ON_UNKNOWN_OOP_REF;
@@ -2357,7 +2364,7 @@ bool LibraryCallKit::inline_unsafe_access(vmIntrinsics::ID id,
       assert(sig->type_at(prefix_size+0)->basic_type() == T_OBJECT, "getter base is object");
       assert(sig->type_at(prefix_size+1)->basic_type() == T_LONG, "getter offset is correct");
     } else {
-      // void putReference(Object base, int/long offset, Object x)
+      // void putBooleanMO(Object base, int/long offset, Object x)
       // void putPrimitiveBitsMO(byte mo, byte bt, Object base, long offset, long x)
       assert(sig->return_type()->basic_type() == T_VOID, "putter must not return a value");
       assert(sig->count() == prefix_size+3, "oop putter has 3 arguments");
@@ -2466,8 +2473,8 @@ bool LibraryCallKit::inline_unsafe_access(vmIntrinsics::ID id,
 
   Node* val = nullptr;
   if (is_store) {
-    val = argument(prefix_size+4);   // passed as a 64-bit long
-    if (type_is_narrow_int) {
+    val = argument(prefix_size+4);   // passed as a 64-bit long (except reference and boolean)
+    if (needs_conversion) {
       val = ConvL2I(val);
     }
     switch (type) {
@@ -2604,7 +2611,7 @@ bool LibraryCallKit::inline_unsafe_access(vmIntrinsics::ID id,
     } else if (type == T_DOUBLE) {
       p = _gvn.transform(new MoveD2LNode(p));
     }
-    if (type_is_narrow_int) {
+    if (needs_conversion) {
       p = ConvI2L(p);  // convert to utype = T_LONG
     }
     // The load node has the control of the preceding MemBarCPUOrder.  All

@@ -774,12 +774,8 @@ public final class Unsafe {
     }
 
     /** Special-access version. */
-//    @IntrinsicCandidate
-//    public native void putBooleanMO(byte memoryOrder, Object o, long offset, boolean x);
-    @ForceInline
-    public void    putBooleanMO(byte memoryOrder, Object o, long offset, boolean x) {
-        putPrimitiveBitsMO(memoryOrder, BT_BOOLEAN, o, offset, bool2byte(x));
-    }
+    @IntrinsicCandidate
+    public native void putBooleanMO(byte memoryOrder, Object o, long offset, boolean x);
 
     /** @see #getInt(Object, long) */
     @ForceInline
@@ -4453,7 +4449,7 @@ public final class Unsafe {
     /** Release version of {@link #putBooleanVolatile(Object, long, boolean)} */
     @ForceInline
     public final void putBooleanRelease(Object o, long offset, boolean x) {
-        putPrimitiveBitsMO(MO_RELEASE, BT_BOOLEAN, o, offset, bool2byte(x));
+        putBooleanMO(MO_RELEASE, o, offset, x);
     }
 
     /** Release version of {@link #putByteVolatile(Object, long, byte)} */
@@ -4575,7 +4571,7 @@ public final class Unsafe {
     /** Opaque version of {@link #putBooleanVolatile(Object, long, boolean)} */
     @ForceInline
     public final void putBooleanOpaque(Object o, long offset, boolean x) {
-        putPrimitiveBitsMO(MO_OPAQUE, BT_BOOLEAN, o, offset, bool2byte(x));
+        putBooleanMO(MO_OPAQUE, o, offset, x);
     }
 
     /** Opaque version of {@link #putByteVolatile(Object, long, byte)} */
