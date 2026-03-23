@@ -166,7 +166,7 @@
   volatile_nonstatic_field(oopDesc,            _metadata._klass,                              Klass*)                                \
   volatile_nonstatic_field(oopDesc,            _metadata._compressed_klass,                   narrowKlass)                           \
   static_field(BarrierSet,                     _barrier_set,                                  BarrierSet*)                           \
-  nonstatic_field(ArrayKlass,                  _dimension,                                    int)                                   \
+  nonstatic_field(ArrayKlass,                  _dimension,                                    const int)                             \
   volatile_nonstatic_field(ArrayKlass,         _higher_dimension,                             ObjArrayKlass*)                        \
   volatile_nonstatic_field(ArrayKlass,         _lower_dimension,                              ArrayKlass*)                           \
   nonstatic_field(BSMAttributeEntries,         _offsets,                                      Array<u4>*)                            \
@@ -335,7 +335,6 @@
   nonstatic_field(ThreadLocalAllocBuffer,      _pf_top,                                       HeapWord*)                             \
   nonstatic_field(ThreadLocalAllocBuffer,      _desired_size,                                 size_t)                                \
   nonstatic_field(ThreadLocalAllocBuffer,      _refill_waste_limit,                           size_t)                                \
-     static_field(ThreadLocalAllocBuffer,      _reserve_for_allocation_prefetch,              int)                                   \
      static_field(ThreadLocalAllocBuffer,      _target_refills,                               unsigned)                              \
   nonstatic_field(ThreadLocalAllocBuffer,      _number_of_refills,                            unsigned)                              \
   nonstatic_field(ThreadLocalAllocBuffer,      _refill_waste,                                 unsigned)                              \
@@ -407,6 +406,8 @@
   nonstatic_field(ClassLoaderData,             _next,                                         ClassLoaderData*)                      \
   volatile_nonstatic_field(ClassLoaderData,    _klasses,                                      Klass*)                                \
   nonstatic_field(ClassLoaderData,             _has_class_mirror_holder,                      bool)                                  \
+                                                                                                                                     \
+  static_field(ClassLoaderData,                _the_null_class_loader_data,                   ClassLoaderData*)                      \
                                                                                                                                      \
   volatile_static_field(ClassLoaderDataGraph, _head,                                          ClassLoaderData*)                      \
                                                                                                                                      \
@@ -576,7 +577,7 @@
   nonstatic_field(ThreadShadow,                _exception_file,                               const char*)                           \
   nonstatic_field(ThreadShadow,                _exception_line,                               int)                                   \
   nonstatic_field(Thread,                      _tlab,                                         ThreadLocalAllocBuffer)                \
-  nonstatic_field(Thread,                      _allocated_bytes,                              jlong)                                 \
+  nonstatic_field(Thread,                      _allocated_bytes,                              uint64_t)                              \
   nonstatic_field(JavaThread,                  _lock_stack,                                   LockStack)                             \
   nonstatic_field(LockStack,                   _top,                                          uint32_t)                              \
   nonstatic_field(LockStack,                   _base[0],                                      oop)                                   \
@@ -1287,6 +1288,12 @@
                                                                           \
   VM_INT_CONSTANTS_GC(declare_constant,                                   \
                       declare_constant_with_value)                        \
+                                                                          \
+  /*****************/                                                     \
+  /* CDS constants */                                                     \
+  /*****************/                                                     \
+                                                                          \
+  CDS_ONLY(declare_constant(AOTCompressedPointers::MetadataOffsetShift))  \
                                                                           \
   /******************/                                                    \
   /* Useful globals */                                                    \
