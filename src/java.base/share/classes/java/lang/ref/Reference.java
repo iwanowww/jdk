@@ -647,7 +647,6 @@ public abstract sealed class Reference<@jdk.internal.RequiresIdentity T>
     @IntrinsicCandidate
     public static void reachabilityFence(Object ref) {
         // Does nothing. HotSpot JVM retains the ref and does not GC it before a call to this method.
-        // NB! Some of the optimizations JIT-compilers perform may break that invariant,
-        // so the method is intrinsified when the invariant doesn't hold.
+        // Using an intrinsic allows JIT-compilers to further optimize it while retaining the correct semantics.
     }
 }
