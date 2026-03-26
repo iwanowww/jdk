@@ -4840,8 +4840,9 @@ void IdealLoopTree::register_reachability_fence(ReachabilityFenceNode* rf) {
   if (_reachability_fences == nullptr) {
     _reachability_fences = new Node_List();
   }
-  assert(!_reachability_fences->contains(rf), "already registered");
-  _reachability_fences->push(rf);
+  if (!_reachability_fences->contains(rf)) {
+    _reachability_fences->push(rf);
+  }
 }
 
 #ifndef PRODUCT

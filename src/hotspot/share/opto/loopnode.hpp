@@ -722,8 +722,8 @@ public:
   // Check for Node being a loop-breaking test
   Node *is_loop_exit(Node *iff) const;
 
-  // Return unique loop-exit projection or null if there are multiple exits exist.
-  IfFalseNode* unique_loop_exit_or_null();
+  // Return unique loop-exit projection or null if the loop has multiple exits.
+  IfFalseNode* unique_loop_exit_proj_or_null();
 
   // Remove simplistic dead code from loop body
   void DCE_loop_body();

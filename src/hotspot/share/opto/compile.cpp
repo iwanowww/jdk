@@ -3984,7 +3984,7 @@ void Compile::final_graph_reshaping_walk(Node_Stack& nstack, Node* root, Final_R
     }
   }
 
-  expand_reachability_fences(sfpt);
+  expand_reachability_edges(sfpt);
 
   // Skip next transformation if compressed oops are not used.
   if ((UseCompressedOops && !Matcher::gen_narrow_oop_implicit_null_checks()) ||

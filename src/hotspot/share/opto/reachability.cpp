@@ -216,32 +216,56 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
 
   // ResourceMark rm; // NB! not safe because insert_rf may trigger _idom reallocation
   Unique_Node_List redundant_rfs;
-  GrowableArray<Pair<Node*,Node*>> worklist;
+  typedef Pair<Node*,Node*> LoopExit;
+  GrowableArray<LoopExit> worklist;
+
   for (int i = 0; i < C->reachability_fences_count(); i++) {
     ReachabilityFenceNode* rf = C->reachability_fence(i);
     assert(!rf->is_redundant(igvn()), "required");
     // Move RFs out of counted loops when possible.
     IdealLoopTree* lpt = get_loop(rf);
     Node* referent = rf->referent();
-    IfFalseNode* loop_exit = lpt->unique_loop_exit_or_null();
-    if (lpt->is_invariant(referent) && loop_exit != nullptr) {
-      // Switch to the outermost loop.
-      for (IdealLoopTree* outer_loop = lpt->_parent;
-           outer_loop->is_invariant(referent) && outer_loop->unique_loop_exit_or_null() != nullptr;
-           outer_loop = outer_loop->_parent) {
-        assert(is_member(outer_loop, rf), "");
-        loop_exit = outer_loop->unique_loop_exit_or_null();
+    if (lpt->is_invariant(referent)) {
+      IfFalseNode* unique_loop_exit = lpt->unique_loop_exit_proj_or_null();
+      if (unique_loop_exit != nullptr) {
+        // Skip over an outer strip-mined loop.
+        if (!lpt->is_root()) {
+          IdealLoopTree* outer_lpt = lpt->_parent;
+          if (outer_lpt->head()->is_OuterStripMinedLoop()) {
+            if (outer_lpt->is_invariant(referent)) {
+              IfNode* outer_loop_end = outer_lpt->head()->as_OuterStripMinedLoop()->outer_loop_end();
+              if (outer_loop_end != nullptr && outer_loop_end->false_proj_or_null() != nullptr) {
+                unique_loop_exit = outer_loop_end->false_proj_or_null();
+              }
+            } else {
+              // An attempt to insert an RF node inside outer strip-mined loop breaks
+              // its IR invariants and manifests as assertion failures.
+              assert(false, "not loop invariant in outer strip-mined loop");
+              continue; // skip
+            }
+          }
+        }
+
+        LoopExit p(referent, unique_loop_exit);
+        worklist.push(p);
+        redundant_rfs.push(rf);
+
+#ifndef PRODUCT
+        if (TraceLoopOpts) {
+          IdealLoopTree* loop = get_loop(unique_loop_exit->in(0));
+          tty->print_cr("ReachabilityFence: N%d: %s N%d/N%d -> loop exit N%d (%s N%d/N%d)",
+                        rf->_idx, lpt->head()->Name(), lpt->head()->_idx, lpt->tail()->_idx,
+                        unique_loop_exit->_idx,
+                        loop->head()->Name(), loop->head()->_idx, loop->tail()->_idx);
+        }
+#endif // !PRODUCT
       }
-      assert(loop_exit != nullptr, "");
-      Pair<Node*,Node*> p(referent, loop_exit);
-      worklist.push(p);
-      redundant_rfs.push(rf);
     }
   }
 
-  // Populate RFs outside counted loops.
+  // Populate RFs outside loops.
   while (worklist.is_nonempty()) {
-    Pair<Node*,Node*> p = worklist.pop();
+    LoopExit p = worklist.pop();
     Node* referent = p.first;
     Node* ctrl_out = p.second;
     insert_rf(ctrl_out, referent);
@@ -437,15 +461,15 @@ static Node* sfpt_ctrl_out(SafePointNode* sfpt) {
   }
 }
 
-// Phase 3: expand reachability fences from safepoint info.
+// Phase 3: materialize reachability fences from reachability edges on safepoints.
 // Turn extra safepoint edges into reachability fences immediately following the safepoint.
 //
-// NB! As of now, a special care is needed to properly enumerage reachability edges because
-// there are other use cases for non-debug safepoint edges. expand_reachability_fences() runs
+// NB! As of now, a special care is needed to properly enumerate reachability edges because
+// there are other use cases for non-debug safepoint edges. expand_reachability_edges() runs
 // after macro expansion where runtime calls during array allocation are annotated with
 // valid_length_test_input as an extra edges. Until there's a mechanism to distinguish between
 // different types of non-debug edges, unrelated cases are filtered out explicitly and in ad-hoc manner.
-void Compile::expand_reachability_fences(Unique_Node_List& safepoints) {
+void Compile::expand_reachability_edges(Unique_Node_List& safepoints) {
   for (uint i = 0; i < safepoints.size(); i++) {
     SafePointNode* sfpt = safepoints.at(i)->as_SafePoint();
 

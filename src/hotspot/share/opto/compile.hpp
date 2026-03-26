@@ -1313,7 +1313,8 @@ public:
   // Definitions of pd methods
   static void pd_compiler2_init();
 
-  void expand_reachability_fences(Unique_Node_List& safepoints);
+  // Materialize reachability fences from reachability edges on safepoints.
+  void expand_reachability_edges(Unique_Node_List& safepoints);
 
   // Static parse-time type checking logic for gen_subtype_check:
   enum SubTypeCheckResult { SSC_always_false, SSC_always_true, SSC_easy_test, SSC_full_test };
