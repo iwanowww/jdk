@@ -1181,9 +1181,7 @@ public:
     Node* c = get_ctrl(dead);
     IdealLoopTree* lpt = get_loop(c);
     _loop_or_ctrl.map(dead->_idx, nullptr); // This node is useless
-    if (!lpt->is_root()) {
-      lpt->_body.yank(dead);
-    }
+    lpt->_body.yank(dead);
     igvn().remove_dead_node(dead);
   }
 

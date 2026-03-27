@@ -184,9 +184,7 @@ void PhaseIdealLoop::replace_rf(Node* old_node, Node* new_node) {
          "%s", NodeClassNames[old_node->Opcode()]);
 
   IdealLoopTree* lpt = get_loop(old_node);
-  if (!lpt->is_root()) {
-    lpt->_body.yank(old_node);
-  }
+  lpt->_body.yank(old_node);
   assert(lpt->_reachability_fences != nullptr, "missing");
   assert(lpt->_reachability_fences->contains(old_node), "missing");
   lpt->_reachability_fences->yank(old_node);
