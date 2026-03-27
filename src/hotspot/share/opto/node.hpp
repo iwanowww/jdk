@@ -710,7 +710,6 @@ public:
       DEFINE_CLASS_ID(MemBar,      Multi, 3)
         DEFINE_CLASS_ID(Initialize,       MemBar, 0)
         DEFINE_CLASS_ID(MemBarStoreStore, MemBar, 1)
-      DEFINE_CLASS_ID(ReachabilityFence, Multi, 4)
 
     DEFINE_CLASS_ID(Mach,  Node, 1)
       DEFINE_CLASS_ID(MachReturn, Mach, 0)
@@ -829,6 +828,7 @@ public:
     DEFINE_CLASS_ID(Move,     Node, 20)
     DEFINE_CLASS_ID(LShift,   Node, 21)
     DEFINE_CLASS_ID(Neg,      Node, 22)
+    DEFINE_CLASS_ID(ReachabilityFence, Node, 23)
 
     _max_classes  = ClassMask_Neg
   };
