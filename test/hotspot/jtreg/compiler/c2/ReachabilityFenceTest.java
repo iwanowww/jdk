@@ -38,9 +38,9 @@ import compiler.lib.ir_framework.*;
  * @summary Tests to ensure that reachabilityFence() correctly keeps objects from being collected prematurely.
  * @modules java.base/jdk.internal.misc
  * @library /test/lib /
- * @run main/othervm -Xbatch compiler.c2.TestReachabilityFence
+ * @run main/othervm -Xbatch compiler.c2.ReachabilityFenceTest
  */
-public class TestReachabilityFence {
+public class ReachabilityFenceTest {
     private static final int SIZE = 100;
 
     static final boolean[] STATUS = new boolean[2];
