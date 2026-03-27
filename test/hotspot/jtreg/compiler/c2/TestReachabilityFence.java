@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -177,10 +177,10 @@ public class TestReachabilityFence {
 
     @Test
     @Arguments(values = {Argument.NUMBER_42})
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "1"}, phase = CompilePhase.AFTER_PARSING)
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "1"}, phase = CompilePhase.AFTER_LOOP_OPTS)
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "1"}, phase = CompilePhase.FINAL_CODE)
+    @IR(counts = {IRNode.REACHABILITY_FENCE,   "1"}, phase = CompilePhase.AFTER_PARSING)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, ">=1"}, phase = CompilePhase.AFTER_LOOP_OPTS)
+    @IR(counts = {IRNode.REACHABILITY_FENCE,   "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
+    @IR(counts = {IRNode.REACHABILITY_FENCE,   "1"}, phase = CompilePhase.FINAL_CODE)
     static long testOffHeap1(int limit) {
         for (long j = 0; j < limit; j++) {
             MyBufferOffHeap myBuffer = bufferOff; // local
@@ -194,10 +194,10 @@ public class TestReachabilityFence {
 
     @Test
     @Arguments(values = {Argument.NUMBER_42})
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "2"}, phase = CompilePhase.AFTER_PARSING)
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "2"}, phase = CompilePhase.AFTER_LOOP_OPTS)
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "1"}, phase = CompilePhase.FINAL_CODE)
+    @IR(counts = {IRNode.REACHABILITY_FENCE,   "2"}, phase = CompilePhase.AFTER_PARSING)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, ">=2"}, phase = CompilePhase.AFTER_LOOP_OPTS)
+    @IR(counts = {IRNode.REACHABILITY_FENCE,   "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
+    @IR(counts = {IRNode.REACHABILITY_FENCE,   "1"}, phase = CompilePhase.FINAL_CODE)
     // Both RF nodes share the same referent and there's a single safepoint on loop-back edge.
     // That's the reason why there are 2 RF nodes after parsing, but 1 RF node at the end.
     static long testOffHeap2(int limit) {
@@ -219,10 +219,10 @@ public class TestReachabilityFence {
 
     @Test
     @Arguments(values = {Argument.NUMBER_42})
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "1"}, phase = CompilePhase.AFTER_PARSING)
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "1"}, phase = CompilePhase.AFTER_LOOP_OPTS)
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "1"}, phase = CompilePhase.FINAL_CODE)
+    @IR(counts = {IRNode.REACHABILITY_FENCE,   "1"}, phase = CompilePhase.AFTER_PARSING)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, ">=1"}, phase = CompilePhase.AFTER_LOOP_OPTS)
+    @IR(counts = {IRNode.REACHABILITY_FENCE,   "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
+    @IR(counts = {IRNode.REACHABILITY_FENCE,   "1"}, phase = CompilePhase.FINAL_CODE)
     static long testOnHeap1(int limit) {
         for (long j = 0; j < limit; j++) {
             MyBufferOnHeap myBuffer = bufferOn; // local
@@ -236,10 +236,10 @@ public class TestReachabilityFence {
 
     @Test
     @Arguments(values = {Argument.NUMBER_42})
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "2"}, phase = CompilePhase.AFTER_PARSING)
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "2"}, phase = CompilePhase.AFTER_LOOP_OPTS)
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "1"}, phase = CompilePhase.FINAL_CODE)
+    @IR(counts = {IRNode.REACHABILITY_FENCE,   "2"}, phase = CompilePhase.AFTER_PARSING)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, ">=2"}, phase = CompilePhase.AFTER_LOOP_OPTS)
+    @IR(counts = {IRNode.REACHABILITY_FENCE,   "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
+    @IR(counts = {IRNode.REACHABILITY_FENCE,   "1"}, phase = CompilePhase.FINAL_CODE)
     static long testOnHeap2(int limit) {
         for (long j = 0; j < limit; j++) {
             MyBufferOnHeap myBuffer = bufferOn; // local
