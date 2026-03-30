@@ -2519,6 +2519,8 @@ void Compile::Optimize() {
 
   process_for_post_loop_opts_igvn(igvn);
 
+  if (failing())  return;
+
   // Once loop optimizations are over, it is safe to get rid of all reachability fence nodes and
   // migrate reachability edges to safepoints.
   if (OptimizeReachabilityFences && _reachability_fences.length() > 0) {

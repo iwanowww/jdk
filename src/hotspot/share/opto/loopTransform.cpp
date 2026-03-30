@@ -91,7 +91,7 @@ IfFalseNode* IdealLoopTree::unique_loop_exit_proj_or_null() {
         continue; // skip
       } else if (ctrl->is_Proj()) {
         if (ctrl->is_IfProj() || ctrl->Opcode() == Op_SCMemProj || ctrl->Opcode() == Op_Proj) {
-          // skip simple control projections
+          continue; // skip simple control projections
         } else if (ctrl->is_CatchProj() || ctrl->is_JumpProj()) {
           return nullptr; // give up on control flow splits
         } else {

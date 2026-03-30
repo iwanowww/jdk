@@ -960,16 +960,13 @@ void CallNode::extract_projections(CallProjections* projs, bool separate_io_proj
         projs->fallthrough_proj = pn;
         const Node* cn = pn->unique_ctrl_out_or_null();
         if (cn != nullptr && cn->is_Catch()) {
-          CatchProjNode* cpn = nullptr;
           for (DUIterator_Fast kmax, k = cn->fast_outs(kmax); k < kmax; k++) {
-            cpn = cn->fast_out(k)->as_CatchProj();
+            CatchProjNode* cpn = cn->fast_out(k)->as_CatchProj();
             if (cpn->_con == CatchProjNode::fall_through_index) {
               assert(cpn->handler_bci() == CatchProjNode::no_handler_bci, "");
               projs->fallthrough_catchproj = cpn;
-            } else {
-              if (!cpn->is_handler_proj()) {
-                projs->catchall_catchproj = cpn;
-              }
+            } else if (!cpn->is_handler_proj()) {
+              projs->catchall_catchproj = cpn;
             }
           }
         }
@@ -984,7 +981,7 @@ void CallNode::extract_projections(CallProjections* projs, bool separate_io_proj
       for (DUIterator j = pn->outs(); pn->has_out(j); j++) {
         Node* e = pn->out(j);
         if (e->Opcode() == Op_CreateEx && e->outcnt() > 0) {
-          CatchProjNode* ecpn = e->in(0)->as_CatchProj();
+          CatchProjNode* ecpn = e->in(0)->isa_CatchProj();
           if (ecpn != nullptr && ecpn->_con != CatchProjNode::fall_through_index && !ecpn->is_handler_proj()) {
             assert(projs->exobj == nullptr, "only one");
             projs->exobj = e;

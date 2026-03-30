@@ -192,14 +192,11 @@ void PhaseIdealLoop::replace_rf(Node* old_node, Node* new_node) {
 }
 
 void PhaseIdealLoop::remove_rf(ReachabilityFenceNode* rf) {
-  Node* referent = rf->referent();
-  if (igvn().type(referent) != TypePtr::NULL_PTR) {
-    igvn().replace_input_of(rf, 1, makecon(TypePtr::NULL_PTR));
-    if (referent->outcnt() == 0) {
-      remove_dead_data_node(referent);
-    }
-  }
   Node* rf_ctrl_in = rf->in(0);
+  Node* referent = rf->referent();
+  if (rf->clear_referent(igvn()) && referent->outcnt() == 0) {
+    remove_dead_data_node(referent);
+  }
   replace_rf(rf, rf_ctrl_in);
 }
 
@@ -340,7 +337,7 @@ static void enumerate_interfering_sfpts(ReachabilityFenceNode* rf, PhaseIdealLoo
 
 // Start offset for reachability info on a safepoint node.
 static uint rf_base_offset(SafePointNode* sfpt) {
-  return sfpt->jvms()->oopoff();
+  return sfpt->jvms()->debug_end();
 }
 
 static bool dominates_another_rf(ReachabilityFenceNode* rf, PhaseIdealLoop* phase) {

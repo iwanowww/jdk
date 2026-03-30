@@ -5178,7 +5178,11 @@ void PhaseIdealLoop::build_and_optimize() {
   bool do_split_ifs = (_mode == LoopOptsDefault);
   bool skip_loop_opts = (_mode == LoopOptsNone);
   bool do_max_unroll = (_mode == LoopOptsMaxUnroll);
+  bool do_verify = (_mode == LoopOptsVerify);
   bool do_expand_reachability_fences = (_mode == PostLoopOptsExpandReachabilityFences);
+
+  assert(!C->post_loop_opts_phase() || do_expand_reachability_fences || do_verify,
+         "no loop opts allowed");
 
   bool old_progress = C->major_progress();
   uint orig_worklist_size = _igvn._worklist.size();
