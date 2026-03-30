@@ -7508,7 +7508,7 @@ void LoopTreeIterator::next() {
   assert(!done(), "must not be done.");
   if (_curnt->_child != nullptr) {
     _curnt = _curnt->_child;
-  } else if (_curnt != _root && _curnt->_next != nullptr) {
+  } else if (_curnt->_next != nullptr) {
     _curnt = _curnt->_next;
   } else {
     while (_curnt != _root && _curnt->_next == nullptr) {
