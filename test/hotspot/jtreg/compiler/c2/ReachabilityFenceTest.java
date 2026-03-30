@@ -155,6 +155,7 @@ public class ReachabilityFenceTest {
 
     static long[] counters = new long[4];
 
+    @ForceInline
     static boolean test(MyBuffer buf) {
         if (buf == null) {
             return false;
@@ -254,6 +255,8 @@ public class ReachabilityFenceTest {
         } // safepoint on loop backedge does NOT contain myBuffer local as part of its JVM state
         return limit;
     }
+
+    /* ===================================== Helper methods ===================================== */
 
     static void runJavaTestCases() throws Throwable {
         // Warmup to trigger compilations.
