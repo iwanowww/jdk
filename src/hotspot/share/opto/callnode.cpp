@@ -1594,23 +1594,31 @@ void SafePointNode::disconnect_from_root(PhaseIterGVN *igvn) {
   }
 }
 
-void SafePointNode::remove_non_debug_edges(GrowableArray<Node*>& non_debug_edges) {
+void SafePointNode::remove_non_debug_edges(NodeEdgeTempStorage& non_debug_edges) {
+  assert(non_debug_edges._state == NodeEdgeTempStorage::state_initial, "not processed");
   assert(non_debug_edges.is_empty(), "edges not processed");
+
   while (req() > jvms()->endoff()) {
     uint last = req() - 1;
     non_debug_edges.push(in(last));
     del_req(last);
   }
+
   assert(jvms()->endoff() == req(), "no extra edges past debug info allowed");
+  DEBUG_ONLY(non_debug_edges._state = NodeEdgeTempStorage::state_populated);
 }
 
-void SafePointNode::restore_non_debug_edges(GrowableArray<Node*>& non_debug_edges) {
+void SafePointNode::restore_non_debug_edges(NodeEdgeTempStorage& non_debug_edges) {
+  assert(non_debug_edges._state == NodeEdgeTempStorage::state_populated, "not populated");
   assert(jvms()->endoff() == req(), "no extra edges past debug info allowed");
-  while (non_debug_edges.is_nonempty()) {
+
+  while (!non_debug_edges.is_empty()) {
     Node* non_debug_edge = non_debug_edges.pop();
     add_req(non_debug_edge);
   }
+
   assert(non_debug_edges.is_empty(), "edges not processed");
+  DEBUG_ONLY(non_debug_edges._state = NodeEdgeTempStorage::state_processed);
 }
 
 //==============  SafePointScalarObjectNode  ==============
