@@ -960,34 +960,34 @@ void CallNode::extract_projections(CallProjections* projs, bool separate_io_proj
         projs->fallthrough_proj = pn;
         const Node* cn = pn->unique_ctrl_out_or_null();
         if (cn != nullptr && cn->is_Catch()) {
-          ProjNode *cpn = nullptr;
+          CatchProjNode* cpn = nullptr;
           for (DUIterator_Fast kmax, k = cn->fast_outs(kmax); k < kmax; k++) {
-            cpn = cn->fast_out(k)->as_Proj();
-            assert(cpn->is_CatchProj(), "must be a CatchProjNode");
-            switch (cpn->_con) {
-              case CatchProjNode::fall_through_index: projs->fallthrough_catchproj = cpn; break;
-              case CatchProjNode::catch_all_index:    projs->catchall_catchproj    = cpn; break;
-              default: break; // exception table; rethrow case
+            cpn = cn->fast_out(k)->as_CatchProj();
+            if (cpn->_con == CatchProjNode::fall_through_index) {
+              assert(cpn->handler_bci() == CatchProjNode::no_handler_bci, "");
+              projs->fallthrough_catchproj = cpn;
+            } else {
+              if (!cpn->is_handler_proj()) {
+                projs->catchall_catchproj = cpn;
+              }
             }
           }
         }
         break;
       }
     case TypeFunc::I_O:
-      if (pn->_is_io_use)
+      if (pn->_is_io_use) {
         projs->catchall_ioproj = pn;
-      else
+      } else {
         projs->fallthrough_ioproj = pn;
+      }
       for (DUIterator j = pn->outs(); pn->has_out(j); j++) {
         Node* e = pn->out(j);
-        if (e->Opcode() == Op_CreateEx && e->in(0)->is_CatchProj() && e->outcnt() > 0) {
-          if (e->in(0)->as_CatchProj()->_con == CatchProjNode::catch_all_index) {
+        if (e->Opcode() == Op_CreateEx && e->outcnt() > 0) {
+          CatchProjNode* ecpn = e->in(0)->as_CatchProj();
+          if (ecpn != nullptr && ecpn->_con != CatchProjNode::fall_through_index && !ecpn->is_handler_proj()) {
             assert(projs->exobj == nullptr, "only one");
             projs->exobj = e;
-          } else {
-            // exception table for rethrow case
-            assert(e->in(0)->as_CatchProj()->_con != CatchProjNode::fall_through_index,
-                   "not an exception table projection");
           }
         }
       }

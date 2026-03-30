@@ -448,7 +448,7 @@ static Node* sfpt_ctrl_out(SafePointNode* sfpt) {
     if (callprojs.fallthrough_catchproj != nullptr) {
       return callprojs.fallthrough_catchproj;
     } else if (callprojs.catchall_catchproj != nullptr) {
-      return callprojs.catchall_catchproj; // rethrow stub // TODO: safe to ignore?
+      return callprojs.catchall_catchproj; // rethrow stub
     } else if (callprojs.fallthrough_proj != nullptr) {
       return callprojs.fallthrough_proj; // no exceptions thrown
     } else {
