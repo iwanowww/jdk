@@ -87,12 +87,18 @@ IfFalseNode* IdealLoopTree::unique_loop_exit_proj_or_null() {
         }
       } else if (ctrl->is_Region()) {
         return nullptr; // give up on control flow merges
-      } else if (ctrl->is_ReachabilityFence() || ctrl->is_SafePoint() || ctrl->is_MemBar()) {
+      } else if (ctrl->is_ReachabilityFence() ||
+                 ctrl->is_SafePoint() ||
+                 ctrl->is_MemBar() ||
+                 ctrl->Opcode() == Op_Blackhole) {
         continue; // skip
       } else if (ctrl->is_Proj()) {
-        if (ctrl->is_IfProj() || ctrl->Opcode() == Op_SCMemProj || ctrl->Opcode() == Op_Proj) {
+        if (ctrl->is_IfProj() ||
+            ctrl->Opcode() == Op_SCMemProj ||
+            ctrl->Opcode() == Op_Proj) {
           continue; // skip simple control projections
-        } else if (ctrl->is_CatchProj() || ctrl->is_JumpProj()) {
+        } else if (ctrl->is_CatchProj() ||
+                   ctrl->is_JumpProj()) {
           return nullptr; // give up on control flow splits
         } else {
           assert(false, "unknown control projection: %s", ctrl->Name());

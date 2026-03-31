@@ -939,7 +939,7 @@ Node *CallNode::result_cast() {
 }
 
 
-void CallNode::extract_projections(CallProjections* projs, bool separate_io_proj, bool do_asserts) const {
+void CallNode::extract_projections(CallProjections* projs, bool separate_io_proj, bool do_asserts, bool allow_handlers) const {
   projs->fallthrough_proj      = nullptr;
   projs->fallthrough_catchproj = nullptr;
   projs->fallthrough_ioproj    = nullptr;
@@ -962,6 +962,7 @@ void CallNode::extract_projections(CallProjections* projs, bool separate_io_proj
         if (cn != nullptr && cn->is_Catch()) {
           for (DUIterator_Fast kmax, k = cn->fast_outs(kmax); k < kmax; k++) {
             CatchProjNode* cpn = cn->fast_out(k)->as_CatchProj();
+            assert(allow_handlers || !cpn->is_handler_proj(), "not allowed");
             if (cpn->_con == CatchProjNode::fall_through_index) {
               assert(cpn->handler_bci() == CatchProjNode::no_handler_bci, "");
               projs->fallthrough_catchproj = cpn;
@@ -982,6 +983,7 @@ void CallNode::extract_projections(CallProjections* projs, bool separate_io_proj
         Node* e = pn->out(j);
         if (e->Opcode() == Op_CreateEx && e->outcnt() > 0) {
           CatchProjNode* ecpn = e->in(0)->isa_CatchProj();
+          assert(allow_handlers || ecpn == nullptr || !ecpn->is_handler_proj(), "not allowed");
           if (ecpn != nullptr && ecpn->_con != CatchProjNode::fall_through_index && !ecpn->is_handler_proj()) {
             assert(projs->exobj == nullptr, "only one");
             projs->exobj = e;
