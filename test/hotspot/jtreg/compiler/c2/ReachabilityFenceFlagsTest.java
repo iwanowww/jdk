@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,21 +32,21 @@ package compiler.c2;
  *
  * @run main/othervm -Xcomp -XX:-TieredCompilation -XX:+UnlockDiagnosticVMOptions
  *                   -XX:+StressReachabilityFences -XX:-OptimizeReachabilityFences -XX:-PreserveReachabilityFencesOnConstants
- *                     compiler.c2.TestReachabilityFenceFlags
+ *                     compiler.c2.ReachabilityFenceFlagsTest
  *
  * @run main/othervm -Xcomp -XX:-TieredCompilation -XX:+UnlockDiagnosticVMOptions
  *                   -XX:+StressReachabilityFences -XX:-OptimizeReachabilityFences -XX:+PreserveReachabilityFencesOnConstants
- *                     compiler.c2.TestReachabilityFenceFlags
+ *                     compiler.c2.ReachabilityFenceFlagsTest
  *
  * @run main/othervm -Xcomp -XX:-TieredCompilation -XX:+UnlockDiagnosticVMOptions
  *                   -XX:+StressReachabilityFences -XX:+OptimizeReachabilityFences -XX:-PreserveReachabilityFencesOnConstants
- *                     compiler.c2.TestReachabilityFenceFlags
+ *                     compiler.c2.ReachabilityFenceFlagsTest
  *
  * @run main/othervm -Xcomp -XX:-TieredCompilation -XX:+UnlockDiagnosticVMOptions
  *                   -XX:+StressReachabilityFences -XX:+OptimizeReachabilityFences -XX:+PreserveReachabilityFencesOnConstants
- *                     compiler.c2.TestReachabilityFenceFlags
+ *                     compiler.c2.ReachabilityFenceFlagsTest
  */
-public class TestReachabilityFenceFlags {
+public class ReachabilityFenceFlagsTest {
     public static void main(String[] args) throws Throwable {
     }
 }

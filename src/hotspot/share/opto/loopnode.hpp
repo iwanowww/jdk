@@ -1182,7 +1182,7 @@ public:
     IdealLoopTree* lpt = get_loop(c);
     _loop_or_ctrl.map(dead->_idx, nullptr); // This node is useless
     lpt->_body.yank(dead);
-    igvn().remove_dead_node(dead);
+    igvn().remove_dead_node(dead, PhaseIterGVN::NodeOrigin::Graph);
   }
 
 private:
