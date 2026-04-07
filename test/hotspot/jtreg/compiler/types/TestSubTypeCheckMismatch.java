@@ -26,7 +26,7 @@
  * @bug 8374496
  * @summary "C2: assert(val->find_edge(con) > 0) failed"
  *
- * @run main/othervm -Xbatch compiler.types.TestSubTypeCheckMismatch
+ * @run main/othervm -Xbatch ${test.main.class}
  */
 package compiler.types;
 
