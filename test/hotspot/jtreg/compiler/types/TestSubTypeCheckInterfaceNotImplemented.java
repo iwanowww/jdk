@@ -53,7 +53,7 @@ public class TestSubTypeCheckInterfaceNotImplemented {
     static boolean testHelper1(Object o) {
         if (o instanceof B) {
             return testHelper2((B)o); // a call to place "o" on JVMS, so the map is updated after the check
-        } else{
+        } else {
             return false;
         }
     }

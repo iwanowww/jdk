@@ -1842,7 +1842,7 @@ void Parse::sharpen_type_after_if(BoolTest::mask btest,
       // it kills data and control leaving IR in broken state.
       tboth = cast_type;
     }
-    if (tboth !=Type::TOP && tboth != obj_type) {
+    if (tboth != Type::TOP && tboth != obj_type) {
       int obj_in_map = map()->find_edge(obj);
       if (obj_in_map >= 0 &&
           (jvms()->is_loc(obj_in_map) || jvms()->is_stk(obj_in_map))) {
