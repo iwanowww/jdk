@@ -627,9 +627,6 @@ InlineTree *InlineTree::build_inline_tree_for_callee( ciMethod* callee_method, J
                callee_method->is_compiled_lambda_form()) {
       max_inline_level_adjust += 1;  // don't count method handle calls from java.lang.invoke implementation
     }
-    if (UseNewCode && callee_method->delay_inline()) {
-      max_inline_level_adjust += 5; // FIXME: better way to account for delayed inlining? bump the limit for VH invokers instead?
-    }
     if (max_inline_level_adjust != 0 && C->print_inlining() && (Verbose || WizardMode)) {
       C->inline_printer()->record(callee_method, caller_jvms, InliningResult::SUCCESS, " \\-> discounting inline depth");
     }
