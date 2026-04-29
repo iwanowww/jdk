@@ -32,23 +32,26 @@
 #include "opto/subnode.hpp"
 #include "opto/subtypenode.hpp"
 
-// static bool klass_is_leaf(const TypeKlassPtr* t) {
-//   const Type* tk = t;
-//   if (tk->isa_aryklassptr()) {
-//     int ignored;
-//     tk = tk->is_aryklassptr()->base_element_type(ignored);
-//   }
-//   if (tk->isa_instklassptr()) {
-//     ciInstanceKlass* ik = tk->is_instklassptr()->instance_klass();
-//     if (!ik->has_subklass()) {
-//       if (!ik->is_final()) {
-//         Compile::current()->dependencies()->assert_leaf_type(ik);
-//       }
-//       return true;
-//     }
-//   }
-//   return false;
-// }
+static const TypeKlassPtr* exact_if_leaf(const TypeKlassPtr* tk) {
+  if (tk->klass_is_exact()) {
+    return tk;
+  }
+  const Type* elem_t = tk;
+  if (elem_t->isa_aryklassptr()) {
+    int ignored;
+    elem_t = tk->is_aryklassptr()->base_element_type(ignored);
+  }
+  if (elem_t->isa_instklassptr()) {
+    ciInstanceKlass* elem_ik = elem_t->is_instklassptr()->instance_klass();
+    if (!elem_ik->has_subklass()) {
+      if (!elem_ik->is_final()) {
+        Compile::current()->dependencies()->assert_leaf_type(elem_ik);
+      }
+      return tk->cast_to_exactness(true);
+    }
+  }
+  return tk;
+}
 
 const Type* SubTypeCheckNode::sub(const Type* sub_t, const Type* super_t) const {
   const TypeKlassPtr* superk = super_t->isa_klassptr();
@@ -56,44 +59,45 @@ const Type* SubTypeCheckNode::sub(const Type* sub_t, const Type* super_t) const 
   assert(sub_t->isa_klassptr() || sub_t->isa_oopptr(), "");
   const TypeKlassPtr* subk = sub_t->isa_klassptr() ? sub_t->is_klassptr() : sub_t->is_oopptr()->as_klass_type();
 
+  Compile::SubTypeCheckResult static_subtype_check = Compile::current()->static_subtype_check(superk, subk, false);
+
   if (superk->klass_is_exact()) {
-    bool is_leaf = false; // klass_is_leaf(superk);
-    const TypeKlassPtr* superk_noexact = superk->cast_to_exactness(is_leaf);
+    superk = exact_if_leaf(superk->cast_to_exactness(false));
+    subk   = exact_if_leaf(subk);
 
-    const Type* tboth = subk->filter_speculative(superk_noexact);
+    const Type* tboth = subk->filter_speculative(superk);
     assert(!tboth->empty() || tboth == Type::TOP, "");
-    assert(Type::equals(tboth, subk) == subk->higher_equal(superk_noexact), "");
+    assert(Type::equals(tboth, subk) == subk->higher_equal(superk), "");
 
-    if (subk->higher_equal(superk_noexact)) {
-      assert(Compile::current()->static_subtype_check(superk, subk, false) == Compile::SSC_always_true, "");
+    if (subk->higher_equal(superk)) {
+      assert(static_subtype_check == Compile::SSC_always_true, "");
       return TypeInt::CC_EQ; // SSC_always_true;
     }
     if (tboth == Type::TOP) {
-      assert(Compile::current()->static_subtype_check(superk, subk, false) == Compile::SSC_always_false, "");
+      assert(static_subtype_check == Compile::SSC_always_false, "");
       return TypeInt::CC_GT; // SSC_always_false;
     }
 
 #ifdef ASSERT
-    Compile::SubTypeCheckResult res = Compile::current()->static_subtype_check(superk, subk, false);
-    if (res == Compile::SSC_always_false || res == Compile::SSC_always_true) {
-      tty->print_cr("res : %d", res);
+    if (static_subtype_check == Compile::SSC_always_false ||
+        static_subtype_check == Compile::SSC_always_true) {
+      tty->print_cr("static_subtype_check(subk, superk)=%d", static_subtype_check);
       tty->cr();
       tty->print("sub_t:     "); sub_t->dump(); tty->cr();
       tty->print("super_t:   "); super_t->dump(); tty->cr();
       tty->cr();
-      tty->print("subk:      "); subk->dump(); tty->cr();
-      tty->print("superk:    "); superk->dump(); tty->cr();
-      tty->print("superk_noexact: "); superk_noexact->dump(); tty->cr();
-      tty->print("filter:    "); tboth->dump(); tty->cr();
+      tty->print("subk:           "); subk->dump(); tty->cr();
+      tty->print("superk:         "); superk->dump(); tty->cr();
+      tty->print("filter:         "); tboth->dump(); tty->cr();
     }
-    assert(Compile::current()->static_subtype_check(superk, subk, false) == Compile::SSC_easy_test ||
-           Compile::current()->static_subtype_check(superk, subk, false) == Compile::SSC_full_test, "");
+    assert(static_subtype_check == Compile::SSC_easy_test ||
+           static_subtype_check == Compile::SSC_full_test, "");
 #endif // ASSERT
   } else {
 #ifdef ASSERT
-    Compile::SubTypeCheckResult res = Compile::current()->static_subtype_check(superk, subk, false);
-    if (res == Compile::SSC_always_false || res == Compile::SSC_always_true) {
-      tty->print_cr("res : %d", res);
+    if (static_subtype_check == Compile::SSC_always_false ||
+        static_subtype_check == Compile::SSC_always_true) {
+      tty->print_cr("static_subtype_check(subk, superk)=%d", static_subtype_check);
       tty->cr();
       tty->print("sub_t:     "); sub_t->dump(); tty->cr();
       tty->print("super_t:   "); super_t->dump(); tty->cr();
@@ -101,8 +105,8 @@ const Type* SubTypeCheckNode::sub(const Type* sub_t, const Type* super_t) const 
       tty->print("subk:      "); subk->dump(); tty->cr();
       tty->print("superk:    "); superk->dump(); tty->cr();
     }
-    assert(Compile::current()->static_subtype_check(superk, subk, false) == Compile::SSC_easy_test ||
-           Compile::current()->static_subtype_check(superk, subk, false) == Compile::SSC_full_test, "");
+    assert(static_subtype_check == Compile::SSC_easy_test ||
+           static_subtype_check == Compile::SSC_full_test, "");
 #endif // ASSERT
   }
 
