@@ -1813,9 +1813,13 @@ static bool match_type_check(PhaseGVN& gvn,
           const TypeKlassPtr* klass_ptr_type = gvn.type(superklass)->is_klassptr();
           const TypeKlassPtr* improved_klass_ptr_type = klass_ptr_type->try_improve();
 
-          (*obj) = obj_or_subklass;
-          (*cast_type) = improved_klass_ptr_type->cast_to_exactness(false)->as_instance_type();
-          return true; // found
+          if (improved_klass_ptr_type->klass_is_exact()) {
+            (*obj) = obj_or_subklass;
+            (*cast_type) = improved_klass_ptr_type->cast_to_exactness(false)->as_instance_type();
+            return true; // found
+          } else {
+            // reflective case
+          }
         }
       }
     }

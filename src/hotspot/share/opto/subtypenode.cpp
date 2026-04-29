@@ -32,10 +32,79 @@
 #include "opto/subnode.hpp"
 #include "opto/subtypenode.hpp"
 
+// static bool klass_is_leaf(const TypeKlassPtr* t) {
+//   const Type* tk = t;
+//   if (tk->isa_aryklassptr()) {
+//     int ignored;
+//     tk = tk->is_aryklassptr()->base_element_type(ignored);
+//   }
+//   if (tk->isa_instklassptr()) {
+//     ciInstanceKlass* ik = tk->is_instklassptr()->instance_klass();
+//     if (!ik->has_subklass()) {
+//       if (!ik->is_final()) {
+//         Compile::current()->dependencies()->assert_leaf_type(ik);
+//       }
+//       return true;
+//     }
+//   }
+//   return false;
+// }
+
 const Type* SubTypeCheckNode::sub(const Type* sub_t, const Type* super_t) const {
   const TypeKlassPtr* superk = super_t->isa_klassptr();
   assert(sub_t != Type::TOP && !TypePtr::NULL_PTR->higher_equal(sub_t), "should be not null");
+  assert(sub_t->isa_klassptr() || sub_t->isa_oopptr(), "");
   const TypeKlassPtr* subk = sub_t->isa_klassptr() ? sub_t->is_klassptr() : sub_t->is_oopptr()->as_klass_type();
+
+  if (superk->klass_is_exact()) {
+    bool is_leaf = false; // klass_is_leaf(superk);
+    const TypeKlassPtr* superk_noexact = superk->cast_to_exactness(is_leaf);
+
+    const Type* tboth = subk->filter_speculative(superk_noexact);
+    assert(!tboth->empty() || tboth == Type::TOP, "");
+    assert(Type::equals(tboth, subk) == subk->higher_equal(superk_noexact), "");
+
+    if (subk->higher_equal(superk_noexact)) {
+      assert(Compile::current()->static_subtype_check(superk, subk, false) == Compile::SSC_always_true, "");
+      return TypeInt::CC_EQ; // SSC_always_true;
+    }
+    if (tboth == Type::TOP) {
+      assert(Compile::current()->static_subtype_check(superk, subk, false) == Compile::SSC_always_false, "");
+      return TypeInt::CC_GT; // SSC_always_false;
+    }
+
+#ifdef ASSERT
+    Compile::SubTypeCheckResult res = Compile::current()->static_subtype_check(superk, subk, false);
+    if (res == Compile::SSC_always_false || res == Compile::SSC_always_true) {
+      tty->print_cr("res : %d", res);
+      tty->cr();
+      tty->print("sub_t:     "); sub_t->dump(); tty->cr();
+      tty->print("super_t:   "); super_t->dump(); tty->cr();
+      tty->cr();
+      tty->print("subk:      "); subk->dump(); tty->cr();
+      tty->print("superk:    "); superk->dump(); tty->cr();
+      tty->print("superk_noexact: "); superk_noexact->dump(); tty->cr();
+      tty->print("filter:    "); tboth->dump(); tty->cr();
+    }
+    assert(Compile::current()->static_subtype_check(superk, subk, false) == Compile::SSC_easy_test ||
+           Compile::current()->static_subtype_check(superk, subk, false) == Compile::SSC_full_test, "");
+#endif // ASSERT
+  } else {
+#ifdef ASSERT
+    Compile::SubTypeCheckResult res = Compile::current()->static_subtype_check(superk, subk, false);
+    if (res == Compile::SSC_always_false || res == Compile::SSC_always_true) {
+      tty->print_cr("res : %d", res);
+      tty->cr();
+      tty->print("sub_t:     "); sub_t->dump(); tty->cr();
+      tty->print("super_t:   "); super_t->dump(); tty->cr();
+      tty->cr();
+      tty->print("subk:      "); subk->dump(); tty->cr();
+      tty->print("superk:    "); superk->dump(); tty->cr();
+    }
+    assert(Compile::current()->static_subtype_check(superk, subk, false) == Compile::SSC_easy_test ||
+           Compile::current()->static_subtype_check(superk, subk, false) == Compile::SSC_full_test, "");
+#endif // ASSERT
+  }
 
   // Oop can't be a subtype of abstract type that has no subclass.
   if (sub_t->isa_oopptr() && superk->isa_instklassptr() && superk->klass_is_exact()) {
