@@ -53,31 +53,30 @@ static const TypeKlassPtr* exact_if_leaf(const TypeKlassPtr* tk) {
   return tk;
 }
 
-const Type* SubTypeCheckNode::sub(const Type* sub_t, const Type* super_t) const {
-  const TypeKlassPtr* superk = super_t->isa_klassptr();
-  assert(sub_t != Type::TOP && !TypePtr::NULL_PTR->higher_equal(sub_t), "should be not null");
-  assert(sub_t->isa_klassptr() || sub_t->isa_oopptr(), "");
-  const TypeKlassPtr* subk = sub_t->isa_klassptr() ? sub_t->is_klassptr() : sub_t->is_oopptr()->as_klass_type();
-
+static Compile::SubTypeCheckResult sub_helper(const Type* sub_t, const Type* super_t, const TypeKlassPtr* subk, const TypeKlassPtr* superk) {
+  bool superk_is_exact = superk->klass_is_exact();
   Compile::SubTypeCheckResult static_subtype_check = Compile::current()->static_subtype_check(superk, subk, false);
 
-  if (superk->klass_is_exact()) {
-    superk = exact_if_leaf(superk->cast_to_exactness(false));
-    subk   = exact_if_leaf(subk);
+  superk = exact_if_leaf(superk->cast_to_exactness(false));
+  subk   = exact_if_leaf(subk);
 
-    const Type* tboth = subk->filter_speculative(superk);
+  const Type* tboth = subk->filter_speculative(superk);
+  if (tboth == Type::TOP) {
+    return Compile::SSC_always_false;
+  }
+
+  if (superk_is_exact) {
     assert(!tboth->empty() || tboth == Type::TOP, "");
     assert(Type::equals(tboth, subk) == subk->higher_equal(superk), "");
 
     if (subk->higher_equal(superk)) {
       assert(static_subtype_check == Compile::SSC_always_true, "");
-      return TypeInt::CC_EQ; // SSC_always_true;
+      return Compile::SSC_always_true;
     }
     if (tboth == Type::TOP) {
-      assert(static_subtype_check == Compile::SSC_always_false, "");
-      return TypeInt::CC_GT; // SSC_always_false;
+      assert(static_subtype_check == Compile::SSC_always_false || subk->klass_is_exact(), ""); // known limitation
+      return Compile::SSC_always_false;
     }
-
 #ifdef ASSERT
     if (static_subtype_check == Compile::SSC_always_false ||
         static_subtype_check == Compile::SSC_always_true) {
@@ -90,8 +89,6 @@ const Type* SubTypeCheckNode::sub(const Type* sub_t, const Type* super_t) const 
       tty->print("superk:         "); superk->dump(); tty->cr();
       tty->print("filter:         "); tboth->dump(); tty->cr();
     }
-    assert(static_subtype_check == Compile::SSC_easy_test ||
-           static_subtype_check == Compile::SSC_full_test, "");
 #endif // ASSERT
   } else {
 #ifdef ASSERT
@@ -105,9 +102,27 @@ const Type* SubTypeCheckNode::sub(const Type* sub_t, const Type* super_t) const 
       tty->print("subk:      "); subk->dump(); tty->cr();
       tty->print("superk:    "); superk->dump(); tty->cr();
     }
-    assert(static_subtype_check == Compile::SSC_easy_test ||
-           static_subtype_check == Compile::SSC_full_test, "");
 #endif // ASSERT
+  }
+  assert(static_subtype_check == Compile::SSC_easy_test ||
+         static_subtype_check == Compile::SSC_full_test, "");
+  return Compile::SSC_full_test;
+}
+
+const Type* SubTypeCheckNode::sub(const Type* sub_t, const Type* super_t) const {
+  const TypeKlassPtr* superk = super_t->isa_klassptr();
+  assert(sub_t != Type::TOP && !TypePtr::NULL_PTR->higher_equal(sub_t), "should be not null");
+  assert(sub_t->isa_klassptr() || sub_t->isa_oopptr(), "");
+  const TypeKlassPtr* subk = sub_t->isa_klassptr() ? sub_t->is_klassptr() : sub_t->is_oopptr()->as_klass_type();
+
+  switch (sub_helper(sub_t, super_t, subk, superk)) {
+      case Compile::SSC_always_false:
+        return TypeInt::CC_GT;
+      case Compile::SSC_always_true:
+        return TypeInt::CC_EQ;
+      case Compile::SSC_easy_test:
+      case Compile::SSC_full_test:
+        break;
   }
 
   // Oop can't be a subtype of abstract type that has no subclass.
