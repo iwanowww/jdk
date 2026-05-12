@@ -30,7 +30,7 @@
 // 2-bit boolean type: H|L
 // the high-bit H is set if it's not default value.
 // the low-bit L represents true and false.
-class TriBool{
+class TriBool {
   template <size_t SZ, typename T>
   friend class TriBoolArray;
 

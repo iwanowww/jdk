@@ -1821,11 +1821,11 @@ protected:
   ciKlass* _klass;
   const TypeInterfaces* _interfaces;
   const TypeInterfaces* meet_interfaces(const TypeKlassPtr* other) const;
-  virtual bool must_be_exact() const { ShouldNotReachHere(); return false; }
   virtual ciKlass* exact_klass_helper() const;
   virtual ciKlass* klass() const { return  _klass; }
 
 public:
+  virtual bool must_be_exact() const { ShouldNotReachHere(); return false; }
 
   bool is_java_subtype_of(const TypeKlassPtr* other) const {
     return is_java_subtype_of_helper(other, klass_is_exact(), other->klass_is_exact());
@@ -1901,9 +1901,9 @@ class TypeInstKlassPtr : public TypeKlassPtr {
     assert(klass->is_instance_klass() && (!klass->is_loaded() || !klass->is_interface()), "");
   }
 
+public:
   virtual bool must_be_exact() const;
 
-public:
   // Instance klass ignoring any interface
   ciInstanceKlass* instance_klass() const {
     assert(!klass()->is_interface(), "");
@@ -1973,9 +1973,8 @@ class TypeAryKlassPtr : public TypeKlassPtr {
   // Only guaranteed non null for array of basic types
   virtual ciKlass* klass() const;
 
-  virtual bool must_be_exact() const;
-
 public:
+  virtual bool must_be_exact() const;
 
   // returns base element type, an instance klass (and not interface) for object arrays
   const Type* base_element_type(int& dims) const;

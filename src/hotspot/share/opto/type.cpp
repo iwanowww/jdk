@@ -4307,7 +4307,7 @@ const Type *TypeInstPtr::xmeet_helper(const Type *t) const {
     } else {
       if (kind == NOT_SUBTYPE && instance_id > 0) {
         instance_id = InstanceBot;
-      } else if (kind == LCA) {
+      } else if (kind == LCA && instance_id > 0) {
         instance_id = InstanceBot;
       }
       ciObject* o = nullptr;             // Assume not constant when done

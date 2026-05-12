@@ -31,6 +31,7 @@
 #include "opto/rootnode.hpp"
 #include "opto/subnode.hpp"
 #include "opto/subtypenode.hpp"
+#include "utilities/tribool.hpp"
 
 static const TypeKlassPtr* exact_if_leaf(const TypeKlassPtr* tk) {
   if (tk->klass_is_exact()) {
@@ -53,60 +54,113 @@ static const TypeKlassPtr* exact_if_leaf(const TypeKlassPtr* tk) {
   return tk;
 }
 
-static Compile::SubTypeCheckResult sub_helper(const Type* sub_t, const Type* super_t, const TypeKlassPtr* subk, const TypeKlassPtr* superk) {
+static TriBool sub_inst(const Type* sub_t, const Type* super_t, Compile::SubTypeCheckResult static_subtype_check) {
+  bool is_reflective = super_t->isa_klassptr()->klass_is_exact();
+
+  const TypeKlassPtr* superk = exact_if_leaf(super_t->isa_klassptr()->cast_to_exactness(false));
+  const Type* t_super = superk->as_instance_type();
+
+  const TypeKlassPtr* subk = (sub_t->isa_klassptr() ? sub_t->is_klassptr()
+                                                    : sub_t->is_oopptr()->as_klass_type());
+  const TypeKlassPtr* subk_leaf = exact_if_leaf(subk);
+
+
+  const Type* t_sub = nullptr;
+  if (sub_t->isa_oopptr() && subk == subk_leaf) {
+    t_sub = sub_t;
+  } else {
+    // TODO: sub_t in case of TypeOopPtr should already be sharpened
+    //assert(sub_t->isa_klassptr() || subk == subk_leaf, "");
+    t_sub = subk_leaf->as_instance_type();
+  }
+
+  const Type* tboth = t_sub->filter(t_super);
+  if (tboth == Type::TOP) {
+    assert(static_subtype_check == Compile::SSC_always_false || subk->klass_is_exact(), ""); // known limitation
+    return false; // always false
+  } else if (is_reflective) {
+    assert(!tboth->empty() || tboth == Type::TOP, "");
+    assert(Type::equals(tboth, t_sub->remove_speculative()) == t_sub->remove_speculative()->higher_equal(t_super), "");
+
+    if (t_sub->higher_equal(t_super)) {
+      assert(static_subtype_check == Compile::SSC_always_true, "");
+      return true;
+    }
+  }
+#ifdef ASSERT
+  if (static_subtype_check == Compile::SSC_always_false ||
+      static_subtype_check == Compile::SSC_always_true) {
+    tty->print_cr("static_subtype_check(subk, superk)=%d", static_subtype_check);
+    tty->cr();
+    tty->print("sub_t:     "); sub_t->dump(); tty->cr();
+    tty->print("super_t:   "); super_t->dump(); tty->cr();
+    tty->cr();
+    tty->print("subk:           "); subk->dump(); tty->cr();
+    tty->print("subk_leaf:      "); subk_leaf->dump(); tty->cr();
+    tty->print("superk:         "); superk->dump(); tty->cr();
+    tty->cr();
+    tty->print("t_sub:     "); t_sub->dump(); tty->cr();
+    tty->print("t_super:   "); t_super->dump(); tty->cr();
+    tty->print("filter:         "); tboth->dump(); tty->cr();
+  }
+#endif // ASSERT
+  assert(static_subtype_check == Compile::SSC_easy_test ||
+         static_subtype_check == Compile::SSC_full_test, "");
+
+  return TriBool();
+}
+
+static TriBool sub_helper(const Type* sub_t, const Type* super_t,
+                          const TypeKlassPtr* subk, const TypeKlassPtr* superk,
+                          Compile::SubTypeCheckResult static_subtype_check) {
   bool superk_is_exact = superk->klass_is_exact();
-  Compile::SubTypeCheckResult static_subtype_check = Compile::current()->static_subtype_check(superk, subk, false);
+
+  assert(superk->cast_to_exactness(false)->klass_is_exact() == false ||
+         superk->must_be_exact() ||
+         (superk->isa_instklassptr() && superk->is_instklassptr()->instance_klass()->is_final()), "");
 
   superk = exact_if_leaf(superk->cast_to_exactness(false));
   subk   = exact_if_leaf(subk);
 
-  const Type* tboth = subk->filter_speculative(superk);
-  if (tboth == Type::TOP) {
-    return Compile::SSC_always_false;
-  }
+  const Type* tboth1 = subk->as_instance_type()->filter(superk->as_instance_type());
 
-  if (superk_is_exact) {
+  const Type* tboth = subk->filter(superk);
+  if (tboth == Type::TOP) {
+    assert(static_subtype_check == Compile::SSC_always_false || subk->klass_is_exact(), ""); // known limitation
+    return false; // always false
+  } else if (superk_is_exact) {
     assert(!tboth->empty() || tboth == Type::TOP, "");
     assert(Type::equals(tboth, subk) == subk->higher_equal(superk), "");
 
     if (subk->higher_equal(superk)) {
       assert(static_subtype_check == Compile::SSC_always_true, "");
-      return Compile::SSC_always_true;
+      return true;
     }
-    if (tboth == Type::TOP) {
-      assert(static_subtype_check == Compile::SSC_always_false || subk->klass_is_exact(), ""); // known limitation
-      return Compile::SSC_always_false;
-    }
-#ifdef ASSERT
-    if (static_subtype_check == Compile::SSC_always_false ||
-        static_subtype_check == Compile::SSC_always_true) {
-      tty->print_cr("static_subtype_check(subk, superk)=%d", static_subtype_check);
-      tty->cr();
-      tty->print("sub_t:     "); sub_t->dump(); tty->cr();
-      tty->print("super_t:   "); super_t->dump(); tty->cr();
-      tty->cr();
-      tty->print("subk:           "); subk->dump(); tty->cr();
-      tty->print("superk:         "); superk->dump(); tty->cr();
-      tty->print("filter:         "); tboth->dump(); tty->cr();
-    }
-#endif // ASSERT
-  } else {
-#ifdef ASSERT
-    if (static_subtype_check == Compile::SSC_always_false ||
-        static_subtype_check == Compile::SSC_always_true) {
-      tty->print_cr("static_subtype_check(subk, superk)=%d", static_subtype_check);
-      tty->cr();
-      tty->print("sub_t:     "); sub_t->dump(); tty->cr();
-      tty->print("super_t:   "); super_t->dump(); tty->cr();
-      tty->cr();
-      tty->print("subk:      "); subk->dump(); tty->cr();
-      tty->print("superk:    "); superk->dump(); tty->cr();
-    }
-#endif // ASSERT
   }
+#ifdef ASSERT
+  if (static_subtype_check == Compile::SSC_always_false ||
+      static_subtype_check == Compile::SSC_always_true) {
+    tty->print_cr("static_subtype_check(subk, superk)=%d", static_subtype_check);
+    tty->cr();
+    tty->print("sub_t:     "); sub_t->dump(); tty->cr();
+    tty->print("super_t:   "); super_t->dump(); tty->cr();
+    tty->cr();
+    tty->print("subk:           "); subk->dump(); tty->cr();
+    tty->print("superk:         "); superk->dump(); tty->cr();
+    tty->print("filter:         "); tboth->dump(); tty->cr();
+  }
+#endif // ASSERT
   assert(static_subtype_check == Compile::SSC_easy_test ||
          static_subtype_check == Compile::SSC_full_test, "");
-  return Compile::SSC_full_test;
+  return TriBool();
+}
+
+static const char* to_string(TriBool b) {
+  if (b.is_default()) {
+    return "default";
+  } else {
+    return (b ? "true" : "false");
+  }
 }
 
 const Type* SubTypeCheckNode::sub(const Type* sub_t, const Type* super_t) const {
@@ -115,14 +169,25 @@ const Type* SubTypeCheckNode::sub(const Type* sub_t, const Type* super_t) const 
   assert(sub_t->isa_klassptr() || sub_t->isa_oopptr(), "");
   const TypeKlassPtr* subk = sub_t->isa_klassptr() ? sub_t->is_klassptr() : sub_t->is_oopptr()->as_klass_type();
 
-  switch (sub_helper(sub_t, super_t, subk, superk)) {
-      case Compile::SSC_always_false:
-        return TypeInt::CC_GT;
-      case Compile::SSC_always_true:
-        return TypeInt::CC_EQ;
-      case Compile::SSC_easy_test:
-      case Compile::SSC_full_test:
-        break;
+  Compile::SubTypeCheckResult static_subtype_check = Compile::current()->static_subtype_check(superk, subk, false);
+
+  TriBool res = sub_helper(sub_t, super_t, subk, superk, static_subtype_check);
+  TriBool res1 = sub_inst(sub_t, super_t, static_subtype_check);
+  if (res != res1) {
+
+    tty->print_cr("static_subtype_check(subk, superk)=%d", static_subtype_check);
+    tty->cr();
+    tty->print_cr("sub_helper=%s, sub_inst=%s", to_string(res), to_string(res1));
+    tty->cr();
+    tty->print("sub_t:     "); sub_t->dump(); tty->cr();
+    tty->print("super_t:   "); super_t->dump(); tty->cr();
+    tty->cr();
+    tty->print("subk:           "); subk->dump(); tty->cr();
+    tty->print("superk:         "); superk->dump(); tty->cr();
+  }
+
+  if (!res.is_default()) {
+    return (res ? TypeInt::CC_EQ : TypeInt::CC_GT);
   }
 
   // Oop can't be a subtype of abstract type that has no subclass.
