@@ -62,7 +62,7 @@ static TriBool sub_inst(const Type* sub_t, const Type* super_t, Compile::SubType
 
   const TypeKlassPtr* subk = (sub_t->isa_klassptr() ? sub_t->is_klassptr()
                                                     : sub_t->is_oopptr()->as_klass_type());
-  const TypeKlassPtr* subk_leaf = exact_if_leaf(subk);
+  const TypeKlassPtr* subk_leaf = exact_if_leaf(subk)->as_instance_type()->as_klass_type();
 
 
   const Type* t_sub = nullptr;
@@ -71,12 +71,15 @@ static TriBool sub_inst(const Type* sub_t, const Type* super_t, Compile::SubType
   } else {
     // TODO: sub_t in case of TypeOopPtr should already be sharpened
     //assert(sub_t->isa_klassptr() || subk == subk_leaf, "");
+    assert(subk_leaf->as_instance_type(false) == subk_leaf->as_instance_type(true), "");
     t_sub = subk_leaf->as_instance_type();
   }
 
   const Type* tboth = t_sub->filter(t_super);
   if (tboth == Type::TOP) {
-    assert(static_subtype_check == Compile::SSC_always_false || subk->klass_is_exact(), ""); // known limitation
+    assert(static_subtype_check == Compile::SSC_always_false ||
+           subk_leaf->klass_is_exact() ||
+           superk->as_instance_type(false) != superk->as_instance_type(true), ""); // known limitation
     return false; // always false
   } else if (is_reflective) {
     assert(!tboth->empty() || tboth == Type::TOP, "");
@@ -172,19 +175,20 @@ const Type* SubTypeCheckNode::sub(const Type* sub_t, const Type* super_t) const 
   Compile::SubTypeCheckResult static_subtype_check = Compile::current()->static_subtype_check(superk, subk, false);
 
   TriBool res = sub_helper(sub_t, super_t, subk, superk, static_subtype_check);
+
+#ifdef ASSERT
   TriBool res1 = sub_inst(sub_t, super_t, static_subtype_check);
   if (res != res1) {
-
-    tty->print_cr("static_subtype_check(subk, superk)=%d", static_subtype_check);
-    tty->cr();
-    tty->print_cr("sub_helper=%s, sub_inst=%s", to_string(res), to_string(res1));
-    tty->cr();
     tty->print("sub_t:     "); sub_t->dump(); tty->cr();
     tty->print("super_t:   "); super_t->dump(); tty->cr();
     tty->cr();
     tty->print("subk:           "); subk->dump(); tty->cr();
     tty->print("superk:         "); superk->dump(); tty->cr();
+
+    fatal("sub_helper=%s, sub_inst=%s static_subtype_check(subk, superk)=%d",
+          to_string(res), to_string(res1),  static_subtype_check);
   }
+#endif // ASSERT
 
   if (!res.is_default()) {
     return (res ? TypeInt::CC_EQ : TypeInt::CC_GT);
