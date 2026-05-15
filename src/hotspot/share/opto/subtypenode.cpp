@@ -34,36 +34,36 @@
 #include "utilities/tribool.hpp"
 
 static const TypeKlassPtr* exact_if_leaf(const TypeKlassPtr* tk) {
-  if (tk->klass_is_exact()) {
-    return tk;
-  }
-  const Type* elem_t = tk;
-  if (elem_t->isa_aryklassptr()) {
-    int ignored;
-    elem_t = tk->is_aryklassptr()->base_element_type(ignored);
-  }
-  if (elem_t->isa_instklassptr()) {
-    ciInstanceKlass* elem_ik = elem_t->is_instklassptr()->instance_klass();
-    if (!elem_ik->has_subklass()) {
-      if (!elem_ik->is_final()) {
-        Compile::current()->dependencies()->assert_leaf_type(elem_ik);
+  const TypeKlassPtr* result = tk;
+  if (!tk->klass_is_exact()) {
+    const Type* elem_t = tk;
+    if (elem_t->isa_aryklassptr()) {
+      int ignored;
+      elem_t = tk->is_aryklassptr()->base_element_type(ignored);
+    }
+    if (elem_t->isa_instklassptr()) {
+      ciInstanceKlass* elem_ik = elem_t->is_instklassptr()->instance_klass();
+      if (!elem_ik->has_subklass()) {
+        if (!elem_ik->is_final()) {
+          Compile::current()->dependencies()->assert_leaf_type(elem_ik);
+        }
+        result = tk->cast_to_exactness(true);
       }
-      return tk->cast_to_exactness(true);
     }
   }
-  return tk;
+  return result->as_instance_type()->as_klass_type();
 }
 
 static TriBool sub_inst(const Type* sub_t, const Type* super_t, Compile::SubTypeCheckResult static_subtype_check) {
-  bool is_reflective = super_t->isa_klassptr()->klass_is_exact();
+  bool superk_is_exact = super_t->isa_klassptr()->klass_is_exact();
 
   const TypeKlassPtr* superk = exact_if_leaf(super_t->isa_klassptr()->cast_to_exactness(false));
   const Type* t_super = superk->as_instance_type();
 
   const TypeKlassPtr* subk = (sub_t->isa_klassptr() ? sub_t->is_klassptr()
                                                     : sub_t->is_oopptr()->as_klass_type());
-  const TypeKlassPtr* subk_leaf = exact_if_leaf(subk)->as_instance_type()->as_klass_type();
-
+  const TypeKlassPtr* subk_leaf = exact_if_leaf(subk);
+  assert(subk_leaf->as_instance_type(false) == subk_leaf->as_instance_type(true), "");
 
   const Type* t_sub = nullptr;
   if (sub_t->isa_oopptr() && subk == subk_leaf) {
@@ -71,7 +71,6 @@ static TriBool sub_inst(const Type* sub_t, const Type* super_t, Compile::SubType
   } else {
     // TODO: sub_t in case of TypeOopPtr should already be sharpened
     //assert(sub_t->isa_klassptr() || subk == subk_leaf, "");
-    assert(subk_leaf->as_instance_type(false) == subk_leaf->as_instance_type(true), "");
     t_sub = subk_leaf->as_instance_type();
   }
 
@@ -79,14 +78,15 @@ static TriBool sub_inst(const Type* sub_t, const Type* super_t, Compile::SubType
   if (tboth == Type::TOP) {
     assert(static_subtype_check == Compile::SSC_always_false ||
            subk_leaf->klass_is_exact() ||
-           superk->as_instance_type(false) != superk->as_instance_type(true), ""); // known limitation
+           superk->as_instance_type(false) != superk->as_instance_type(true), ""); // known limitations
     return false; // always false
-  } else if (is_reflective) {
+  } else if (superk_is_exact) {
     assert(!tboth->empty() || tboth == Type::TOP, "");
     assert(Type::equals(tboth, t_sub->remove_speculative()) == t_sub->remove_speculative()->higher_equal(t_super), "");
 
     if (t_sub->higher_equal(t_super)) {
-      assert(static_subtype_check == Compile::SSC_always_true, "");
+      assert(static_subtype_check == Compile::SSC_always_true ||
+             subk != subk_leaf, ""); // known limitation
       return true;
     }
   }
@@ -123,6 +123,7 @@ static TriBool sub_helper(const Type* sub_t, const Type* super_t,
          (superk->isa_instklassptr() && superk->is_instklassptr()->instance_klass()->is_final()), "");
 
   superk = exact_if_leaf(superk->cast_to_exactness(false));
+  const TypeKlassPtr* subk_orig = subk;
   subk   = exact_if_leaf(subk);
 
   const Type* tboth1 = subk->as_instance_type()->filter(superk->as_instance_type());
@@ -136,7 +137,8 @@ static TriBool sub_helper(const Type* sub_t, const Type* super_t,
     assert(Type::equals(tboth, subk) == subk->higher_equal(superk), "");
 
     if (subk->higher_equal(superk)) {
-      assert(static_subtype_check == Compile::SSC_always_true, "");
+      assert(static_subtype_check == Compile::SSC_always_true ||
+             subk != subk_orig, "");
       return true;
     }
   }
@@ -175,9 +177,8 @@ const Type* SubTypeCheckNode::sub(const Type* sub_t, const Type* super_t) const 
   Compile::SubTypeCheckResult static_subtype_check = Compile::current()->static_subtype_check(superk, subk, false);
 
   TriBool res = sub_helper(sub_t, super_t, subk, superk, static_subtype_check);
-
-#ifdef ASSERT
   TriBool res1 = sub_inst(sub_t, super_t, static_subtype_check);
+#ifdef ASSERT
   if (res != res1) {
     tty->print("sub_t:     "); sub_t->dump(); tty->cr();
     tty->print("super_t:   "); super_t->dump(); tty->cr();
