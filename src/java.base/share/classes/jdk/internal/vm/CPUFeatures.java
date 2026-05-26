@@ -34,7 +34,7 @@ import static jdk.internal.util.Architecture.isX64;
 /**
  * Enumerates CPU ISA extensions supported by the JVM on the current hardware.
  */
-/*package-private*/ final class CPUFeatures {
+public final class CPUFeatures {
     private static final Set<String> features = getCPUFeatures();
 
     private static Set<String> getCPUFeatures() {
@@ -67,9 +67,6 @@ import static jdk.internal.util.Architecture.isX64;
 
         static {
             requires(isX64(), "unsupported platform");
-
-            debug("AVX=%b; AVX2=%b; AVX512F=%b; AVX512DQ=%b",
-                  SUPPORTS_AVX, SUPPORTS_AVX2, SUPPORTS_AVX512F, SUPPORTS_AVX512DQ);
         }
     }
 
