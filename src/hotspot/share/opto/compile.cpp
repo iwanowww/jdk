@@ -2468,6 +2468,18 @@ void Compile::Optimize() {
       // Try again if candidates exist and made progress
       // by removing some allocations and/or locks.
     } while (progress);
+
+    print_method(PHASE_AFTER_ITERATIVE_EA, 2);
+  }
+
+  // After escape analayis is over, reachability fences don't need memory anymore.
+  if (C->reachability_fences_count() > 0) {
+    for (int i = 0; i < C->reachability_fences_count(); i++) {
+      C->reachability_fence(i)->clear_memory(igvn);
+    }
+    assert(!failing(), "");
+    igvn.optimize();
+    if (failing()) return;
   }
 
   // Loop transforms on the ideal graph.  Range Check Elimination,

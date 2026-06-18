@@ -489,7 +489,7 @@ bool ConnectionGraph::can_reduce_phi_check_inputs(PhiNode* ophi) const {
         continue;
       }
 
-      if (PhaseMacroExpand::can_eliminate_allocation(_igvn, alloc, nullptr)) {
+      if (PhaseMacroExpand::can_eliminate_allocation(_igvn, alloc, nullptr, nullptr)) {
         found_sr_allocate = true;
       } else {
         NOT_PRODUCT(if (TraceReduceAllocationMerges) tty->print_cr("%dth input of Phi %d is SR but can't be eliminated.", i, ophi->_idx);)

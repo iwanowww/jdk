@@ -121,7 +121,17 @@ bool ReachabilityFenceNode::clear_referent(PhaseIterGVN& phase) {
   if (phase.type(referent()) == TypePtr::NULL_PTR) {
     return false;
   } else {
-    phase.replace_input_of(this, 1, phase.makecon(TypePtr::NULL_PTR));
+    phase.replace_input_of(this, Referent, phase.makecon(TypePtr::NULL_PTR));
+    return true;
+  }
+}
+
+// TODO
+bool ReachabilityFenceNode::clear_memory(PhaseIterGVN& phase) {
+  if (in(Memory)->is_top()) {
+    return false;
+  } else {
+    phase.replace_input_of(this, Memory, phase.C->top());
     return true;
   }
 }
@@ -162,7 +172,7 @@ void PhaseIdealLoop::insert_rf(Node* ctrl, Node* referent) {
   IdealLoopTree* lpt = get_loop(ctrl);
   Node* ctrl_end = ctrl->unique_ctrl_out();
 
-  auto new_rf = new ReachabilityFenceNode(C, ctrl, referent);
+  auto new_rf = new ReachabilityFenceNode(C, ctrl, C->top(), referent);
 
   register_control(new_rf, lpt, ctrl);
   set_idom(new_rf, ctrl, dom_depth(ctrl) + 1);
@@ -217,6 +227,9 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
   for (int i = 0; i < C->reachability_fences_count(); i++) {
     ReachabilityFenceNode* rf = C->reachability_fence(i);
     assert(!rf->is_redundant(igvn()), "required");
+    if (rf->in(ReachabilityFenceNode::Memory) != C->top()) {
+      continue; // skip; wait until memory is not needed
+    }
     // Move RFs out of counted loops when possible.
     IdealLoopTree* lpt = get_loop(rf);
     Node* referent = rf->referent();
@@ -499,7 +512,7 @@ void Compile::expand_reachability_edges(Unique_Node_List& safepoints) {
         Node* referent = sfpt->in(idx);
         sfpt->del_req(idx);
 
-        Node* new_rf = new ReachabilityFenceNode(C, ctrl_out, referent);
+        Node* new_rf = new ReachabilityFenceNode(C, ctrl_out, C->top(), referent);
         ctrl_end->replace_edge(ctrl_out, new_rf);
         ctrl_end = new_rf;
       }

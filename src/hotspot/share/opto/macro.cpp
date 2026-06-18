@@ -497,14 +497,13 @@ Node *PhaseMacroExpand::value_from_mem_phi(Node *mem, BasicType ft, const Type *
 }
 
 // Search the last value stored into the object's field.
-Node* PhaseMacroExpand::value_from_mem(Node* origin, Node* ctl, BasicType ft, const Type* ftype, const TypeOopPtr* adr_t, AllocateNode* alloc) {
+Node* PhaseMacroExpand::value_from_mem(Node* orig_mem, Node* ctl, BasicType ft, const Type* ftype, const TypeOopPtr* adr_t, AllocateNode* alloc) {
   assert(adr_t->is_known_instance_field(), "instance required");
   int instance_id = adr_t->instance_id();
   assert((uint)instance_id == alloc->_idx, "wrong allocation");
 
   int alias_idx = C->get_alias_index(adr_t);
   int offset = adr_t->offset();
-  Node* orig_mem = origin->in(TypeFunc::Memory);
   Node *start_mem = C->start()->proj_out_or_null(TypeFunc::Memory);
   Node *alloc_ctrl = alloc->in(TypeFunc::Control);
   Node *alloc_mem = alloc->proj_out_or_null(TypeFunc::Memory, /*io_use:*/false);
@@ -612,7 +611,8 @@ Node* PhaseMacroExpand::value_from_mem(Node* origin, Node* ctl, BasicType ft, co
 }
 
 // Check the possibility of scalar replacement.
-bool PhaseMacroExpand::can_eliminate_allocation(PhaseIterGVN* igvn, AllocateNode* alloc, Unique_Node_List* safepoints) {
+bool PhaseMacroExpand::can_eliminate_allocation(PhaseIterGVN* igvn, AllocateNode* alloc,
+                                                Unique_Node_List* safepoints, Unique_Node_List* reachability_fences) {
   //  Scan the uses of the allocation to check for anything that would
   //  prevent us from eliminating it.
   NOT_PRODUCT( const char* fail_eliminate = nullptr; )
@@ -686,6 +686,9 @@ bool PhaseMacroExpand::can_eliminate_allocation(PhaseIterGVN* igvn, AllocateNode
         // ok to eliminate
       } else if (use->is_ReachabilityFence() && OptimizeReachabilityFences) {
         // ok to eliminate
+        if (reachability_fences != nullptr) {
+          reachability_fences->push(use);
+        }
       } else if (use->is_SafePoint()) {
         SafePointNode* sfpt = use->as_SafePoint();
         if (sfpt->is_Call() && sfpt->as_Call()->has_non_debug_use(res)) {
@@ -927,7 +930,7 @@ SafePointScalarObjectNode* PhaseMacroExpand::create_scalarized_object_descriptio
 
     const TypeOopPtr *field_addr_type = res_type->add_offset(offset)->isa_oopptr();
 
-    Node* field_val = value_from_mem(sfpt, sfpt->control(), basic_elem_type, field_type, field_addr_type, alloc);
+    Node* field_val = value_from_mem(sfpt->in(TypeFunc::Memory), sfpt->control(), basic_elem_type, field_type, field_addr_type, alloc);
 
     // We weren't able to find a value for this field,
     // give up on eliminating this allocation.
@@ -978,10 +981,125 @@ SafePointScalarObjectNode* PhaseMacroExpand::create_scalarized_object_descriptio
 }
 
 // Do scalar replacement.
-bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc, Unique_Node_List& safepoints) {
+bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc, Unique_Node_List& safepoints, Unique_Node_List& reachability_fences) {
   Unique_Node_List safepoints_done;
   Node* res = alloc->result_cast();
   assert(res == nullptr || res->is_CheckCastPP(), "unexpected AllocateNode result");
+
+  typedef Pair<ReachabilityFenceNode*, Node*> Component;
+  GrowableArray<Component> reachability_fences_insert;
+
+  Unique_Node_List reachability_fences_remove;
+  while (reachability_fences.size() > 0) {
+    ReachabilityFenceNode* rf = reachability_fences.pop()->as_ReachabilityFence();
+
+    reachability_fences_remove.push(rf);
+
+    ciInstanceKlass* iklass    = nullptr;
+    BasicType basic_elem_type  = T_ILLEGAL;
+    const Type* field_type     = nullptr;
+    int nfields                = 0;
+    int array_base             = 0;
+    int element_size           = 0;
+    const TypeOopPtr* res_type = nullptr;
+
+    if (res != nullptr) { // Could be null when there are no users
+      res_type = _igvn.type(res)->isa_oopptr();
+
+      if (res_type->isa_instptr()) {
+        // find the fields of the class which will be needed for safepoint debug information
+        iklass = res_type->is_instptr()->instance_klass();
+        nfields = iklass->nof_nonstatic_fields();
+      } else {
+        // find the array's elements which will be needed for safepoint debug information
+        nfields = alloc->in(AllocateNode::ALength)->find_int_con(-1);
+        assert(nfields >= 0, "must be an array klass.");
+        basic_elem_type = res_type->is_aryptr()->elem()->array_element_basic_type();
+        array_base = arrayOopDesc::base_offset_in_bytes(basic_elem_type);
+        element_size = type2aelembytes(basic_elem_type);
+        field_type = res_type->is_aryptr()->elem();
+      }
+    }
+
+    // Scan object's fields adding an input to the safepoint for each field.
+    for (int j = 0; j < nfields; j++) {
+      intptr_t offset;
+      ciField* field = nullptr;
+      if (iklass != nullptr) {
+        field = iklass->nonstatic_field_at(j);
+        offset = field->offset_in_bytes();
+        ciType* elem_type = field->type();
+        basic_elem_type = field->layout_type();
+
+        // The next code is taken from Parse::do_get_xxx().
+        if (is_reference_type(basic_elem_type)) {
+          if (!elem_type->is_loaded()) {
+            field_type = TypeInstPtr::BOTTOM;
+          } else if (field != nullptr && field->is_static_constant()) {
+            ciObject* con = field->constant_value().as_object();
+            // Do not "join" in the previous type; it doesn't add value,
+            // and may yield a vacuous result if the field is of interface type.
+            field_type = TypeOopPtr::make_from_constant(con)->isa_oopptr();
+            assert(field_type != nullptr, "field singleton type must be consistent");
+          } else {
+            field_type = TypeOopPtr::make_from_klass(elem_type->as_klass());
+          }
+          if (UseCompressedOops) {
+            field_type = field_type->make_narrowoop();
+            basic_elem_type = T_NARROWOOP;
+          }
+        } else {
+          field_type = Type::get_const_basic_type(basic_elem_type);
+        }
+      } else {
+        offset = array_base + j * (intptr_t)element_size;
+      }
+
+      if (is_reference_type(basic_elem_type, true /*include_narrow_oop*/)) {
+        const TypeOopPtr *field_addr_type = res_type->add_offset(offset)->isa_oopptr();
+        Node* field_val = value_from_mem(rf->in(ReachabilityFenceNode::Memory),
+                                         rf->in(ReachabilityFenceNode::Control),
+                                         basic_elem_type, field_type, field_addr_type, alloc);
+
+        // We weren't able to find a value for this field, give up on eliminating this allocation.
+        if (field_val == nullptr) {
+#ifndef PRODUCT
+          if (PrintEliminateAllocations) {
+            if (field != nullptr) {
+              tty->print("=== At ReachabilityFence node %d can't find value of field: ", rf->_idx);
+              field->print();
+              int field_idx = C->get_alias_index(field_addr_type);
+              tty->print(" (alias_idx=%d)", field_idx);
+            } else { // Array's element
+              tty->print("=== At ReachabilityFence node %d can't find value of array element [%d]", rf->_idx, j);
+            }
+            tty->print(", which prevents elimination of: ");
+            if (res == nullptr) {
+              alloc->dump();
+            } else {
+              res->dump();
+            }
+          }
+#endif
+          return false;
+        }
+
+        if (UseCompressedOops && field_type->isa_narrowoop()) {
+          // Enable "DecodeN(EncodeP(Allocate)) --> Allocate" transformation
+          // to be able scalar replace the allocation.
+          if (field_val->is_EncodeP()) {
+            field_val = field_val->in(1);
+          } else {
+            field_val = transform_later(new DecodeNNode(field_val, field_val->get_ptr_type()));
+          }
+        }
+        DEBUG_ONLY(verify_type_compatability(field_val->bottom_type(), field_type);)
+
+        Component elem(rf, field_val);
+        reachability_fences_insert.push(elem);
+      }
+    }
+  }
 
   // Process the safepoint uses
   while (safepoints.size() > 0) {
@@ -1013,6 +1131,29 @@ bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc, Unique_Node_List&
     safepoints_done.push(sfpt);
   }
 
+  // Process reachability fences.
+  if (reachability_fences_insert.length() > 0) {
+    assert(reachability_fences_remove.size() > 0, "");
+    while (reachability_fences_insert.length() > 0) {
+      Component elem = reachability_fences_insert.pop();
+      ReachabilityFenceNode* rf = elem.first;
+      Node* referent = elem.second;
+
+      Node* ctrl_out = rf->unique_ctrl_out();
+      Node* mem = rf->in(ReachabilityFenceNode::Memory);
+      Node* field_rf = transform_later(new ReachabilityFenceNode(C, rf, mem, referent));
+
+      _igvn.rehash_node_delayed(ctrl_out);
+      ctrl_out->replace_edge(rf, field_rf);
+      _igvn._worklist.push(ctrl_out); // modified
+    }
+  }
+  while (reachability_fences_remove.size() > 0) {
+    ReachabilityFenceNode* rf = reachability_fences_remove.pop()->as_ReachabilityFence();
+    if (rf->clear_referent(_igvn)) {
+      _igvn._worklist.push(rf); // modified
+    }
+  }
   return true;
 }
 
@@ -1098,6 +1239,7 @@ void PhaseMacroExpand::process_users_of_allocation(CallNode *alloc) {
         }
         _igvn._worklist.push(ac);
       } else if (use->is_ReachabilityFence() && OptimizeReachabilityFences) {
+        assert(false, "");
         use->as_ReachabilityFence()->clear_referent(_igvn); // redundant fence; will be removed during IGVN
       } else {
         eliminate_gc_barrier(use);
@@ -1200,7 +1342,8 @@ bool PhaseMacroExpand::eliminate_allocate_node(AllocateNode *alloc) {
   alloc->extract_projections(&_callprojs, false /*separate_io_proj*/, false /*do_asserts*/);
 
   Unique_Node_List safepoints;
-  if (!can_eliminate_allocation(&_igvn, alloc, &safepoints)) {
+  Unique_Node_List reachability_fences;
+  if (!can_eliminate_allocation(&_igvn, alloc, &safepoints, &reachability_fences)) {
     return false;
   }
 
@@ -1214,7 +1357,7 @@ bool PhaseMacroExpand::eliminate_allocate_node(AllocateNode *alloc) {
     }
   }
 
-  if (!scalar_replacement(alloc, safepoints)) {
+  if (!scalar_replacement(alloc, safepoints, reachability_fences)) {
     return false;
   }
 

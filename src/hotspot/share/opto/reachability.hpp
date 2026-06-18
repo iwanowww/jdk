@@ -41,15 +41,18 @@
 // More details in reachability.cpp.
 class ReachabilityFenceNode : public Node {
 public:
-  ReachabilityFenceNode(Compile* C, Node* ctrl, Node* referent)
-      : Node(1) {
+  enum { Control, Memory, Referent };
+
+  ReachabilityFenceNode(Compile* C, Node* ctrl, Node* mem, Node* referent)
+      : Node(3) {
     assert(referent->bottom_type()->isa_oopptr() ||
            referent->bottom_type()->isa_narrowoop() != nullptr ||
            referent->bottom_type() == TypePtr::NULL_PTR,
            "%s", Type::str(referent->bottom_type()));
     init_class_id(Class_ReachabilityFence);
-    init_req(TypeFunc::Control, ctrl);
-    add_req(referent);
+    init_req(Control, ctrl);
+    init_req(Memory, mem);
+    init_req(Referent, referent);
     C->add_reachability_fence(this);
   }
   virtual int  Opcode() const;
@@ -61,7 +64,11 @@ public:
   virtual const RegMask& in_RegMask(uint idx) const {
     // Fake input register mask for the referent: accepts all registers and all stack slots.
     // This avoids redundant register moves around reachability fences.
-    return RegMask::ALL;
+    if (idx == Memory) {
+      return RegMask::EMPTY;
+    } else {
+      return RegMask::ALL;
+    }
   }
   virtual const RegMask& out_RegMask() const {
     return RegMask::EMPTY;
@@ -70,9 +77,10 @@ public:
   virtual Node* Ideal(PhaseGVN* phase, bool can_reshape);
   virtual Node* Identity(PhaseGVN* phase);
 
-  Node* referent() const { return in(1); }
+  Node* referent() const { return in(Referent); }
   bool is_redundant(PhaseGVN& gvn);
   bool clear_referent(PhaseIterGVN& phase);
+  bool clear_memory(PhaseIterGVN& phase);
 
 #ifndef PRODUCT
   virtual void format(PhaseRegAlloc* ra, outputStream* st) const;

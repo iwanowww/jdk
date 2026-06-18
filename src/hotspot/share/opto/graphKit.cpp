@@ -3541,7 +3541,9 @@ Node* GraphKit::insert_mem_bar_volatile(int opcode, int alias_idx, Node* precede
 //------------------------------insert_reachability_fence----------------------
 Node* GraphKit::insert_reachability_fence(Node* referent) {
   assert(!referent->is_top(), "");
-  Node* rf = _gvn.transform(new ReachabilityFenceNode(C, control(), referent));
+  Node* mem = reset_memory();
+  set_all_memory(mem);
+  Node* rf = _gvn.transform(new ReachabilityFenceNode(C, control(), mem, referent));
   set_control(rf);
   C->record_for_igvn(rf);
   return rf;
