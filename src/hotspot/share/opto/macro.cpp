@@ -820,12 +820,12 @@ void PhaseMacroExpand::undo_previous_scalarizations(Unique_Node_List& safepoints
 
 #ifdef ASSERT
   // Verify if a value can be written into a field.
-  void verify_type_compatability(const Type* value_type, const Type* field_type) {
+  bool value_matches_field(const Type* value_type, const Type* field_type) {
     BasicType value_bt = value_type->basic_type();
     BasicType field_bt = field_type->basic_type();
 
     // Primitive types must match.
-    if (is_java_primitive(value_bt) && value_bt == field_bt) { return; }
+    if (is_java_primitive(value_bt) && value_bt == field_bt) { return true; }
 
     // I have been struggling to make a similar assert for non-primitive
     // types. I we can add one in the future. For now, I just let them
@@ -838,7 +838,7 @@ void PhaseMacroExpand::undo_previous_scalarizations(Unique_Node_List& safepoints
     // that it should get an oop from an interface, but the value lost
     // that information, and so it is not a subtype.
     // There may be other issues, feel free to investigate further!
-    if (!is_java_primitive(value_bt)) { return; }
+    if (!is_java_primitive(value_bt)) { return true; }
 
     tty->print_cr("value not compatible for field: %s vs %s",
                   type2name(value_bt),
@@ -849,57 +849,42 @@ void PhaseMacroExpand::undo_previous_scalarizations(Unique_Node_List& safepoints
     tty->print("field_type: ");
     field_type->dump();
     tty->cr();
-    assert(false, "value_type does not fit field_type");
+    return false;
   }
-#endif
+#endif // ASSERT
 
-SafePointScalarObjectNode* PhaseMacroExpand::create_scalarized_object_description(AllocateNode *alloc, SafePointNode* sfpt) {
-  assert(sfpt->jvms()->endoff() == sfpt->req(), "no extra edges past debug info allowed");
+bool PhaseMacroExpand::enumerate_field_values_for_allocation(AllocateNode* alloc, Node* ctrl, Node* mem,
+                                                             GrowableArray<Node*>& field_values,
+                                                             bool references_only, Node* info) {
+  assert(field_values.is_empty(), "not empty");
 
-  // Fields of scalar objs are referenced only at the end
-  // of regular debuginfo at the last (youngest) JVMS.
-  // Record relative start index.
   ciInstanceKlass* iklass    = nullptr;
   BasicType basic_elem_type  = T_ILLEGAL;
   const Type* field_type     = nullptr;
-  const TypeOopPtr* res_type = nullptr;
   int nfields                = 0;
   int array_base             = 0;
   int element_size           = 0;
-  uint first_ind             = (sfpt->req() - sfpt->jvms()->scloff());
-  Node* res                  = alloc->result_cast();
 
-  assert(res == nullptr || res->is_CheckCastPP(), "unexpected AllocateNode result");
-  assert(sfpt->jvms() != nullptr, "missed JVMS");
-
-  if (res != nullptr) { // Could be null when there are no users
-    res_type = _igvn.type(res)->isa_oopptr();
-
-    if (res_type->isa_instptr()) {
-      // find the fields of the class which will be needed for safepoint debug information
-      iklass = res_type->is_instptr()->instance_klass();
-      nfields = iklass->nof_nonstatic_fields();
-    } else {
-      // find the array's elements which will be needed for safepoint debug information
-      nfields = alloc->in(AllocateNode::ALength)->find_int_con(-1);
-      assert(nfields >= 0, "must be an array klass.");
-      basic_elem_type = res_type->is_aryptr()->elem()->array_element_basic_type();
-      array_base = arrayOopDesc::base_offset_in_bytes(basic_elem_type);
-      element_size = type2aelembytes(basic_elem_type);
-      field_type = res_type->is_aryptr()->elem();
-    }
+  const TypeOopPtr* res_type = _igvn.type(alloc->result_cast())->isa_oopptr();
+  if (res_type->isa_instptr()) {
+    // find the fields of the class which will be needed for safepoint debug information
+    iklass = res_type->is_instptr()->instance_klass();
+    nfields = iklass->nof_nonstatic_fields();
+  } else {
+    assert(res_type->isa_aryptr(), "not an array: %s", Type::str(res_type));
+    // find the array's elements which will be needed for safepoint debug information
+    nfields = alloc->in(AllocateNode::ALength)->find_int_con(-1);
+    assert(nfields >= 0, "must be an array klass");
+    basic_elem_type = res_type->is_aryptr()->elem()->array_element_basic_type();
+    array_base = arrayOopDesc::base_offset_in_bytes(basic_elem_type);
+    element_size = type2aelembytes(basic_elem_type);
+    field_type = res_type->is_aryptr()->elem();
   }
 
-  SafePointScalarObjectNode* sobj = new SafePointScalarObjectNode(res_type, alloc, first_ind, sfpt->jvms()->depth(), nfields);
-  sobj->init_req(0, C->root());
-  transform_later(sobj);
-
-  // Scan object's fields adding an input to the safepoint for each field.
   for (int j = 0; j < nfields; j++) {
     intptr_t offset;
-    ciField* field = nullptr;
-    if (iklass != nullptr) {
-      field = iklass->nonstatic_field_at(j);
+    if (res_type->isa_instptr()) {
+      ciField* field = iklass->nonstatic_field_at(j);
       offset = field->offset_in_bytes();
       ciType* elem_type = field->type();
       basic_elem_type = field->layout_type();
@@ -928,176 +913,147 @@ SafePointScalarObjectNode* PhaseMacroExpand::create_scalarized_object_descriptio
       offset = array_base + j * (intptr_t)element_size;
     }
 
-    const TypeOopPtr *field_addr_type = res_type->add_offset(offset)->isa_oopptr();
+    if (references_only && !is_reference_type(basic_elem_type, true /*include_narrow_oop*/)) {
+      continue; // skip primitive fields
+    }
 
-    Node* field_val = value_from_mem(sfpt->in(TypeFunc::Memory), sfpt->control(), basic_elem_type, field_type, field_addr_type, alloc);
+    const TypeOopPtr* field_addr_type = res_type->add_offset(offset)->isa_oopptr();
+    Node* field_val = value_from_mem(mem, ctrl, basic_elem_type, field_type, field_addr_type, alloc);
 
-    // We weren't able to find a value for this field,
-    // give up on eliminating this allocation.
-    if (field_val == nullptr) {
-      uint last = sfpt->req() - 1;
-      for (int k = 0;  k < j; k++) {
-        sfpt->del_req(last--);
-      }
-      _igvn._worklist.push(sfpt);
-
-#ifndef PRODUCT
-      if (PrintEliminateAllocations) {
-        if (field != nullptr) {
-          tty->print("=== At SafePoint node %d can't find value of field: ", sfpt->_idx);
-          field->print();
-          int field_idx = C->get_alias_index(field_addr_type);
-          tty->print(" (alias_idx=%d)", field_idx);
-        } else { // Array's element
-          tty->print("=== At SafePoint node %d can't find value of array element [%d]", sfpt->_idx, j);
+    if (field_val != nullptr) {
+      if (UseCompressedOops && field_type->isa_narrowoop()) {
+        // Enable "DecodeN(EncodeP(Allocate)) --> Allocate" transformation
+        // to be able scalar replace the allocation.
+        if (field_val->is_EncodeP()) {
+          field_val = field_val->in(1);
+        } else {
+          field_val = transform_later(new DecodeNNode(field_val, field_val->get_ptr_type()));
         }
-        tty->print(", which prevents elimination of: ");
-        if (res == nullptr)
-          alloc->dump();
-        else
-          res->dump();
       }
-#endif
-
-      return nullptr;
-    }
-
-    if (UseCompressedOops && field_type->isa_narrowoop()) {
-      // Enable "DecodeN(EncodeP(Allocate)) --> Allocate" transformation
-      // to be able scalar replace the allocation.
-      if (field_val->is_EncodeP()) {
-        field_val = field_val->in(1);
-      } else {
-        field_val = transform_later(new DecodeNNode(field_val, field_val->get_ptr_type()));
+      assert(value_matches_field(field_val->bottom_type(), field_type), "value_type does not fit field_type");
+#ifndef PRODUCT
+    } else {
+      bool first_failure = !field_values.contains(nullptr);
+      if (PrintEliminateAllocations && info != nullptr && first_failure) {
+        tty->print("=== At %s node %d can't find value of ", info->Name(), info->_idx);
+        if (res_type->isa_instptr()) {
+          tty->print_raw("field: ");
+          iklass->nonstatic_field_at(j)->print();
+          tty->print(" (alias_idx=%d)", C->get_alias_index(field_addr_type));
+        } else {
+          tty->print("array element [%d]", j);
+        }
+        tty->print(", which prevents elimination of: %s node %d", alloc->Name(), alloc->_idx);
+        alloc->result_cast()->dump();
       }
+#endif // !PRODUCT
     }
-    DEBUG_ONLY(verify_type_compatability(field_val->bottom_type(), field_type);)
-    sfpt->add_req(field_val);
+    field_values.push(field_val);
   }
+  return !field_values.contains(nullptr);
+}
 
-  sfpt->jvms()->set_endoff(sfpt->req());
+SafePointScalarObjectNode* PhaseMacroExpand::create_scalarized_object_description(AllocateNode* alloc, SafePointNode* sfpt) {
+  assert(alloc->result_cast() != nullptr, "no uses");
+  assert(alloc->result_cast()->is_CheckCastPP(), "wrong Allocate result");
+  assert(sfpt->jvms() != nullptr, "missed JVMS");
+  assert(sfpt->jvms()->endoff() == sfpt->req(), "no extra edges past debug info allowed");
 
-  return sobj;
+  // Fields of scalar objs are referenced only at the end
+  // of regular debuginfo at the last (youngest) JVMS.
+  // Record relative start index.
+
+  ResourceMark rm;
+  GrowableArray<Node*> field_values;
+  if (enumerate_field_values_for_allocation(alloc, sfpt->control(), sfpt->in(TypeFunc::Memory),
+                                            field_values, false /*references_only*/, sfpt)) {
+    const TypeOopPtr* res_type = _igvn.type(alloc->result_cast())->isa_oopptr();
+    uint nfields = field_values.length();
+    uint first_ind = (sfpt->req() - sfpt->jvms()->scloff());
+    SafePointScalarObjectNode* sobj = new SafePointScalarObjectNode(res_type, alloc, first_ind, sfpt->jvms()->depth(), nfields);
+    sobj->init_req(0, C->root());
+    transform_later(sobj);
+
+    for (int i = 0; i < field_values.length(); i++) {
+      Node* field_val = field_values.at(i);
+      sfpt->add_req(field_val);
+    }
+    sfpt->jvms()->set_endoff(sfpt->req());
+
+    return sobj;
+  } else {
+    return nullptr; // failed to scalarize field accesses
+  }
+}
+
+bool PhaseMacroExpand::create_scalarized_reachability_fences(AllocateNode* alloc,
+                                                             ReachabilityFenceNode* reachability_fence,
+                                                             GrowableArray<Component>& reachability_fences_insert,
+                                                             GrowableArray<Node*>& temp) {
+  GrowableArray<Node*>& field_values = temp;
+  if (enumerate_field_values_for_allocation(alloc,
+                                            reachability_fence->in(ReachabilityFenceNode::Control),
+                                            reachability_fence->in(ReachabilityFenceNode::Memory),
+                                            field_values,
+                                            true /*references_only*/,
+                                            reachability_fence /*info*/)) {
+    while (field_values.is_nonempty()) {
+      // Delay reachability fence scalarization until all safepoints are processed.
+      Node* field_val = field_values.pop();
+      Component elem(reachability_fence, field_val);
+      reachability_fences_insert.push(elem);
+    }
+    return true;
+  } else {
+    return false; // failed to scalarize object field accesses
+  }
+}
+
+void PhaseMacroExpand::insert_scalarized_reachability_fences(GrowableArray<Component>& scalarized_reachability_fences,
+                                                             Unique_Node_List& reachability_fences) {
+  while (scalarized_reachability_fences.length() > 0) {
+    assert(reachability_fences.size() > 0, "no nodes to replace");
+    Component elem = scalarized_reachability_fences.pop();
+    ReachabilityFenceNode* rf = elem.first;
+    Node* referent = elem.second;
+
+    assert(reachability_fences.member(rf), "wrong node");
+
+    Node* ctrl_out = rf->unique_ctrl_out();
+    Node* mem = rf->in(ReachabilityFenceNode::Memory);
+    Node* field_rf = transform_later(new ReachabilityFenceNode(C, rf, mem, referent));
+
+    _igvn.rehash_node_delayed(ctrl_out);
+    ctrl_out->replace_edge(rf, field_rf);
+    _igvn._worklist.push(ctrl_out); // modified
+  }
 }
 
 // Do scalar replacement.
 bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc, Unique_Node_List& safepoints, Unique_Node_List& reachability_fences) {
   Unique_Node_List safepoints_done;
   Node* res = alloc->result_cast();
-  assert(res == nullptr || res->is_CheckCastPP(), "unexpected AllocateNode result");
+  if (res == nullptr) {
+    assert(safepoints.size()          == 0, "no uses");
+    assert(reachability_fences.size() == 0, "no uses");
+    return true;
+  }
+  assert(res->is_CheckCastPP(), "unexpected AllocateNode result");
+  const TypeOopPtr* res_type = _igvn.type(res)->isa_oopptr();
 
-  typedef Pair<ReachabilityFenceNode*, Node*> Component;
-  GrowableArray<Component> reachability_fences_insert;
+  GrowableArray<Component> scalarized_reachability_fences;
+  if (OptimizeReachabilityFences) {
+    GrowableArray<Node*> tmp; // has to be under the same ResourceMark as scalarized_reachability_fences
 
-  Unique_Node_List reachability_fences_remove;
-  while (reachability_fences.size() > 0) {
-    ReachabilityFenceNode* rf = reachability_fences.pop()->as_ReachabilityFence();
-
-    reachability_fences_remove.push(rf);
-
-    ciInstanceKlass* iklass    = nullptr;
-    BasicType basic_elem_type  = T_ILLEGAL;
-    const Type* field_type     = nullptr;
-    int nfields                = 0;
-    int array_base             = 0;
-    int element_size           = 0;
-    const TypeOopPtr* res_type = nullptr;
-
-    if (res != nullptr) { // Could be null when there are no users
-      res_type = _igvn.type(res)->isa_oopptr();
-
-      if (res_type->isa_instptr()) {
-        // find the fields of the class which will be needed for safepoint debug information
-        iklass = res_type->is_instptr()->instance_klass();
-        nfields = iklass->nof_nonstatic_fields();
-      } else {
-        // find the array's elements which will be needed for safepoint debug information
-        nfields = alloc->in(AllocateNode::ALength)->find_int_con(-1);
-        assert(nfields >= 0, "must be an array klass.");
-        basic_elem_type = res_type->is_aryptr()->elem()->array_element_basic_type();
-        array_base = arrayOopDesc::base_offset_in_bytes(basic_elem_type);
-        element_size = type2aelembytes(basic_elem_type);
-        field_type = res_type->is_aryptr()->elem();
+    for (uint i = 0; i < reachability_fences.size(); i++) {
+      ReachabilityFenceNode* reachability_fence = reachability_fences.at(i)->as_ReachabilityFence();
+      if (!create_scalarized_reachability_fences(alloc, reachability_fence, scalarized_reachability_fences, tmp)) {
+        return false; // failed to scalarize object field accesses for reachability fences
       }
     }
-
-    // Scan object's fields adding an input to the safepoint for each field.
-    for (int j = 0; j < nfields; j++) {
-      intptr_t offset;
-      ciField* field = nullptr;
-      if (iklass != nullptr) {
-        field = iklass->nonstatic_field_at(j);
-        offset = field->offset_in_bytes();
-        ciType* elem_type = field->type();
-        basic_elem_type = field->layout_type();
-
-        // The next code is taken from Parse::do_get_xxx().
-        if (is_reference_type(basic_elem_type)) {
-          if (!elem_type->is_loaded()) {
-            field_type = TypeInstPtr::BOTTOM;
-          } else if (field != nullptr && field->is_static_constant()) {
-            ciObject* con = field->constant_value().as_object();
-            // Do not "join" in the previous type; it doesn't add value,
-            // and may yield a vacuous result if the field is of interface type.
-            field_type = TypeOopPtr::make_from_constant(con)->isa_oopptr();
-            assert(field_type != nullptr, "field singleton type must be consistent");
-          } else {
-            field_type = TypeOopPtr::make_from_klass(elem_type->as_klass());
-          }
-          if (UseCompressedOops) {
-            field_type = field_type->make_narrowoop();
-            basic_elem_type = T_NARROWOOP;
-          }
-        } else {
-          field_type = Type::get_const_basic_type(basic_elem_type);
-        }
-      } else {
-        offset = array_base + j * (intptr_t)element_size;
-      }
-
-      if (is_reference_type(basic_elem_type, true /*include_narrow_oop*/)) {
-        const TypeOopPtr *field_addr_type = res_type->add_offset(offset)->isa_oopptr();
-        Node* field_val = value_from_mem(rf->in(ReachabilityFenceNode::Memory),
-                                         rf->in(ReachabilityFenceNode::Control),
-                                         basic_elem_type, field_type, field_addr_type, alloc);
-
-        // We weren't able to find a value for this field, give up on eliminating this allocation.
-        if (field_val == nullptr) {
-#ifndef PRODUCT
-          if (PrintEliminateAllocations) {
-            if (field != nullptr) {
-              tty->print("=== At ReachabilityFence node %d can't find value of field: ", rf->_idx);
-              field->print();
-              int field_idx = C->get_alias_index(field_addr_type);
-              tty->print(" (alias_idx=%d)", field_idx);
-            } else { // Array's element
-              tty->print("=== At ReachabilityFence node %d can't find value of array element [%d]", rf->_idx, j);
-            }
-            tty->print(", which prevents elimination of: ");
-            if (res == nullptr) {
-              alloc->dump();
-            } else {
-              res->dump();
-            }
-          }
-#endif
-          return false;
-        }
-
-        if (UseCompressedOops && field_type->isa_narrowoop()) {
-          // Enable "DecodeN(EncodeP(Allocate)) --> Allocate" transformation
-          // to be able scalar replace the allocation.
-          if (field_val->is_EncodeP()) {
-            field_val = field_val->in(1);
-          } else {
-            field_val = transform_later(new DecodeNNode(field_val, field_val->get_ptr_type()));
-          }
-        }
-        DEBUG_ONLY(verify_type_compatability(field_val->bottom_type(), field_type);)
-
-        Component elem(rf, field_val);
-        reachability_fences_insert.push(elem);
-      }
+  } else {
+    if (reachability_fences.size() > 0) {
+      return false; // can't scalarize reachability fence uses
     }
   }
 
@@ -1131,28 +1087,19 @@ bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc, Unique_Node_List&
     safepoints_done.push(sfpt);
   }
 
-  // Process reachability fences.
-  if (reachability_fences_insert.length() > 0) {
-    assert(reachability_fences_remove.size() > 0, "");
-    while (reachability_fences_insert.length() > 0) {
-      Component elem = reachability_fences_insert.pop();
-      ReachabilityFenceNode* rf = elem.first;
-      Node* referent = elem.second;
+  if (OptimizeReachabilityFences) {
+    // Finish scalarizing reachability fences after all safepoints are successfully processed.
+    insert_scalarized_reachability_fences(scalarized_reachability_fences, reachability_fences);
 
-      Node* ctrl_out = rf->unique_ctrl_out();
-      Node* mem = rf->in(ReachabilityFenceNode::Memory);
-      Node* field_rf = transform_later(new ReachabilityFenceNode(C, rf, mem, referent));
-
-      _igvn.rehash_node_delayed(ctrl_out);
-      ctrl_out->replace_edge(rf, field_rf);
-      _igvn._worklist.push(ctrl_out); // modified
+    while (reachability_fences.size() > 0) {
+      ReachabilityFenceNode* rf = reachability_fences.pop()->as_ReachabilityFence();
+      if (rf->clear_referent(_igvn)) {
+        _igvn._worklist.push(rf); // modified
+      }
     }
-  }
-  while (reachability_fences_remove.size() > 0) {
-    ReachabilityFenceNode* rf = reachability_fences_remove.pop()->as_ReachabilityFence();
-    if (rf->clear_referent(_igvn)) {
-      _igvn._worklist.push(rf); // modified
-    }
+  } else {
+    assert(reachability_fences.size() == 0, "not empty");
+    assert(scalarized_reachability_fences.is_empty(), "not empty");
   }
   return true;
 }

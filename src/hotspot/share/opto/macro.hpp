@@ -33,6 +33,7 @@ class  CallNode;
 class  SubTypeCheckNode;
 class  Node;
 class  PhaseIterGVN;
+class  ReachabilityFenceNode;
 
 class PhaseMacroExpand : public Phase {
 private:
@@ -207,6 +208,17 @@ private:
 
   Node* make_arraycopy_load(ArrayCopyNode* ac, intptr_t offset, Node* ctl, Node* mem, BasicType ft, const Type* ftype, AllocateNode* alloc);
 
+  bool enumerate_field_values_for_allocation(AllocateNode* alloc, Node* ctrl, Node* mem,
+                                             GrowableArray<Node*>& field_values, bool references_only, Node* info);
+
+  typedef Pair<ReachabilityFenceNode*, Node*> Component;
+  bool create_scalarized_reachability_fences(AllocateNode* alloc,
+                                             ReachabilityFenceNode* reachability_fence,
+                                             GrowableArray<Component>& scalarized_reachability_fences, // out-param
+                                             GrowableArray<Node*>& temp);
+
+  void insert_scalarized_reachability_fences(GrowableArray<Component>& scalarized_reachability_fences,
+                                             Unique_Node_List& reachabilty_fences);
 public:
   PhaseMacroExpand(PhaseIterGVN &igvn) : Phase(Macro_Expand), _igvn(igvn) {
     _igvn.set_delay_transform(true);
