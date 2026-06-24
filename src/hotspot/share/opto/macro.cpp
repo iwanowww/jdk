@@ -986,47 +986,6 @@ SafePointScalarObjectNode* PhaseMacroExpand::create_scalarized_object_descriptio
   }
 }
 
-bool PhaseMacroExpand::enumerate_field_values_for_allocation(AllocateNode* alloc,
-                                                             ReachabilityFenceNode* reachability_fence,
-                                                             GrowableArray<ReachabilityFenceInfo>& scalarized_reachability_fences,
-                                                             GrowableArray<Node*>& temp) {
-  Node* ctrl_rf = reachability_fence->in(ReachabilityFenceNode::Control);
-  Node* mem_rf = reachability_fence->in(ReachabilityFenceNode::Memory);
-  GrowableArray<Node*>& field_values = temp; // reuse temporary buffer
-  if (enumerate_field_values_for_allocation(alloc, ctrl_rf, mem_rf, field_values, true /*references_only*/, reachability_fence /*info*/)) {
-    while (field_values.is_nonempty()) {
-      // Delay reachability fence scalarization until all safepoints are processed.
-      Node* referent = field_values.pop();
-
-      ReachabilityFenceInfo info(referent, reachability_fence);
-      scalarized_reachability_fences.push(info);
-    }
-    return true;
-  } else {
-    return false; // failed to scalarize object field accesses
-  }
-}
-
-void PhaseMacroExpand::insert_reachability_fences(GrowableArray<ReachabilityFenceInfo>& reachability_fences_info) {
-  while (reachability_fences_info.length() > 0) {
-    ReachabilityFenceInfo elem = reachability_fences_info.pop();
-
-    Node* referent = elem.first;
-    ReachabilityFenceNode* original_reachability_fence = elem.second;
-
-    // Inherit control and memory inputs from original fence.
-    Node* ctrl     = original_reachability_fence->in(ReachabilityFenceNode::Control);
-    Node* mem      = original_reachability_fence->in(ReachabilityFenceNode::Memory);
-
-    Node* ctrl_out = ctrl->unique_ctrl_out();
-    Node* field_rf = transform_later(new ReachabilityFenceNode(C, ctrl, mem, referent));
-
-    _igvn.rehash_node_delayed(ctrl_out);
-    ctrl_out->replace_edge(ctrl, field_rf);
-    _igvn._worklist.push(ctrl_out); // modified
-  }
-}
-
 // Do scalar replacement.
 bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc,
                                           Unique_Node_List& safepoints,
@@ -1040,22 +999,6 @@ bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc,
   }
   assert(res->is_CheckCastPP(), "unexpected AllocateNode result");
   const TypeOopPtr* res_type = _igvn.type(res)->isa_oopptr();
-
-  GrowableArray<ReachabilityFenceInfo> oop_field_values_for_allocation;
-  if (OptimizeReachabilityFences) {
-    GrowableArray<Node*> tmp; // has to be under the same ResourceMark as scalarized_reachability_fence_components
-
-    for (uint i = 0; i < reachability_fences.size(); i++) {
-      ReachabilityFenceNode* reachability_fence = reachability_fences.at(i)->as_ReachabilityFence();
-      if (!enumerate_field_values_for_allocation(alloc, reachability_fence, oop_field_values_for_allocation, tmp)) {
-        return false; // failed to scalarize object field accesses for reachability fences
-      }
-    }
-  } else {
-    if (reachability_fences.size() > 0) {
-      return false; // can't scalarize reachability fence uses
-    }
-  }
 
   // Process the safepoint uses
   while (safepoints.size() > 0) {
@@ -1089,18 +1032,34 @@ bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc,
 
   // Finish scalarizing reachability fences after all safepoints are successfully processed.
   if (OptimizeReachabilityFences) {
-    insert_reachability_fences(oop_field_values_for_allocation);
-
-    // Remove scalarized reachability fences.
-    while (reachability_fences.size() > 0) {
-      ReachabilityFenceNode* rf = reachability_fences.pop()->as_ReachabilityFence();
-      if (rf->clear_referent(_igvn)) {
-        _igvn._worklist.push(rf); // modified
+    for (uint i = 0; i < reachability_fences.size(); i++) {
+      ReachabilityFenceNode* reachability_fence = reachability_fences.at(i)->as_ReachabilityFence();
+      Node* ctrl_rf = reachability_fence->in(ReachabilityFenceNode::Control);
+      Node* mem_rf = reachability_fence->in(ReachabilityFenceNode::Memory);
+      GrowableArray<Node*> oop_field_values;
+      if (enumerate_field_values_for_allocation(alloc, ctrl_rf, mem_rf, oop_field_values, true /*references_only*/, reachability_fence /*info*/)) {
+        while (oop_field_values.length() > 0) {
+          Node* field_value = oop_field_values.pop();
+          Node* ctrl_out = ctrl_rf->unique_ctrl_out();
+          Node* field_rf = transform_later(new ReachabilityFenceNode(C, ctrl_rf, mem_rf, field_value));
+          _igvn.rehash_node_delayed(ctrl_out);
+          ctrl_out->replace_edge(ctrl_rf, field_rf);
+          _igvn._worklist.push(ctrl_out); // modified
+        }
+        if (reachability_fence->clear_referent(_igvn)) {
+          _igvn._worklist.push(reachability_fence); // modified
+        }
+        // TODO: fix
+      } else {
+        undo_previous_scalarizations(safepoints_done, alloc);
+        fatal("NYI: reachability fences");
+        return false; // failed to scalarize object field accesses for reachability fences
       }
     }
   } else {
-    assert(reachability_fences.size() == 0, "not empty");
-    assert(oop_field_values_for_allocation.is_empty(), "not empty");
+    if (reachability_fences.size() > 0) {
+      return false; // can't scalarize reachability fence uses
+    }
   }
   return true;
 }
