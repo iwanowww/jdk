@@ -45,13 +45,14 @@ public:
 
   ReachabilityFenceNode(Compile* C, Node* ctrl, Node* mem, Node* referent)
       : Node(3) {
+    assert(ctrl != nullptr && mem != nullptr && referent != nullptr, "required");
     assert(referent->bottom_type()->isa_oopptr() ||
            referent->bottom_type()->isa_narrowoop() != nullptr ||
            referent->bottom_type() == TypePtr::NULL_PTR,
-           "%s", Type::str(referent->bottom_type()));
+           "not an oop: %s %s", Type::str(referent->bottom_type()), referent->Name());
     init_class_id(Class_ReachabilityFence);
-    init_req(Control, ctrl);
-    init_req(Memory, mem);
+    init_req(Control,  ctrl);
+    init_req(Memory,   mem);
     init_req(Referent, referent);
     C->add_reachability_fence(this);
   }

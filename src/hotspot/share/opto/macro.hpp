@@ -211,14 +211,14 @@ private:
   bool enumerate_field_values_for_allocation(AllocateNode* alloc, Node* ctrl, Node* mem,
                                              GrowableArray<Node*>& field_values, bool references_only, Node* info);
 
-  typedef Pair<ReachabilityFenceNode*, Node*> Component;
-  bool create_scalarized_reachability_fences(AllocateNode* alloc,
+  typedef Pair<Node*,ReachabilityFenceNode*> ReachabilityFenceInfo; // (referent, original reachability fence) tuple
+  // Enumerate oop field values for allocation as seen at a reachability fence.
+  bool enumerate_field_values_for_allocation(AllocateNode* alloc,
                                              ReachabilityFenceNode* reachability_fence,
-                                             GrowableArray<Component>& scalarized_reachability_fences, // out-param
+                                             GrowableArray<ReachabilityFenceInfo>& scalarized_reachability_fences, // out-param
                                              GrowableArray<Node*>& temp);
 
-  void insert_scalarized_reachability_fences(GrowableArray<Component>& scalarized_reachability_fences,
-                                             Unique_Node_List& reachabilty_fences);
+  void insert_reachability_fences(GrowableArray<ReachabilityFenceInfo>& reachability_fences_info);
 public:
   PhaseMacroExpand(PhaseIterGVN &igvn) : Phase(Macro_Expand), _igvn(igvn) {
     _igvn.set_delay_transform(true);

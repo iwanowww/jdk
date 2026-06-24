@@ -2417,6 +2417,13 @@ void Compile::Optimize() {
 
   if (failing())  return;
 
+#ifdef ASSERT
+  for (int i = 0; i < C->reachability_fences_count(); i++) {
+    ReachabilityFenceNode* rf = C->reachability_fence(i);
+    assert(rf->in(0)->unique_ctrl_out_or_null() != nullptr, "multiple control use");
+  }
+#endif // ASSERT
+
   _print_phase_loop_opts = has_loops();
   if (_print_phase_loop_opts) {
     print_method(PHASE_BEFORE_LOOP_OPTS, 2);
