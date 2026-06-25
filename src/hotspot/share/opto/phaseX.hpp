@@ -624,6 +624,11 @@ public:
     n->set_req_X(i, in, this);
   }
 
+  void replace_edge_of(Node* n, Node* old, Node* neww) {
+    rehash_node_delayed(n);
+    n->replace_edge(old, neww, this);
+  }
+
   // Add "in" as input (req) of "n"
   void add_input_to(Node* n, Node* in) {
     rehash_node_delayed(n);

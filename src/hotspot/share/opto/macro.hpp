@@ -110,7 +110,7 @@ private:
 
   bool eliminate_boxing_node(CallStaticJavaNode *boxing);
   bool eliminate_allocate_node(AllocateNode *alloc);
-  void undo_previous_scalarizations(Unique_Node_List& safepoints_done, AllocateNode* alloc);
+  void undo_previous_scalarizations(Unique_Node_List& safepoints_done,Unique_Node_List& new_reachability_fences, AllocateNode* alloc);
   bool scalar_replacement(AllocateNode* alloc, Unique_Node_List& safepoints, Unique_Node_List& reachability_fences);
   void process_users_of_allocation(CallNode *alloc);
 
