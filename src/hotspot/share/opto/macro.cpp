@@ -345,7 +345,7 @@ Node* PhaseMacroExpand::make_arraycopy_load(ArrayCopyNode* ac, intptr_t offset, 
       adr_type = _igvn.type(base)->is_ptr()->add_offset(off);
       if (ac->in(ArrayCopyNode::Src) == ac->in(ArrayCopyNode::Dest)) {
         // Don't emit a new load from src if src == dst but try to get the value from memory instead
-        return value_from_mem(ac, ctl, ft, ftype, adr_type->isa_oopptr(), alloc);
+        return value_from_mem(ac->in(TypeFunc::Memory), ctl, ft, ftype, adr_type->isa_oopptr(), alloc);
       }
     } else {
       Node* diff = _igvn.transform(new SubINode(ac->in(ArrayCopyNode::SrcPos), ac->in(ArrayCopyNode::DestPos)));
