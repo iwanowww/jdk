@@ -834,8 +834,8 @@ void Node::add_req_batch( Node *n, uint m ) {
 }
 
 //------------------------------del_req----------------------------------------
-// Delete the required edge and compact the edge array
-void Node::del_req( uint idx ) {
+// Delete the required edge and compact the edge array. Returns deleted input value.
+Node* Node::del_req( uint idx ) {
   assert( idx < _cnt, "oob");
   assert( !VerifyHashTableKeys || _hash_lock == 0,
           "remove node from hash table before modifying it");
@@ -846,6 +846,7 @@ void Node::del_req( uint idx ) {
   // Avoid spec violation: Gap in prec edges.
   close_prec_gap_at(_cnt);
   Compile::current()->record_modified_node(this);
+  return n;
 }
 
 //------------------------------del_req_ordered--------------------------------

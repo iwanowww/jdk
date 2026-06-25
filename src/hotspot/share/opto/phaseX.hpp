@@ -630,10 +630,10 @@ public:
     n->add_req(in);
   }
 
-  // Delete ith edge of "n"
-  void delete_input_of(Node* n, uint i) {
+  // Delete ith edge of "n". Returns the node deleted edge pointed at.
+  Node* delete_input_of(Node* n, uint i) {
     rehash_node_delayed(n);
-    n->del_req(i);
+    return n->del_req(i);
   }
 
   // Delete precedence edge i of "n"

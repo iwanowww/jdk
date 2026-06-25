@@ -1617,10 +1617,10 @@ void SafePointNode::remove_non_debug_edges(NodeEdgeTempStorage& non_debug_edges)
   assert(non_debug_edges._state == NodeEdgeTempStorage::state_initial, "not processed");
   assert(non_debug_edges.is_empty(), "edges not processed");
 
+  PhaseIterGVN& igvn = non_debug_edges._igvn;
   while (req() > jvms()->endoff()) {
-    uint last = req() - 1;
-    non_debug_edges.push(in(last));
-    del_req(last);
+    Node* last_non_debug_edge = igvn.delete_input_of(this, req() - 1);
+    non_debug_edges.push(last_non_debug_edge);
   }
 
   assert(jvms()->endoff() == req(), "no extra edges past debug info allowed");
@@ -1631,9 +1631,10 @@ void SafePointNode::restore_non_debug_edges(NodeEdgeTempStorage& non_debug_edges
   assert(non_debug_edges._state == NodeEdgeTempStorage::state_populated, "not populated");
   assert(jvms()->endoff() == req(), "no extra edges past debug info allowed");
 
+  PhaseIterGVN& igvn = non_debug_edges._igvn;
   while (!non_debug_edges.is_empty()) {
     Node* non_debug_edge = non_debug_edges.pop();
-    add_req(non_debug_edge);
+    igvn.add_input_to(this, non_debug_edge);
   }
 
   assert(non_debug_edges.is_empty(), "edges not processed");

@@ -463,7 +463,7 @@ public:
   void add_req( Node *n0, Node *n1, Node *n2 ) {
     add_req(n0); add_req(n1); add_req(n2); }
   void add_req_batch( Node* n, uint m ); // Append m NEW required inputs (all n).
-  void del_req( uint idx ); // Delete required edge & compact
+  Node* del_req( uint idx ); // Delete required edge & compact
   void del_req_ordered( uint idx ); // Delete required edge & compact with preserved order
   void ins_req( uint i, Node *n ); // Insert a NEW required input
   void set_req( uint i, Node *n ) {
