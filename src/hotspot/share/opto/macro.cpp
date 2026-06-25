@@ -857,6 +857,7 @@ bool PhaseMacroExpand::enumerate_field_values_for_allocation(AllocateNode* alloc
                                                              GrowableArray<Node*>& field_values,
                                                              bool references_only, Node* info) {
   assert(field_values.is_empty(), "not empty");
+  assert(info != nullptr, "missing");
 
   ciInstanceKlass* iklass    = nullptr;
   BasicType basic_elem_type  = T_ILLEGAL;
@@ -931,10 +932,11 @@ bool PhaseMacroExpand::enumerate_field_values_for_allocation(AllocateNode* alloc
         }
       }
       assert(value_matches_field(field_val->bottom_type(), field_type), "value_type does not fit field_type");
-#ifndef PRODUCT
+      field_values.push(field_val);
     } else {
-      bool first_failure = !field_values.contains(nullptr);
-      if (PrintEliminateAllocations && info != nullptr && first_failure) {
+      // Fail-fast on first failure to lookup field value.
+#ifndef PRODUCT
+      if (PrintEliminateAllocations) {
         tty->print("=== At %s node %d can't find value of ", info->Name(), info->_idx);
         if (res_type->isa_instptr()) {
           tty->print_raw("field: ");
@@ -947,10 +949,12 @@ bool PhaseMacroExpand::enumerate_field_values_for_allocation(AllocateNode* alloc
         alloc->result_cast()->dump();
       }
 #endif // !PRODUCT
+      field_values.clear();
+      return false; // no field value found
     }
-    field_values.push(field_val);
   }
-  return !field_values.contains(nullptr);
+  assert(!field_values.contains(nullptr), "missing field value");
+  return true;
 }
 
 SafePointScalarObjectNode* PhaseMacroExpand::create_scalarized_object_description(AllocateNode* alloc, SafePointNode* sfpt) {
