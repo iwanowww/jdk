@@ -3966,10 +3966,10 @@ void Compile::final_graph_reshaping_walk(Node_Stack& nstack, Node* root, Final_R
   // decoding the oop for that is not needed.
   for (int i = 0; i < C->reachability_fences_count(); i++) {
     ReachabilityFenceNode* rf = C->reachability_fence(i);
-    DecodeNNode* dn = rf->in(1)->isa_DecodeN();
+    DecodeNNode* dn = rf->in(ReachabilityFenceNode::Referent)->isa_DecodeN();
     if (dn != nullptr) {
       if (!dn->has_non_debug_uses() || Matcher::narrow_oop_use_complex_address()) {
-        rf->set_req(1, dn->in(1));
+        rf->set_req(ReachabilityFenceNode::Referent, dn->in(1));
         if (dn->outcnt() == 0) {
           dn->disconnect_inputs(this);
         }
