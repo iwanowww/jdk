@@ -963,6 +963,20 @@ bool PhaseMacroExpand::enumerate_field_values_for_allocation(AllocateNode* alloc
       return false; // no field value found
     }
   }
+
+  if (StressEliminateAllocations) {
+    if (C->random() % 20 == 0) { // 5%
+#ifndef PRODUCT
+      if (PrintEliminateAllocations) {
+        tty->print("=== At %s node %d forcefully abort elimination of: %s node %d",
+                   info->Name(), info->_idx, alloc->Name(), alloc->_idx);
+        alloc->result_cast()->dump();
+      }
+#endif // !PRODUCT
+      return false; // fail scalarization attempt anyway
+    }
+  }
+
   assert(!field_values.contains(nullptr), "missing field value");
   return true;
 }
