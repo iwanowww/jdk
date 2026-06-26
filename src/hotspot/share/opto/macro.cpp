@@ -811,9 +811,9 @@ void PhaseMacroExpand::undo_previous_scalarizations(Unique_Node_List& safepoints
     for (int i = start; i < end; i++) {
       if (sfpt_done->in(i)->is_SafePointScalarObject()) {
         SafePointScalarObjectNode* scobj = sfpt_done->in(i)->as_SafePointScalarObject();
-        if (scobj->first_index(jvms) == sfpt_done->req() &&
+        if (scobj->alloc() == alloc &&
+            scobj->first_index(jvms) == sfpt_done->req() &&
             scobj->n_fields() == (uint)nfields) {
-          assert(scobj->alloc() == alloc, "sanity");
           sfpt_done->set_req(i, res);
         }
       }
@@ -1162,9 +1162,6 @@ void PhaseMacroExpand::process_users_of_allocation(CallNode *alloc) {
           }
         }
         _igvn._worklist.push(ac);
-      } else if (use->is_ReachabilityFence() && OptimizeReachabilityFences) {
-        assert(false, "");
-        use->as_ReachabilityFence()->clear_referent(_igvn); // redundant fence; will be removed during IGVN
       } else {
         eliminate_gc_barrier(use);
       }

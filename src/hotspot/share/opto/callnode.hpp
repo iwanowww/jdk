@@ -614,10 +614,7 @@ public:
     return jvms->of_depth(_depth)->scloff() + _first_index;
   }
   uint n_fields()    const { return _n_fields; }
-
-#ifdef ASSERT
   Node* alloc() const { return _alloc; }
-#endif
 
   virtual uint size_of() const { return sizeof(*this); }
 

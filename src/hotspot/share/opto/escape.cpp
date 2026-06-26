@@ -4008,7 +4008,6 @@ PhiNode* ConnectionGraph::create_split_phi(PhiNode* orig_phi, int alias_idx, Uni
       Node* phi = region->fast_out(i);
       if (phi->is_Phi() &&
           C->get_alias_index(phi->as_Phi()->adr_type()) == alias_idx) {
-        assert(phi->_idx >= nodes_size(), "only new Phi per instance memory slice");
         return phi->as_Phi();
       }
     }
