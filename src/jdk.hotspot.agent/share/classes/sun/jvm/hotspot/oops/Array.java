@@ -66,7 +66,7 @@ public class Array extends Oop {
         return !VM.getVM().isCompressedOopsEnabled();
       }
     }
-    return type == BasicType.T_DOUBLE || type == BasicType.T_LONG;
+    return type == BasicType.T_DOUBLE || type == BasicType.T_LONG || VM.getVM().isAlignArrayElementsEnabled();
   }
 
   private static long headerSizeInBytes() {

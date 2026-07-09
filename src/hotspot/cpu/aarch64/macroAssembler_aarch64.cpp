@@ -6058,8 +6058,9 @@ address MacroAssembler::arrays_equals(Register a1, Register a2, Register tmp3,
     cmp(cnt1, tmp5);
     br(NE, DONE); // If lengths differ, return false
     // Increase loop counter by diff between base- and actual start-offset.
-    addw(cnt1, cnt1, extra_length);
-
+    if (extra_length != 0) {
+      addw(cnt1, cnt1, extra_length);
+    }
     // on most CPUs a2 is still "locked"(surprisingly) in ldrw and it's
     // faster to perform another branch before comparing a1 and a2
     cmp(cnt1, (u1)elem_per_word);
@@ -6121,6 +6122,7 @@ address MacroAssembler::arrays_equals(Register a1, Register a2, Register tmp3,
     mov(result, a2);
     b(DONE);
     bind(SHORT);
+    cbz(cnt1, SAME); // if (cnt1 == 0) => SAME
     sub(tmp5, zr, cnt1, LSL, 3 + log_elem_size);
     ldr(tmp3, Address(a1, start_offset));
     ldr(tmp4, Address(a2, start_offset));
