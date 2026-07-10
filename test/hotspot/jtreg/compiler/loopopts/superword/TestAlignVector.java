@@ -25,13 +25,11 @@ package compiler.loopopts.superword;
 
 import compiler.lib.ir_framework.*;
 import jdk.test.lib.Utils;
-import jdk.test.whitebox.WhiteBox;
 import jdk.internal.misc.Unsafe;
 import java.lang.reflect.Array;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Random;
-import java.nio.ByteOrder;
 
 /*
  * @test id=NoAlignVector
@@ -140,6 +138,7 @@ public class TestAlignVector {
         tests.put("test0",       () -> { return test0(aB.clone(), bB.clone(), mB); });
         tests.put("test1a",      () -> { return test1a(aB.clone(), bB.clone(), mB); });
         tests.put("test1b",      () -> { return test1b(aB.clone(), bB.clone(), mB); });
+        tests.put("test1c",      () -> { return test1c(aB.clone(), bB.clone(), mB); });
         tests.put("test2",       () -> { return test2(aB.clone(), bB.clone(), mB); });
         tests.put("test3",       () -> { return test3(aB.clone(), bB.clone(), mB); });
         tests.put("test4",       () -> { return test4(aB.clone(), bB.clone(), mB); });
@@ -226,6 +225,7 @@ public class TestAlignVector {
     @Run(test = {"test0",
                  "test1a",
                  "test1b",
+                 "test1c",
                  "test2",
                  "test3",
                  "test4",
@@ -452,12 +452,30 @@ public class TestAlignVector {
     @IR(counts = {IRNode.LOAD_VECTOR_B, "> 0",
                   IRNode.AND_VB, "> 0",
                   IRNode.STORE_VECTOR, "> 0"},
-        applyIfOr = {"UseCompactObjectHeaders", "true", "AlignVector", "false"},
+        applyIfAnd = {"UseCompactObjectHeaders", "true", "AlignArrayElements", "false"},
         // UNSAFE.ARRAY_BYTE_BASE_OFFSET = 16, but with compact object headers UNSAFE.ARRAY_BYTE_BASE_OFFSET=12.
         // If AlignVector=true, we need the offset to be 8-byte aligned, else the vectors are filtered out.
         applyIfPlatform = {"64-bit", "true"},
         applyIfCPUFeatureOr = {"avx2", "true", "asimd", "true", "rvv", "true"})
     static Object[] test1b(byte[] a, byte[] b, byte mask) {
+        return test1Helper(a, b, mask);
+    }
+
+    @Test
+    @IR(counts = {IRNode.LOAD_VECTOR_B, "> 0",
+            IRNode.AND_VB, "> 0",
+            IRNode.STORE_VECTOR, "> 0"},
+            applyIf = {"AlignVector", "false"},
+            // UNSAFE.ARRAY_BYTE_BASE_OFFSET = 16, but with compact object headers UNSAFE.ARRAY_BYTE_BASE_OFFSET=12.
+            // If AlignVector=true, we need the offset to be 8-byte aligned, else the vectors are filtered out.
+            applyIfPlatform = {"64-bit", "true"},
+            applyIfCPUFeatureOr = {"avx2", "true", "asimd", "true", "rvv", "true"})
+    static Object[] test1c(byte[] a, byte[] b, byte mask) {
+        return test1Helper(a, b, mask);
+    }
+
+    @ForceInline
+    static Object[] test1Helper(byte[] a, byte[] b, byte mask) {
         for (int i = 4; i < RANGE-8; i+=8) {
             b[i+0] = (byte)(a[i+0] & mask); // adr = base + UNSAFE.ARRAY_BYTE_BASE_OFFSET + 4 + iter*8
             b[i+1] = (byte)(a[i+1] & mask);
@@ -782,7 +800,7 @@ public class TestAlignVector {
     @IR(counts = {IRNode.LOAD_VECTOR_S, IRNode.VECTOR_SIZE_4, "> 0",
                   IRNode.AND_VS,        IRNode.VECTOR_SIZE_4, "> 0",
                   IRNode.STORE_VECTOR, "> 0"},
-        applyIfAnd = {"MaxVectorSize", ">=16", "UseCompactObjectHeaders", "true"},
+        applyIfAnd = {"MaxVectorSize", ">=16", "UseCompactObjectHeaders", "true", "AlignArrayElements", "false"},
         // UNSAFE.ARRAY_BYTE_BASE_OFFSET = 16, but with compact object headers UNSAFE.ARRAY_BYTE_BASE_OFFSET=12.
         // If AlignVector=true, we need the offset to be 8-byte aligned, else the vectors are filtered out.
         applyIfPlatform = {"64-bit", "true"},
