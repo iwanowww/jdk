@@ -84,7 +84,7 @@ define_pd_global(bool, CompactStrings, true);
 
 define_pd_global(bool, PreserveFramePointer, false);
 
-define_pd_global(bool, AlignArrayElements, false);
+define_pd_global(bool, AlignArrayElements, true);
 
 define_pd_global(intx, InitArrayShortSize, 8*BytesPerLong);
 
