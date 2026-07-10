@@ -53,10 +53,19 @@ public class TestArrayCopySelect {
                                    "-XX:CompileCommand=inline,java.lang.StringUTF16::toBytes");
 
         TestFramework.runWithFlags("-XX:+UseCompactObjectHeaders",
+                                   "-XX:-AlignArrayElements",
                                    "-XX:-CompactStrings",
                                    "-XX:CompileCommand=inline,java.lang.StringBuilder::toString",
                                    "-XX:CompileCommand=inline,java.lang.StringUTF16::getChars",
                                    "-XX:CompileCommand=inline,java.lang.StringUTF16::toBytes");
+
+        TestFramework.runWithFlags("-XX:+UseCompactObjectHeaders",
+                                   "-XX:+AlignArrayElements",
+                                   "-XX:-CompactStrings",
+                                   "-XX:CompileCommand=inline,java.lang.StringBuilder::toString",
+                                   "-XX:CompileCommand=inline,java.lang.StringUTF16::getChars",
+                                   "-XX:CompileCommand=inline,java.lang.StringUTF16::toBytes");
+
     }
 
     @Test
@@ -71,7 +80,7 @@ public class TestArrayCopySelect {
 
     @Test
     @Warmup(10000)
-    @IR(applyIf = {"UseCompactObjectHeaders", "true"},
+    @IR(applyIfAnd = {"UseCompactObjectHeaders", "true", "AlignArrayElements", "false"},
         counts = {IRNode.CALL_OF, "arrayof_jshort_disjoint_arraycopy", "0"})
     static void testSBToStringUnAligned() {
         // Exercise the StringBuilder.toString API
@@ -90,7 +99,7 @@ public class TestArrayCopySelect {
 
     @Test
     @Warmup(10000)
-    @IR(applyIf = {"UseCompactObjectHeaders", "true"},
+    @IR(applyIfAnd = {"UseCompactObjectHeaders", "true", "AlignArrayElements", "false"},
         counts = {IRNode.CALL_OF, "arrayof_jshort_disjoint_arraycopy", "0"})
     static void testStrUGetCharsUnAligned() {
         // Exercise the StringUTF16.getChars API
@@ -108,7 +117,7 @@ public class TestArrayCopySelect {
 
     @Test
     @Warmup(10000)
-    @IR(applyIf = {"UseCompactObjectHeaders", "true"},
+    @IR(applyIfAnd = {"UseCompactObjectHeaders", "true", "AlignArrayElements", "false"},
         counts = {IRNode.CALL_OF, "arrayof_jshort_disjoint_arraycopy", "0"})
     static void testStrUtoBytesUnAligned() {
         // Exercise the StringUTF16.toBytes API
