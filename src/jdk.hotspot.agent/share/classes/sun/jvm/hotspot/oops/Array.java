@@ -63,7 +63,7 @@ public class Array extends Oop {
   private static boolean elementTypeShouldBeAligned(BasicType type) {
     if (VM.getVM().isLP64()) {
       if (type == BasicType.T_OBJECT || type == BasicType.T_ARRAY) {
-        return !VM.getVM().isCompressedOopsEnabled();
+        return !VM.getVM().isCompressedOopsEnabled() || VM.getVM().isAlignArrayElementsEnabled();
       }
     }
     return type == BasicType.T_DOUBLE || type == BasicType.T_LONG || VM.getVM().isAlignArrayElementsEnabled();

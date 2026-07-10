@@ -40,29 +40,61 @@
  *          java.management
  * @build jdk.test.whitebox.WhiteBox
  * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
- * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI -XX:-UseCompressedOops -XX:-UseCompactObjectHeaders BaseOffsets
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI -XX:-UseCompressedOops
+ *                   -XX:-UseCompactObjectHeaders
+ *                   BaseOffsets
  */
 
 /*
- * @test id=with-coop-with-coh
+ * @test id=with-coop-with-coh-aligned
  * @library /test/lib /
  * @requires vm.bits == "64"
  * @modules java.base/jdk.internal.misc
  *          java.management
  * @build jdk.test.whitebox.WhiteBox
  * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
- * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI -XX:+UseCompressedOops -XX:+UseCompactObjectHeaders BaseOffsets
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
+ *                   -XX:+UseCompressedOops -XX:+UseCompactObjectHeaders -XX:+AlignArrayElements
+ *                   BaseOffsets
  */
 
 /*
- * @test id=no-coops-with-coh
+ * @test id=with-coop-with-coh-unaligned
  * @library /test/lib /
  * @requires vm.bits == "64"
  * @modules java.base/jdk.internal.misc
  *          java.management
  * @build jdk.test.whitebox.WhiteBox
  * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
- * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI -XX:-UseCompressedOops -XX:+UseCompactObjectHeaders BaseOffsets
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
+ *                   -XX:+UseCompressedOops -XX:+UseCompactObjectHeaders -XX:-AlignArrayElements
+ *                   BaseOffsets
+ */
+
+/*
+ * @test id=no-coops-with-coh-aligned
+ * @library /test/lib /
+ * @requires vm.bits == "64"
+ * @modules java.base/jdk.internal.misc
+ *          java.management
+ * @build jdk.test.whitebox.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
+ *                   -XX:-UseCompressedOops -XX:+UseCompactObjectHeaders -XX:+AlignArrayElements
+ *                   BaseOffsets
+ */
+
+/*
+ * @test id=no-coops-with-coh-unaligned
+ * @library /test/lib /
+ * @requires vm.bits == "64"
+ * @modules java.base/jdk.internal.misc
+ *          java.management
+ * @build jdk.test.whitebox.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
+ *                   -XX:-UseCompressedOops -XX:+UseCompactObjectHeaders -XX:-AlignArrayElements
+ *                   BaseOffsets
  */
 
 /*
@@ -97,15 +129,22 @@ public class BaseOffsets {
     static final long INT_ARRAY_OFFSET;
     static final long LONG_ARRAY_OFFSET;
     static {
-        if (!Platform.is64bit() || WB.getBooleanVMFlag("UseCompactObjectHeaders")) {
-            INT_OFFSET = 8;
-            INT_ARRAY_OFFSET = 12;
-            LONG_ARRAY_OFFSET = 16;
-        } else {
-            INT_OFFSET = 12;
-            INT_ARRAY_OFFSET = 16;
-            LONG_ARRAY_OFFSET = 16;
-        }
+        boolean is12ByteObjHeader = Platform.is64bit() && !WB.getBooleanVMFlag("UseCompactObjectHeaders");
+        boolean isAlignedArray = Platform.is64bit() && (!WB.getBooleanVMFlag("UseCompactObjectHeaders") ||
+                                                         WB.getBooleanVMFlag("AlignArrayElements"));
+
+        INT_OFFSET = is12ByteObjHeader ? 12 : 8;
+        INT_ARRAY_OFFSET = isAlignedArray ? 16 : 12;
+        LONG_ARRAY_OFFSET = 16;
+
+        System.out.printf("64bit=%b isAlignedArray=%b UseCompactObjectHeaders=%b AlignArrayElements=%b\n",
+                          Platform.is64bit(), isAlignedArray,
+                          WB.getBooleanVMFlag("UseCompactObjectHeaders"),
+                          WB.getBooleanVMFlag("AlignArrayElements"));
+
+        System.out.println("INT_OFFSET = " + INT_OFFSET);
+        System.out.println("INT_ARRAY_OFFSET = " + INT_ARRAY_OFFSET);
+        System.out.println("LONG_ARRAY_OFFSET = " + LONG_ARRAY_OFFSET);
     }
 
     static public void main(String[] args) {
