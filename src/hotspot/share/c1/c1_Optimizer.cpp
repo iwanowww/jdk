@@ -583,7 +583,6 @@ public:
   void do_ExceptionObject(ExceptionObject* x);
   void do_UnsafeGet      (UnsafeGet*       x);
   void do_UnsafePut      (UnsafePut*       x);
-  void do_UnsafeGetAndSet(UnsafeGetAndSet* x);
   void do_ProfileCall    (ProfileCall*     x);
   void do_ProfileReturnType (ProfileReturnType*  x);
   void do_ProfileACmpTypes(ProfileACmpTypes*  x);
@@ -769,7 +768,6 @@ void NullCheckVisitor::do_OsrEntry       (OsrEntry*        x) {}
 void NullCheckVisitor::do_ExceptionObject(ExceptionObject* x) { nce()->handle_ExceptionObject(x); }
 void NullCheckVisitor::do_UnsafeGet      (UnsafeGet*       x) {}
 void NullCheckVisitor::do_UnsafePut      (UnsafePut*       x) {}
-void NullCheckVisitor::do_UnsafeGetAndSet(UnsafeGetAndSet* x) {}
 void NullCheckVisitor::do_ProfileCall    (ProfileCall*     x) { nce()->clear_last_explicit_null_check();
                                                                 nce()->handle_ProfileCall(x); }
 void NullCheckVisitor::do_ProfileReturnType (ProfileReturnType* x) { nce()->handle_ProfileReturnType(x); }
