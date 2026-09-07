@@ -2406,8 +2406,20 @@ bool LibraryCallKit::inline_unsafe_access(vmIntrinsics::ID id,
         if (bt == type && !field->is_flat()) {
           Node* value = vt->field_value_by_offset(off, false);
           const Type* value_type = _gvn.type(value);
+          // FIXME: duplicated with normal accesses
           if (value_type->is_inlinetypeptr()) {
             value = InlineTypeNode::make_from_oop(this, value, value_type->inline_klass());
+          }
+          if (type == T_BOOLEAN) {
+            // Truncate boolean values returned by unsafe operations.
+            value = gvn().transform(new AndINode(value, gvn().intcon(0x1)));
+          } else if (type == T_FLOAT) {
+            value = _gvn.transform(new MoveF2INode(value));
+          } else if (type == T_DOUBLE) {
+            value = _gvn.transform(new MoveD2LNode(value));
+          }
+          if (type_is_narrow_int) {
+            value = ConvI2L(value);  // convert to utype = T_LONG
           }
           set_result(value);
           return true;
