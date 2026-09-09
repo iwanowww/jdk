@@ -2425,7 +2425,7 @@ bool LibraryCallKit::inline_unsafe_access(vmIntrinsics::ID id,
           } else if (type == T_DOUBLE) {
             value = _gvn.transform(new MoveD2LNode(value));
           }
-          if (type_is_narrow_int) {
+          if (needs_conversion) {
             value = ConvI2L(value);  // convert to utype = T_LONG
           }
           set_result(value);
@@ -3006,7 +3006,7 @@ bool LibraryCallKit::inline_unsafe_load_store(vmIntrinsics::ID id,
 
   int alias_idx = C->get_alias_index(adr_type);
 
-  bool type_is_narrow_int = false;
+  bool needs_conversion = false;
   if (is_reference_type(type)) {
     decorators |= IN_HEAP | ON_UNKNOWN_OOP_REF;
 
@@ -3034,7 +3034,7 @@ bool LibraryCallKit::inline_unsafe_load_store(vmIntrinsics::ID id,
       oldval = _gvn.makecon(TypePtr::NULL_PTR);
     }
   } else if (!is_double_word_type(type)) {
-    type_is_narrow_int = true;   // utype is T_LONG, type is T_INT, etc.
+    needs_conversion = true;   // utype is T_LONG, type is T_INT, etc.
     newval = ConvL2I(newval);
     if (oldval != nullptr)
       oldval = ConvL2I(oldval);
@@ -3066,7 +3066,7 @@ bool LibraryCallKit::inline_unsafe_load_store(vmIntrinsics::ID id,
     }
   }
 
-  if (!returns_boolean && type_is_narrow_int) {
+  if (!returns_boolean && needs_conversion) {
     // Intrinsic is one of _compareAndExchangePrimitiveBitsMO (etc.)
     // and type is one of T_INT, T_SHORT, T_BYTE.
     assert(type2size[result->bottom_type()->basic_type()] == 1, "result type should match");
