@@ -506,7 +506,7 @@ bool InlineTree::pass_initial_checks(ciMethod* caller_method, int caller_bci, ci
       C->needs_clinit_barrier(callee_holder, caller_method)) {
     return false;
   }
-  if( !UseInterpreter ) /* running Xcomp */ {
+  if (!UseInterpreter && !callee_method->force_inline()) /* running Xcomp */ {
     // Checks that constant pool's call site has been visited
     // stricter than callee_holder->is_initialized()
     ciBytecodeStream iter(caller_method);
