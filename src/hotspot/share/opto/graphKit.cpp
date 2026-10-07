@@ -4699,8 +4699,8 @@ AllocateNode* AllocateNode::Ideal_allocation(Node* ptr, PhaseValues* phase,
 }
 
 // Trace Initialize <- Proj[Parm] <- Allocate
-AllocateNode* InitializeNode::allocation() {
-  Node* rawoop = in(InitializeNode::RawAddress);
+AllocateNode* InitializeNode::allocation_or_null() const {
+  Node* rawoop = in(RawAddress);
   if (rawoop->is_Proj()) {
     Node* alloc = rawoop->in(0);
     if (alloc->is_Allocate()) {
@@ -4711,8 +4711,8 @@ AllocateNode* InitializeNode::allocation() {
 }
 
 // Trace Allocate -> Proj[Parm] -> Initialize
-InitializeNode* AllocateNode::initialization() {
-  ProjNode* rawoop = proj_out_or_null(AllocateNode::RawAddress);
+InitializeNode* AllocateNode::initialization_or_null() const {
+  ProjNode* rawoop = proj_out_or_null(RawAddress);
   if (rawoop == nullptr)  return nullptr;
   for (DUIterator_Fast imax, i = rawoop->fast_outs(imax); i < imax; i++) {
     Node* init = rawoop->fast_out(i);

@@ -163,7 +163,7 @@ static Node *scan_mem_chain(Node *mem, int alias_idx, int offset, Node *start_me
       Node *in = mem->in(0);
       // we can safely skip over safepoints, calls, locks and membars because we
       // already know that the object is safe to eliminate.
-      if (in->is_Initialize() && in->as_Initialize()->allocation() == alloc) {
+      if (in->is_Initialize() && in->as_Initialize()->allocation_or_null() == alloc) {
         return in;
       } else if (in->is_Call()) {
         CallNode *call = in->as_Call();
@@ -214,7 +214,7 @@ static Node *scan_mem_chain(Node *mem, int alias_idx, int offset, Node *start_me
         // we are looking.
         DEBUG_ONLY(intptr_t offset;)
         assert(alloc == AllocateNode::Ideal_allocation(mem->in(3), phase, offset), "sanity");
-        InitializeNode* init = alloc->as_Allocate()->initialization();
+        InitializeNode* init = alloc->as_Allocate()->initialization_or_null();
         // We are looking for stored value, return Initialize node
         // or memory edge from Allocate node.
         if (init != nullptr) {
@@ -333,7 +333,7 @@ Node* PhaseMacroExpand::make_arraycopy_load(ArrayCopyNode* ac, intptr_t offset, 
       // If the arraycopy does not copy to this offset, we cannot generate a rematerialization load for it.
       return nullptr;
     }
-    assert(ac->in(ArrayCopyNode::Dest) == alloc->result_cast(), "arraycopy destination should be allocation's result");
+    assert(ac->in(ArrayCopyNode::Dest) == alloc->unique_result_cast(), "arraycopy destination should be allocation's result");
     uint shift = exact_log2(type2aelembytes(bt));
     Node* src_pos = ac->in(ArrayCopyNode::SrcPos);
     Node* dest_pos = ac->in(ArrayCopyNode::DestPos);
@@ -774,16 +774,19 @@ bool PhaseMacroExpand::can_eliminate_allocation(PhaseIterGVN* igvn, AllocateNode
   bool reduce_merge_precheck = (safepoints == nullptr);
 
   Unique_Node_List worklist;
-  Node* res = alloc->result_cast();
+  bool alloc_is_unused;
+  CheckCastPPNode* alloc_result = alloc->unique_result_cast_or_null(alloc_is_unused);
   const TypeOopPtr* res_type = nullptr;
-  if (res == nullptr) {
-    // All users were eliminated.
-  } else if (!res->is_CheckCastPP()) {
-    NOT_PRODUCT(fail_eliminate = "Allocation does not have unique CheckCastPP";)
-    can_eliminate = false;
+  if (alloc_result == nullptr) {
+    if (alloc_is_unused) {
+      // All users were eliminated.
+    } else {
+      NOT_PRODUCT(fail_eliminate = "Allocation does not have unique CheckCastPP";)
+      can_eliminate = false;
+    }
   } else {
-    worklist.push(res);
-    res_type = igvn->type(res)->isa_oopptr();
+    worklist.push(alloc_result);
+    res_type = igvn->type(alloc_result)->isa_oopptr();
     if (res_type == nullptr) {
       NOT_PRODUCT(fail_eliminate = "Neither instance or array allocation";)
       can_eliminate = false;
@@ -800,7 +803,7 @@ bool PhaseMacroExpand::can_eliminate_allocation(PhaseIterGVN* igvn, AllocateNode
   }
 
   while (can_eliminate && worklist.size() > 0) {
-    res = worklist.pop();
+    Node* res = worklist.pop();
     for (DUIterator_Fast jmax, j = res->fast_outs(jmax); j < jmax && can_eliminate; j++) {
       Node* use = res->fast_out(j);
 
@@ -930,23 +933,20 @@ bool PhaseMacroExpand::can_eliminate_allocation(PhaseIterGVN* igvn, AllocateNode
   if (PrintEliminateAllocations && safepoints != nullptr) {
     if (can_eliminate) {
       tty->print("Scalar ");
-      if (res == nullptr)
-        alloc->dump();
-      else
-        res->dump();
     } else {
       tty->print("NotScalar (%s)", fail_eliminate);
-      if (res == nullptr)
-        alloc->dump();
-      else
-        res->dump();
-#ifdef ASSERT
-      if (disq_node != nullptr) {
-          tty->print("  >>>> ");
-          disq_node->dump();
-      }
-#endif /*ASSERT*/
     }
+    if (alloc_result != nullptr) {
+      alloc_result->dump();
+    } else {
+      alloc->dump();
+    }
+#ifdef ASSERT
+    if (!can_eliminate && disq_node != nullptr) {
+        tty->print("  >>>> ");
+        disq_node->dump();
+    }
+#endif /*ASSERT*/
   }
 
   if (TraceReduceAllocationMerges && !can_eliminate && reduce_merge_precheck) {
@@ -958,9 +958,9 @@ bool PhaseMacroExpand::can_eliminate_allocation(PhaseIterGVN* igvn, AllocateNode
 }
 
 void PhaseMacroExpand::undo_previous_scalarizations(Node_List& safepoints_done, Node_List& scalar_objects_done, AllocateNode* alloc) {
-  Node* res = alloc->result_cast();
-  assert(res == nullptr || res->is_CheckCastPP(), "unexpected AllocateNode result");
   assert(safepoints_done.size() == scalar_objects_done.size(), "inconsistent count");
+
+  Node* res = alloc->unique_result_cast_or_null();
 
   // rollback processed safepoints
   while (safepoints_done.size() > 0) {
@@ -1209,14 +1209,13 @@ SafePointScalarObjectNode* PhaseMacroExpand::create_scalarized_object_descriptio
   const TypeOopPtr* res_type = nullptr;
   int nfields                = 0;
   uint first_ind             = (sfpt->req() - sfpt->jvms()->scloff());
-  Node* res                  = alloc->result_cast();
+  CheckCastPPNode* alloc_result = alloc->unique_result_cast_or_null();
 
-  assert(res == nullptr || res->is_CheckCastPP(), "unexpected AllocateNode result");
   assert(sfpt->jvms() != nullptr, "missed JVMS");
   uint before_sfpt_req = sfpt->req();
 
-  if (res != nullptr) { // Could be null when there are no users
-    res_type = _igvn.type(res)->isa_oopptr();
+  if (alloc_result != nullptr) { // Could be null when there are no users
+    res_type = _igvn.type(alloc_result)->isa_oopptr();
 
     if (res_type->isa_instptr()) {
       // find the fields of the class which will be needed for safepoint debug information
@@ -1243,7 +1242,7 @@ SafePointScalarObjectNode* PhaseMacroExpand::create_scalarized_object_descriptio
   sobj->init_req(0, C->root());
   transform_later(sobj);
 
-  if (res == nullptr) {
+  if (alloc_result == nullptr) {
     sfpt->jvms()->set_endoff(sfpt->req());
     return sobj;
   }
@@ -1252,7 +1251,7 @@ SafePointScalarObjectNode* PhaseMacroExpand::create_scalarized_object_descriptio
   if (iklass == nullptr) {
     success = add_array_elems_to_safepoint(alloc, res_type->is_aryptr(), sfpt, value_worklist);
   } else {
-    success = add_inst_fields_to_safepoint(iklass, alloc, res, 0, sfpt, value_worklist);
+    success = add_inst_fields_to_safepoint(iklass, alloc, alloc_result, 0, sfpt, value_worklist);
   }
 
   // We weren't able to find a value for this field, remove all the fields added to the safepoint
@@ -1272,11 +1271,10 @@ SafePointScalarObjectNode* PhaseMacroExpand::create_scalarized_object_descriptio
 bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc, Unique_Node_List& safepoints) {
   Node_List safepoints_done;
   Node_List scalar_objects_done;
-  Node* res = alloc->result_cast();
-  assert(res == nullptr || res->is_CheckCastPP(), "unexpected AllocateNode result");
+  CheckCastPPNode* alloc_result = alloc->unique_result_cast_or_null();
   const TypeOopPtr* res_type = nullptr;
-  if (res != nullptr) { // Could be null when there are no users
-    res_type = _igvn.type(res)->isa_oopptr();
+  if (alloc_result != nullptr) { // Could be null when there are no users
+    res_type = _igvn.type(alloc_result)->isa_oopptr();
   }
 
   // Process the safepoint uses
@@ -1301,8 +1299,8 @@ bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc, Unique_Node_List&
     // Now make a pass over the debug information replacing any references
     // to the allocated object with "sobj"
     JVMState *jvms = sfpt->jvms();
-    sfpt->replace_edges_in_range(res, sobj, jvms->debug_start(), jvms->debug_end(), &_igvn);
-    non_debug_edges_worklist.remove_edge_if_present(res); // drop scalarized input from non-debug info
+    sfpt->replace_edges_in_range(alloc_result, sobj, jvms->debug_start(), jvms->debug_end(), &_igvn);
+    non_debug_edges_worklist.remove_edge_if_present(alloc_result); // drop scalarized input from non-debug info
     sfpt->restore_non_debug_edges(non_debug_edges_worklist);
     _igvn._worklist.push(sfpt);
 
@@ -1338,7 +1336,7 @@ static void disconnect_projections(MultiNode* n, PhaseIterGVN& igvn) {
 // Process users of eliminated allocation.
 void PhaseMacroExpand::process_users_of_allocation(CallNode *alloc, bool value_type_alloc) {
   Unique_Node_List worklist;
-  Node* res = alloc->result_cast();
+  Node* res = alloc->result_cast_or_null();
   if (res != nullptr) {
     worklist.push(res);
   }
@@ -1540,8 +1538,8 @@ bool PhaseMacroExpand::eliminate_allocate_node(AllocateNode *alloc) {
   }
   // Eliminate boxing allocations which are not used
   // regardless scalar replaceable status.
-  Node* res = alloc->result_cast();
-  bool boxing_alloc = (res == nullptr) && C->eliminate_boxing() &&
+  bool boxing_alloc = alloc->is_unused() &&
+                      C->eliminate_boxing() &&
                       tklass->isa_instklassptr() &&
                       tklass->is_instklassptr()->instance_klass()->is_box_klass();
   if (!alloc->_is_scalar_replaceable && !boxing_alloc && !value_type_alloc) {
@@ -1556,7 +1554,7 @@ bool PhaseMacroExpand::eliminate_allocate_node(AllocateNode *alloc) {
   }
 
   if (!alloc->_is_scalar_replaceable) {
-    assert(res == nullptr || value_type_alloc, "sanity");
+    assert(alloc->is_unused() || value_type_alloc, "sanity");
     // We can only eliminate allocation if all debug info references
     // are already replaced with SafePointScalarObject because
     // we can't search for a fields value without instance_id.
@@ -1761,11 +1759,12 @@ void PhaseMacroExpand::expand_allocate_common(
 
   // ArrayCopyNode right after an allocation operates on the raw result projection for the Allocate node so it's not
   // safe to remove such an allocation even if it has no result cast.
-  bool allocation_has_use = (alloc->result_cast() != nullptr) || (alloc->initialization() != nullptr && alloc->initialization()->is_complete_with_arraycopy());
+  InitializeNode* alloc_init = alloc->initialization_or_null();
+  bool allocation_has_use = !alloc->is_unused() ||
+                            (alloc_init != nullptr && alloc_init->is_complete_with_arraycopy());
   if (!allocation_has_use) {
-    InitializeNode* init = alloc->initialization();
-    if (init != nullptr) {
-      init->remove(&_igvn);
+    if (alloc_init != nullptr) {
+      alloc_init->remove(&_igvn);
     }
     if (expand_fast_path && (initial_slow_test == nullptr)) {
       // Remove allocation node and return.
@@ -1864,7 +1863,7 @@ void PhaseMacroExpand::expand_allocate_common(
         slow_region = needgc_ctrl;
       }
 
-      InitializeNode* init = alloc->initialization();
+      InitializeNode* init = alloc->initialization_or_null();
       fast_oop_rawmem = initialize_object(alloc,
                                           fast_oop_ctrl, fast_oop_rawmem, fast_oop,
                                           klass_node, length, size_in_bytes);
@@ -2202,7 +2201,7 @@ Node* PhaseMacroExpand::initialize_object(AllocateNode* alloc,
                                           Node* control, Node* rawmem, Node* object,
                                           Node* klass_node, Node* length,
                                           Node* size_in_bytes) {
-  InitializeNode* init = alloc->initialization();
+  InitializeNode* init = alloc->initialization_or_null();
   // Store the klass & mark bits
   Node* mark_node = alloc->make_ideal_mark(&_igvn, control, rawmem);
   if (!mark_node->is_Con()) {
@@ -2426,7 +2425,7 @@ void PhaseMacroExpand::expand_allocate(AllocateNode *alloc) {
 void PhaseMacroExpand::expand_allocate_array(AllocateArrayNode *alloc) {
   Node* length = alloc->in(AllocateNode::ALength);
   Node* valid_length_test = alloc->in(AllocateNode::ValidLengthTest);
-  InitializeNode* init = alloc->initialization();
+  InitializeNode* init = alloc->initialization_or_null();
   Node* klass_node = alloc->in(AllocateNode::KlassNode);
   Node* init_value = alloc->in(AllocateNode::InitValue);
   const TypeAryKlassPtr* ary_klass_t = _igvn.type(klass_node)->isa_aryklassptr();

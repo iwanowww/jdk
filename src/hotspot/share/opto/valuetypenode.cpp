@@ -1415,8 +1415,8 @@ Node* ValueTypeNode::Ideal(PhaseGVN* phase, bool can_reshape) {
         AllocateNode* alloc = fast_out(i)->isa_Allocate();
         if (alloc != nullptr && alloc->in(AllocateNode::ValueType) == this && !alloc->_is_scalar_replaceable) {
           // Found a re-allocation
-          Node* res = alloc->result_cast();
-          if (res != nullptr && res->is_CheckCastPP()) {
+          CheckCastPPNode* res = alloc->unique_result_cast_or_null();
+          if (res != nullptr) {
             // Replace allocation by oop and unlink AllocateNode
             replace_allocation(igvn, res, oop);
             igvn->replace_input_of(alloc, AllocateNode::ValueType, igvn->C->top());
@@ -1925,7 +1925,7 @@ void ValueTypeNode::remove_redundant_allocations(PhaseIdealLoop* phase) const {
   for (DUIterator_Fast imax, i = fast_outs(imax); i < imax; i++) {
     AllocateNode* alloc = fast_out(i)->isa_Allocate();
     if (alloc != nullptr && alloc->in(AllocateNode::ValueType) == this && !alloc->_is_scalar_replaceable) {
-      Node* res = alloc->result_cast();
+      CheckCastPPNode* res = alloc->unique_result_cast_or_null();
       if (res == nullptr || !res->is_CheckCastPP()) {
         break; // No unique CheckCastPP
       }
@@ -1934,7 +1934,7 @@ void ValueTypeNode::remove_redundant_allocations(PhaseIdealLoop* phase) const {
       for (DUIterator_Fast jmax, j = fast_outs(jmax); j < jmax; j++) {
         AllocateNode* alloc_other = fast_out(j)->isa_Allocate();
         if (alloc_other != nullptr && alloc_other->in(AllocateNode::ValueType) == this && !alloc_other->_is_scalar_replaceable) {
-          Node* res_other = alloc_other->result_cast();
+          CheckCastPPNode* res_other = alloc_other->unique_result_cast_or_null();
           if (res_other != nullptr && res_other->is_CheckCastPP() && res_other != res_dom &&
               phase->is_dominator(res_other->in(0), res_dom->in(0))) {
             res_dom = res_other;

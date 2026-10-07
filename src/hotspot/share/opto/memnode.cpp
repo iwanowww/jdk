@@ -297,7 +297,7 @@ Node* MemNode::optimize_simple_memory_chain(Node* mchain, const TypeOopPtr* t_oo
         // The call will be folded, skip over it.
         break;
       } else if (proj_in->is_Initialize()) {
-        AllocateNode* alloc = proj_in->as_Initialize()->allocation();
+        AllocateNode* alloc = proj_in->as_Initialize()->allocation_or_null();
         // Stop if this is the initialization for the object instance which
         // contains this memory slice, otherwise skip over it.
         if ((alloc == nullptr) || (alloc->_idx == instance_id)) {
@@ -1010,7 +1010,7 @@ AccessAnalyzer::AccessIndependence AccessAnalyzer::detect_access_independence(No
     }
   } else if (other->is_Proj() && other->in(0)->is_Initialize()) {
     InitializeNode* st_init = other->in(0)->as_Initialize();
-    AllocateNode* st_alloc = st_init->allocation();
+    AllocateNode* st_alloc = st_init->allocation_or_null();
     if (st_alloc == nullptr) {
       // Something degenerated
       return {false, nullptr};
@@ -1519,7 +1519,7 @@ Node* MemNode::can_see_stored_value(Node* st, PhaseValues* phase) const {
     // A load from an initialization barrier can match a captured store.
     if (st->is_Proj() && st->in(0)->is_Initialize()) {
       InitializeNode* init = st->in(0)->as_Initialize();
-      AllocateNode* alloc = init->allocation();
+      AllocateNode* alloc = init->allocation_or_null();
       if ((alloc != nullptr) && (alloc == ld_alloc)) {
         // examine a captured store value
         st = init->find_captured_store(ld_off, memory_size(), phase);
@@ -4570,7 +4570,7 @@ bool ClearArrayNode::step_through(Node** np, uint instance_id, PhaseValues* phas
     return false;
   }
   // Otherwise skip it.
-  InitializeNode* init = alloc->initialization();
+  InitializeNode* init = alloc->initialization_or_null();
   if (init != nullptr)
     *np = init->in(TypeFunc::Memory);
   else
@@ -5100,7 +5100,7 @@ InitializeNode::InitializeNode(Compile* C, int adr_type, Node* rawoop)
 
   assert(adr_type == Compile::AliasIdxRaw, "only valid atp");
   assert(in(RawAddress) == rawoop, "proper init");
-  // Note:  allocation() can be null, for secondary initialization barriers
+  // Note:  allocation can be null, for secondary initialization barriers
 }
 
 // Since this node is not matched, it will be processed by the
@@ -5145,7 +5145,7 @@ void InitializeNode::set_complete(PhaseGVN* phase) {
 // convenience function
 // return false if the init contains any stores already
 bool AllocateNode::maybe_set_complete(PhaseGVN* phase) {
-  InitializeNode* init = initialization();
+  InitializeNode* init = initialization_or_null();
   if (init == nullptr || init->is_complete()) {
     return false;
   }
@@ -5265,7 +5265,7 @@ intptr_t InitializeNode::can_capture_store(StoreNode* st, PhaseGVN* phase, bool 
   AllocateNode* alloc = AllocateNode::Ideal_allocation(adr, phase, offset);
   if (alloc == nullptr)
     return FAIL;                // inscrutable address
-  if (alloc != allocation())
+  if (alloc != allocation_or_null())
     return FAIL;                // wrong allocation!  (store needs to float up)
   int size_in_bytes = st->memory_size();
   if ((size_in_bytes != 0) && (offset % size_in_bytes) != 0) {
@@ -5384,8 +5384,6 @@ int InitializeNode::captured_store_insertion_point(intptr_t start,
 
   if (is_complete())
     return FAIL;                // arraycopy got here first; punt
-
-  assert(allocation() != nullptr, "must be present");
 
   // no negatives, no header fields:
   if (start < (intptr_t) allocation()->minimum_header_size())  return FAIL;
@@ -5843,7 +5841,6 @@ Node* InitializeNode::complete_stores(Node* rawctl, Node* rawmem, Node* rawptr,
                                       PhaseIterGVN* phase) {
   assert(!is_complete(), "not already complete");
   assert(stores_are_sane(phase), "");
-  assert(allocation() != nullptr, "must be present");
 
   remove_extra_zeroes();
 
@@ -5975,8 +5972,7 @@ Node* InitializeNode::complete_stores(Node* rawctl, Node* rawmem, Node* rawptr,
     intptr_t size_limit = phase->find_intptr_t_con(size_in_bytes, max_jint);
     if (zeroes_done + BytesPerLong >= size_limit) {
       AllocateNode* alloc = allocation();
-      assert(alloc != nullptr, "must be present");
-      if (alloc != nullptr && alloc->Opcode() == Op_Allocate) {
+      if (alloc->Opcode() == Op_Allocate) {
         Node* klass_node = alloc->in(AllocateNode::KlassNode);
         ciKlass* k = phase->type(klass_node)->is_instklassptr()->instance_klass();
         if (zeroes_done == k->layout_helper())
@@ -6042,7 +6038,6 @@ MachProjNode* InitializeNode::mem_mach_proj() const {
 bool InitializeNode::stores_are_sane(PhaseValues* phase) {
   if (is_complete())
     return true;                // stores could be anything at this point
-  assert(allocation() != nullptr, "must be present");
   intptr_t last_off = allocation()->minimum_header_size();
   for (uint i = InitializeNode::RawStores; i < req(); i++) {
     Node* st = in(i);

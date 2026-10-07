@@ -2797,7 +2797,7 @@ void PhaseIterGVN::add_users_of_use_to_worklist(Node* n, Node* use, Unique_Node_
   };
   // If changed initialization activity, check dependent Stores
   if (use_op == Op_Allocate || use_op == Op_AllocateArray) {
-    InitializeNode* init = use->as_Allocate()->initialization();
+    InitializeNode* init = use->as_Allocate()->initialization_or_null();
     if (init != nullptr) {
       init->for_each_proj(enqueue_init_mem_projs, TypeFunc::Memory);
     }

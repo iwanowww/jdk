@@ -2129,7 +2129,7 @@ void Compile::process_value_types(PhaseIterGVN &igvn, bool remove) {
     Node* macro_node = C->macro_node(i);
     if (macro_node->Opcode() == Op_Allocate) {
       AllocateNode* allocate = macro_node->as_Allocate();
-      Node* result_cast = allocate->result_cast();
+      CheckCastPPNode* result_cast = allocate->unique_result_cast_or_null();
       if (result_cast != nullptr) {
         const Type* result_type = igvn.type(result_cast);
         if (result_type->is_valueklassptr()) {

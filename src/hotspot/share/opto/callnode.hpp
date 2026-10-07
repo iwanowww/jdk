@@ -38,7 +38,7 @@
 
 // Optimization - Graph Style
 
-class NamedCounter;
+class CheckCastPPNode;
 class MultiNode;
 class  SafePointNode;
 class   CallNode;
@@ -54,6 +54,7 @@ class       AllocateArrayNode;
 class     AbstractLockNode;
 class       LockNode;
 class       UnlockNode;
+class NamedCounter;
 
 //------------------------------StartNode--------------------------------------
 // The method start node
@@ -816,8 +817,9 @@ public:
   bool                has_debug_use(const Node* n) const;
   // Returns the unique CheckCastPP of a call
   // or result projection is there are several CheckCastPP
-  // or returns null if there is no one.
-  Node* result_cast();
+  // or null if there is none.
+  Node* result_cast_or_null() const;
+
   // Does this node returns pointer?
   bool returns_pointer() const {
     const TypeTuple* r = tf()->range_sig();
@@ -1197,7 +1199,14 @@ public:
   // Walks out edges to find it...
   // (Note: Both InitializeNode::allocation and AllocateNode::initialization
   // are defined in graphKit.cpp, which sets up the bidirectional relation.)
-  InitializeNode* initialization();
+  InitializeNode* initialization_or_null() const;
+
+  // Return the corresponding initialization barrier.
+  InitializeNode* initialization() const {
+    InitializeNode* init = initialization_or_null();
+    assert(init != nullptr, "missing");
+    return init;
+  }
 
   // Convenience for initialization->maybe_set_complete(phase)
   bool maybe_set_complete(PhaseGVN* phase);
@@ -1210,8 +1219,14 @@ public:
   // AlllocateNode._is_non_escaping is true when its escape state is
   // noEscape.
   bool does_not_escape_thread() {
-    InitializeNode* init = nullptr;
-    return _is_non_escaping || (((init = initialization()) != nullptr) && init->does_not_escape());
+    if (_is_non_escaping) {
+      return true;
+    }
+    InitializeNode* init = initialization_or_null();
+    if (init != nullptr) {
+      return init->does_not_escape();
+    }
+    return false;
   }
 
   // If object doesn't escape in <.init> method and there is memory barrier
@@ -1220,6 +1235,44 @@ public:
   // allocation node.
   void compute_MemBar_redundancy(ciMethod* initializer);
   bool is_allocation_MemBar_redundant() { return _is_allocation_MemBar_redundant; }
+
+  // Returns the unique CheckCastPP of a call or null if there is none.
+  CheckCastPPNode* unique_result_cast_or_null() const {
+    bool alloc_is_unused;
+    CheckCastPPNode* result = unique_result_cast_or_null(alloc_is_unused);
+    // assert(result != nullptr || alloc_is_unused, "not a canonical shape");
+    return result;
+  }
+
+  // Returns whether allocation result is used or not.
+  bool is_unused() const {
+    bool alloc_is_unused;
+    CheckCastPPNode* result = unique_result_cast_or_null(alloc_is_unused);
+    if (alloc_is_unused) {
+      assert(result == nullptr, "");
+    }
+    return alloc_is_unused;
+  }
+
+  // Returns the unique CheckCastPP of a call or null if there is none.
+  // Also, it reports whether the allocation is used or not. It allows
+  // to distinguish the situations when allocation is used, but IR shape
+  // differs from canonical one (so no unique result cast is present).
+  CheckCastPPNode* unique_result_cast_or_null(bool& alloc_is_unused) const {
+    Node* result = result_cast_or_null();
+    alloc_is_unused = (result == nullptr);
+    if (result != nullptr && result->is_CheckCastPP()) {
+      return result->as_CheckCastPP();
+    }
+    return nullptr;
+  }
+
+  // Returns the unique CheckCastPP of a call.
+  CheckCastPPNode* unique_result_cast() const {
+    CheckCastPPNode* result = unique_result_cast_or_null();
+    assert(result != nullptr, "missing");
+    return result;
+  }
 
   Node* make_ideal_mark(PhaseGVN* phase, Node* control, Node* mem);
 

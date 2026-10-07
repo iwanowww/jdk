@@ -552,8 +552,8 @@ StringConcat* PhaseStringOpts::build_candidate(CallStaticJavaNode* call) {
         break;
       }
       // Find the constructor call
-      Node* result = alloc->result_cast();
-      if (result == nullptr || !result->is_CheckCastPP() || alloc->in(TypeFunc::Memory)->is_top()) {
+      CheckCastPPNode* result = alloc->unique_result_cast_or_null();
+      if (result == nullptr || alloc->in(TypeFunc::Memory)->is_top()) {
         // strange looking allocation
 #ifndef PRODUCT
         if (PrintOptimizeStringConcat) {

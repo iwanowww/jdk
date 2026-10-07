@@ -927,23 +927,21 @@ bool CallNode::has_debug_use(const Node* n) const {
   return false;
 }
 
-// Returns the unique CheckCastPP of a call
-// or 'this' if there are several CheckCastPP or unexpected uses
-// or returns null if there is no one.
-Node *CallNode::result_cast() {
-  Node *cast = nullptr;
-
-  Node *p = proj_out_or_null(TypeFunc::Parms);
-  if (p == nullptr)
+// Returns the unique CheckCastPP of a Call if there is one.
+// Otherwise, it either returns result Proj when there are multiple CheckCastPPs present or null if there are none.
+Node* CallNode::result_cast_or_null() const {
+  ProjNode* p = proj_out_or_null(TypeFunc::Parms);
+  if (p == nullptr) {
     return nullptr;
-
+  }
+  CheckCastPPNode* cast = nullptr;
   for (DUIterator_Fast imax, i = p->fast_outs(imax); i < imax; i++) {
-    Node *use = p->fast_out(i);
+    Node* use = p->fast_out(i);
     if (use->is_CheckCastPP()) {
       if (cast != nullptr) {
-        return this;  // more than 1 CheckCastPP
+        return p;  // more than 1 CheckCastPP
       }
-      cast = use;
+      cast = use->as_CheckCastPP();
     } else if (!use->is_Initialize() &&
                !use->is_AddP() &&
                use->Opcode() != Op_MemBarStoreStore) {
@@ -951,7 +949,7 @@ Node *CallNode::result_cast() {
       // node, a MemBarStoreStore (clone) and AddP nodes. If we
       // encounter any other use (a Phi node can be seen in rare
       // cases) return this to prevent incorrect optimizations.
-      return this;
+      return p;
     }
   }
   return cast;
@@ -2172,7 +2170,7 @@ Node *AllocateArrayNode::make_ideal_length(const TypeOopPtr* oop_type, PhaseValu
       }
       // Create a cast which is control dependent on the initialization to
       // propagate the fact that the array length must be positive.
-      InitializeNode* init = initialization();
+      InitializeNode* init = initialization_or_null();
       if (init != nullptr) {
         length = new CastIINode(init->proj_out_or_null(TypeFunc::Control), length, narrow_length_type);
       }

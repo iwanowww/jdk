@@ -1450,7 +1450,14 @@ public:
   // Return the corresponding allocation for this initialization (or null if none).
   // (Note: Both InitializeNode::allocation and AllocateNode::initialization
   // are defined in graphKit.cpp, which sets up the bidirectional relation.)
-  AllocateNode* allocation();
+  AllocateNode* allocation_or_null() const;
+
+  // Return the corresponding allocation for this initialization.
+  AllocateNode* allocation() const {
+    AllocateNode* alloc = allocation_or_null();
+    assert(alloc != nullptr, "missing");
+    return alloc;
+  }
 
   // Anything other than zeroing in this init?
   bool is_non_zero();

@@ -1348,7 +1348,7 @@ bool ConnectionGraph::reduce_phi_on_safepoints_helper(Node* ophi, Node* cast, No
       AllocateNode* alloc = ptn->ideal_node()->as_Allocate();
       Unique_Node_List value_worklist;
 #ifdef ASSERT
-      const Type* res_type = alloc->result_cast()->bottom_type();
+      const Type* res_type = alloc->unique_result_cast()->bottom_type();
       if (res_type->is_valueklassptr() && !Compile::current()->has_circular_value_type()) {
         assert(!ophi->as_Phi()->can_push_value_types_down(_igvn), "missed earlier scalarization opportunity");
       }
@@ -1362,7 +1362,7 @@ bool ConnectionGraph::reduce_phi_on_safepoints_helper(Node* ophi, Node* cast, No
 
       // Now make a pass over the debug information replacing any references
       // to the allocated object with "sobj"
-      Node* ccpp = alloc->result_cast();
+      Node* ccpp = alloc->unique_result_cast();
       sfpt->replace_edges_in_range(ccpp, sobj, debug_start, jvms->debug_end(), _igvn);
       non_debug_edges_worklist.remove_edge_if_present(ccpp); // drop scalarized input from non-debug info
 
@@ -2849,7 +2849,7 @@ bool ConnectionGraph::complete_connection_graph(
       // The object allocated by this Allocate node will never be
       // seen by an other thread. Mark it so that when it is
       // expanded no MemBarStoreStore is added.
-      InitializeNode* ini = n->as_Allocate()->initialization();
+      InitializeNode* ini = n->as_Allocate()->initialization_or_null();
       if (ini != nullptr)
         ini->set_does_not_escape();
     }
@@ -3161,7 +3161,7 @@ int ConnectionGraph::find_init_values_null(JavaObjectNode* pta, PhaseValues* pha
   if (!alloc->is_Allocate() || alloc->as_Allocate()->in(AllocateNode::InitValue) != nullptr) {
     return 0;
   }
-  InitializeNode* ini = alloc->as_Allocate()->initialization();
+  InitializeNode* ini = alloc->as_Allocate()->initialization_or_null();
   bool visited_bottom_offset = false;
   GrowableArray<int> offsets_worklist;
   int new_edges = 0;
@@ -4671,7 +4671,7 @@ Node* ConnectionGraph::find_inst_mem(Node* orig_mem, int alias_idx, Unique_Node_
           result = call->in(TypeFunc::Memory);
         }
       } else if (proj_in->is_Initialize()) {
-        AllocateNode* alloc = proj_in->as_Initialize()->allocation();
+        AllocateNode* alloc = proj_in->as_Initialize()->allocation_or_null();
         // Stop if this is the initialization for the object instance which
         // which contains this memory slice, otherwise skip over it.
         if (alloc == nullptr || alloc->_idx != (uint)toop->instance_id()) {
@@ -4925,7 +4925,7 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
         continue;
       }
       // Find CheckCastPP for the allocate or for the return value of a call
-      n = alloc->result_cast();
+      n = alloc->result_cast_or_null();
       if (n == nullptr) {            // No uses except Initialize node
         if (alloc->is_Allocate()) {
           // Set the scalar_replaceable flag for allocation
@@ -5003,7 +5003,6 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
       if (alloc->is_Allocate() && (t->isa_instptr() || t->isa_aryptr())) {
         // Add a new NarrowMem projection for each existing NarrowMem projection with new adr type
         InitializeNode* init = alloc->as_Allocate()->initialization();
-        assert(init != nullptr, "can't find Initialization node for this Allocate node");
         auto process_narrow_proj = [&](NarrowMemProjNode* proj) {
           const TypePtr* adr_type = proj->adr_type();
           const TypePtr* new_adr_type = tinst->with_offset(adr_type->offset());
