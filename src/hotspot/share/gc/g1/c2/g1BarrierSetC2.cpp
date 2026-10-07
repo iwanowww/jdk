@@ -123,7 +123,7 @@ bool G1BarrierSetC2::g1_can_remove_pre_barrier(GraphKit* kit,
       }
     } else if (mem->is_Proj() && mem->in(0)->is_Initialize()) {
       InitializeNode* st_init = mem->in(0)->as_Initialize();
-      AllocateNode* st_alloc = st_init->allocation();
+      AllocateNode* st_alloc = st_init->allocation_or_null();
 
       // Make sure that we are looking at the same allocation site.
       // The alloc variable is guaranteed to not be null here from earlier check.
@@ -186,7 +186,7 @@ bool G1BarrierSetC2::g1_can_remove_post_barrier(GraphKit* kit,
   Node* mem = store_ctrl;   // Start search from Store node.
   if (mem->is_Proj() && mem->in(0)->is_Initialize()) {
     InitializeNode* st_init = mem->in(0)->as_Initialize();
-    AllocateNode*  st_alloc = st_init->allocation();
+    AllocateNode*  st_alloc = st_init->allocation_or_null();
     // Make sure we are looking at the same allocation
     if (alloc == st_alloc) {
       return true;
