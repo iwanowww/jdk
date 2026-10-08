@@ -4912,33 +4912,24 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
   //  see the comment in find_second_addp().)
   //
   while (alloc_worklist.length() != 0) {
-    Node *n = alloc_worklist.pop();
-    uint ni = n->_idx;
-    if (n->is_Call()) {
-      CallNode *alloc = n->as_Call();
+    Node* n = alloc_worklist.pop();
+    if (n->is_Allocate()) {
+      AllocateNode* alloc = n->as_Allocate();
       // copy escape information to call node
       PointsToNode* ptn = ptnode_adr(alloc->_idx);
       PointsToNode::EscapeState es = ptn->escape_state();
-      // We have an allocation or call which returns a Java object,
-      // see if it is non-escaped.
+      // We have an allocation, see if it is non-escaped.
       if (es != PointsToNode::NoEscape || !ptn->scalar_replaceable()) {
         continue;
       }
-      // Find CheckCastPP for the allocate or for the return value of a call
-      n = alloc->result_cast_or_null();
-      if (n == nullptr) {            // No uses except Initialize node
-        if (alloc->is_Allocate()) {
-          // Set the scalar_replaceable flag for allocation
-          // so it could be eliminated if it has no uses.
-          alloc->as_Allocate()->_is_scalar_replaceable = true;
-        }
-        continue;
-      }
-      if (!n->is_CheckCastPP()) { // not unique CheckCastPP.
+      // Find CheckCastPP for the allocate.
+      bool alloc_is_unused;
+      CheckCastPPNode* alloc_result = alloc->unique_result_cast_or_null(alloc_is_unused);
+      if (alloc_result == nullptr) { // No uses except Initialize node
+        // Set the scalar_replaceable flag for allocation
+        // so it could be eliminated if it has no uses.
         // we could reach here for allocate case if one init is associated with many allocs.
-        if (alloc->is_Allocate()) {
-          alloc->as_Allocate()->_is_scalar_replaceable = false;
-        }
+        alloc->_is_scalar_replaceable = alloc_is_unused;
         continue;
       }
 
@@ -4948,19 +4939,19 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
       // Also detect j.l.reflect.Array.newInstance(jobject, jint) case when
       // the allocation result is cast to java.lang.Object and then
       // to the actual Array type.
-      if (alloc->is_Allocate() && n->as_Type()->type() == TypeInstPtr::NOTNULL
+      if (alloc_result->as_Type()->type() == TypeInstPtr::NOTNULL
           && (alloc->is_AllocateArray() ||
               igvn->type(alloc->in(AllocateNode::KlassNode)) != TypeInstKlassPtr::OBJECT)) {
-        Node *cast2 = nullptr;
-        for (DUIterator_Fast imax, i = n->fast_outs(imax); i < imax; i++) {
-          Node *use = n->fast_out(i);
+        CheckCastPPNode* cast2 = nullptr;
+        for (DUIterator_Fast imax, i = alloc_result->fast_outs(imax); i < imax; i++) {
+          Node* use = alloc_result->fast_out(i);
           if (use->is_CheckCastPP()) {
-            cast2 = use;
+            cast2 = use->as_CheckCastPP();
             break;
           }
         }
         if (cast2 != nullptr) {
-          n = cast2;
+          alloc_result = cast2;
         } else {
           // Non-scalar replaceable if the allocation type is unknown statically
           // (reflection allocation), the object can't be restored during
@@ -4969,40 +4960,37 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
         }
       }
 
-      const TypeOopPtr *t = igvn->type(n)->isa_oopptr();
+      const TypeOopPtr* t = igvn->type(alloc_result)->isa_oopptr();
       if (t == nullptr) {
         continue;  // not a TypeOopPtr
       }
       if (!t->klass_is_exact()) {
         continue; // not an unique type
       }
-      if (alloc->is_Allocate()) {
-        // Set the scalar_replaceable flag for allocation
-        // so it could be eliminated.
-        alloc->as_Allocate()->_is_scalar_replaceable = true;
-      }
-      set_escape_state(ptnode_adr(n->_idx), es NOT_PRODUCT(COMMA trace_propagate_message(ptn))); // CheckCastPP escape state
+      // Set the scalar_replaceable flag for allocation // so it could be eliminated.
+      alloc->_is_scalar_replaceable = true;
+      set_escape_state(ptnode_adr(alloc_result->_idx), es NOT_PRODUCT(COMMA trace_propagate_message(ptn))); // CheckCastPP escape state
       // in order for an object to be scalar-replaceable, it must be:
       //   - a direct allocation (not a call returning an object)
       //   - non-escaping
       //   - eligible to be a unique type
       //   - not determined to be ineligible by escape analysis
-      set_map(alloc, n);
-      set_map(n, alloc);
-      const TypeOopPtr* tinst = t->cast_to_instance_id(ni);
-      igvn->hash_delete(n);
-      igvn->set_type(n,  tinst);
-      n->raise_bottom_type(tinst);
-      igvn->hash_insert(n);
-      record_for_optimizer(n);
+      set_map(alloc, alloc_result);
+      set_map(alloc_result, alloc);
+      const TypeOopPtr* tinst = t->cast_to_instance_id(alloc->_idx);
+      igvn->hash_delete(alloc_result);
+      igvn->set_type(alloc_result, tinst);
+      alloc_result->raise_bottom_type(tinst);
+      igvn->hash_insert(alloc_result);
+      record_for_optimizer(alloc_result);
       // Allocate an alias index for the header fields. Accesses to
       // the header emitted during macro expansion wouldn't have
       // correct memory state otherwise.
       _compile->get_alias_index(tinst->add_offset(oopDesc::mark_offset_in_bytes()));
       _compile->get_alias_index(tinst->add_offset(oopDesc::klass_offset_in_bytes()));
-      if (alloc->is_Allocate() && (t->isa_instptr() || t->isa_aryptr())) {
+      if (t->isa_instptr() || t->isa_aryptr()) {
         // Add a new NarrowMem projection for each existing NarrowMem projection with new adr type
-        InitializeNode* init = alloc->as_Allocate()->initialization();
+        InitializeNode* init = alloc->initialization();
         auto process_narrow_proj = [&](NarrowMemProjNode* proj) {
           const TypePtr* adr_type = proj->adr_type();
           const TypePtr* new_adr_type = tinst->with_offset(adr_type->offset());
@@ -5046,10 +5034,10 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
         // An allocation may have an Initialize which has raw stores. Scan
         // the users of the raw allocation result and push AddP users
         // on alloc_worklist.
-        Node *raw_result = alloc->proj_out_or_null(TypeFunc::Parms);
+        Node* raw_result = alloc->proj_out_or_null(TypeFunc::Parms);
         assert (raw_result != nullptr, "must have an allocation result");
         for (DUIterator_Fast imax, i = raw_result->fast_outs(imax); i < imax; i++) {
-          Node *use = raw_result->fast_out(i);
+          Node* use = raw_result->fast_out(i);
           if (use->is_AddP() && use->outcnt() > 0) { // Don't process dead nodes
             Node* addp2 = find_second_addp(use, raw_result);
             if (addp2 != nullptr) {
@@ -5062,6 +5050,46 @@ void ConnectionGraph::split_unique_types(GrowableArray<Node *>  &alloc_worklist,
           }
         }
       }
+
+      n = alloc_result;
+    } else if (n->is_Call()) {
+      CallNode* call = n->as_Call();
+      // copy escape information to call node
+      PointsToNode* ptn = ptnode_adr(call->_idx);
+      PointsToNode::EscapeState es = ptn->escape_state();
+      // We have a call which returns a Java object, see if it is non-escaped.
+      if (es != PointsToNode::NoEscape || !ptn->scalar_replaceable()) {
+        continue;
+      }
+      // Find CheckCastPP for the return value of a call
+      Node* call_result = call->result_cast_or_null();
+      if (call_result == nullptr || !call_result->is_CheckCastPP()) {
+        continue;
+      }
+
+      const TypeOopPtr* t = igvn->type(call_result)->isa_oopptr();
+      if (t == nullptr) {
+        continue;  // not a TypeOopPtr
+      }
+      if (!t->klass_is_exact()) {
+        continue; // not an unique type
+      }
+      set_escape_state(ptnode_adr(call->_idx), es NOT_PRODUCT(COMMA trace_propagate_message(ptn))); // CheckCastPP escape state
+      set_map(call, call_result);
+      set_map(call_result, call);
+      const TypeOopPtr* tinst = t->cast_to_instance_id(call->_idx);
+      igvn->hash_delete(call_result);
+      igvn->set_type(call_result,  tinst);
+      call_result->raise_bottom_type(tinst);
+      igvn->hash_insert(call_result);
+      record_for_optimizer(call_result);
+      // Allocate an alias index for the header fields. Accesses to
+      // the header emitted during macro expansion wouldn't have
+      // correct memory state otherwise.
+      _compile->get_alias_index(tinst->add_offset(oopDesc::mark_offset_in_bytes()));
+      _compile->get_alias_index(tinst->add_offset(oopDesc::klass_offset_in_bytes()));
+
+      n = call_result;
     } else if (n->is_AddP()) {
       if (has_reducible_merge_base(n->as_AddP(), reducible_merges)) {
         // This AddP will go away when we reduce the Phi
