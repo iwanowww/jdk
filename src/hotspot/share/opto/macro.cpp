@@ -1334,21 +1334,21 @@ static void disconnect_projections(MultiNode* n, PhaseIterGVN& igvn) {
 }
 
 // Process users of eliminated allocation.
-void PhaseMacroExpand::process_users_of_allocation(CallNode *alloc, bool value_type_alloc) {
+void PhaseMacroExpand::process_users_of_allocation(AllocateNode* alloc, bool value_type_alloc) {
   Unique_Node_List worklist;
-  Node* res = alloc->result_cast_or_null();
-  if (res != nullptr) {
-    worklist.push(res);
+  CheckCastPPNode* alloc_result = alloc->unique_result_cast_or_null();
+  if (alloc_result != nullptr) {
+    worklist.push(alloc_result);
   }
   while (worklist.size() > 0) {
-    res = worklist.pop();
+    Node* res = worklist.pop();
     for (DUIterator_Last jmin, j = res->last_outs(jmin); j >= jmin; ) {
-      Node *use = res->last_out(j);
+      Node* use = res->last_out(j);
       uint oc1 = res->outcnt();
 
       if (use->is_AddP()) {
         for (DUIterator_Last kmin, k = use->last_outs(kmin); k >= kmin; ) {
-          Node *n = use->last_out(k);
+          Node* n = use->last_out(k);
           uint oc2 = use->outcnt();
           if (n->is_Store()) {
             for (DUIterator_Fast pmax, p = n->fast_outs(pmax); p < pmax; p++) {
@@ -1445,28 +1445,32 @@ void PhaseMacroExpand::process_users_of_allocation(CallNode *alloc, bool value_t
     _igvn.remove_dead_node(res, PhaseIterGVN::NodeOrigin::Graph);
   }
 
+  assert(_callprojs->nb_resproj < 2, "multiple result projections not supported: nb_resproj=%d", _callprojs->nb_resproj);
+  assert(_callprojs->nb_resproj == 0 || _callprojs->resproj[0] != nullptr, "mismatch: nb_resproj=%d", _callprojs->nb_resproj);
+
   //
   // Process other users of allocation's projections
   //
-  if (_callprojs->resproj[0] != nullptr && _callprojs->resproj[0]->outcnt() != 0) {
-    // First disconnect stores captured by Initialize node.
+  Node* resproj = _callprojs->resproj[0];
+  if (resproj != nullptr && resproj->outcnt() != 0) {
+  // First disconnect stores captured by Initialize node.
     // If Initialize node is eliminated first in the following code,
     // it will kill such stores and DUIterator_Last will assert.
-    for (DUIterator_Fast jmax, j = _callprojs->resproj[0]->fast_outs(jmax);  j < jmax; j++) {
-      Node* use = _callprojs->resproj[0]->fast_out(j);
+    for (DUIterator_Fast jmax, j = resproj->fast_outs(jmax);  j < jmax; j++) {
+      Node* use = resproj->fast_out(j);
       if (use->is_AddP()) {
         // raw memory addresses used only by the initialization
         _igvn.replace_node(use, C->top());
         --j; --jmax;
       }
     }
-    for (DUIterator_Last jmin, j = _callprojs->resproj[0]->last_outs(jmin); j >= jmin; ) {
-      Node* use = _callprojs->resproj[0]->last_out(j);
-      uint oc1 = _callprojs->resproj[0]->outcnt();
+    for (DUIterator_Last jmin, j = resproj->last_outs(jmin); j >= jmin; ) {
+      Node* use = resproj->last_out(j);
+      uint oc1 = resproj->outcnt();
       if (use->is_Initialize()) {
         // Eliminate Initialize node.
-        InitializeNode *init = use->as_Initialize();
-        Node *ctrl_proj = init->proj_out_or_null(TypeFunc::Control);
+        InitializeNode* init = use->as_Initialize();
+        Node* ctrl_proj = init->proj_out_or_null(TypeFunc::Control);
         if (ctrl_proj != nullptr) {
           _igvn.replace_node(ctrl_proj, init->in(TypeFunc::Control));
 #ifdef ASSERT
@@ -1494,26 +1498,36 @@ void PhaseMacroExpand::process_users_of_allocation(CallNode *alloc, bool value_t
       } else  {
         assert(false, "only Initialize or AddP expected");
       }
-      j -= (oc1 - _callprojs->resproj[0]->outcnt());
+      j -= (oc1 - resproj->outcnt());
     }
   }
-  if (_callprojs->fallthrough_catchproj != nullptr) {
-    _igvn.replace_node(_callprojs->fallthrough_catchproj, alloc->in(TypeFunc::Control));
+
+  remove_call(alloc, _callprojs);
+}
+
+void PhaseMacroExpand::remove_call(CallNode* call, CallProjections* callprojs) {
+  for (uint i = 0; i < callprojs->nb_resproj; i++) {
+    if (callprojs->resproj[i] != nullptr) {
+      assert(callprojs->resproj[i]->outcnt() == 0, "result is used");
+    }
   }
-  if (_callprojs->fallthrough_memproj != nullptr) {
-    _igvn.replace_node(_callprojs->fallthrough_memproj, alloc->in(TypeFunc::Memory));
+  if (callprojs->fallthrough_catchproj != nullptr) {
+    _igvn.replace_node(callprojs->fallthrough_catchproj, call->in(TypeFunc::Control));
   }
-  if (_callprojs->catchall_memproj != nullptr) {
-    _igvn.replace_node(_callprojs->catchall_memproj, C->top());
+  if (callprojs->fallthrough_memproj != nullptr) {
+    _igvn.replace_node(callprojs->fallthrough_memproj, call->in(TypeFunc::Memory));
   }
-  if (_callprojs->fallthrough_ioproj != nullptr) {
-    _igvn.replace_node(_callprojs->fallthrough_ioproj, alloc->in(TypeFunc::I_O));
+  if (callprojs->fallthrough_ioproj != nullptr) {
+    _igvn.replace_node(callprojs->fallthrough_ioproj, call->in(TypeFunc::I_O));
   }
-  if (_callprojs->catchall_ioproj != nullptr) {
-    _igvn.replace_node(_callprojs->catchall_ioproj, C->top());
+  if (callprojs->catchall_memproj != nullptr) {
+    _igvn.replace_node(callprojs->catchall_memproj, C->top());
   }
-  if (_callprojs->catchall_catchproj != nullptr) {
-    _igvn.replace_node(_callprojs->catchall_catchproj, C->top());
+  if (callprojs->catchall_ioproj != nullptr) {
+    _igvn.replace_node(callprojs->catchall_ioproj, C->top());
+  }
+  if (callprojs->catchall_catchproj != nullptr) {
+    _igvn.replace_node(callprojs->catchall_catchproj, C->top());
   }
 }
 
@@ -1594,6 +1608,12 @@ bool PhaseMacroExpand::eliminate_allocate_node(AllocateNode *alloc) {
 }
 
 bool PhaseMacroExpand::eliminate_boxing_node(CallStaticJavaNode* call) {
+  assert(call->is_boxing_method() || call->is_unboxing_method(), "not a boxing or unboxing call");
+  assert(call->tf()->range_sig()->cnt() == TypeFunc::Parms + 1 ||
+         (call->tf()->range_sig()->cnt() == TypeFunc::Parms + 2 &&
+          call->tf()->range_sig()->field_at(TypeFunc::Parms + 1) == Type::HALF),
+         "multiple results: %d", call->tf()->range_cc()->cnt());
+
   // EA should remove all uses of non-escaping boxing node.
   if (!C->eliminate_boxing()) {
     return false;
@@ -1604,9 +1624,11 @@ bool PhaseMacroExpand::eliminate_boxing_node(CallStaticJavaNode* call) {
     }
   }
 
-  _callprojs = call->extract_projections(false /*separate_io_proj*/, false /*do_asserts*/);
+  CallProjections* callprojs = call->extract_projections(false /*separate_io_proj*/, false /*do_asserts*/);
+  assert(callprojs->nb_resproj == 0, "not eliminated");
+  assert(callprojs->resproj[0] == nullptr, "not eliminated");
 
-  process_users_of_allocation(call);
+  remove_call(call, callprojs);
 
   CompileLog* log = C->log();
   if (log != nullptr) {
