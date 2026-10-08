@@ -772,11 +772,11 @@ bool PhaseMacroExpand::can_eliminate_allocation(PhaseIterGVN* igvn, AllocateNode
   DEBUG_ONLY( Node* disq_node = nullptr; )
   bool can_eliminate = true;
   bool reduce_merge_precheck = (safepoints == nullptr);
+  bool is_valueklassptr = false;
 
   Unique_Node_List worklist;
   bool alloc_is_unused;
   CheckCastPPNode* alloc_result = alloc->unique_result_cast_or_null(alloc_is_unused);
-  const TypeOopPtr* res_type = nullptr;
   if (alloc_result == nullptr) {
     if (alloc_is_unused) {
       // All users were eliminated.
@@ -786,19 +786,21 @@ bool PhaseMacroExpand::can_eliminate_allocation(PhaseIterGVN* igvn, AllocateNode
     }
   } else {
     worklist.push(alloc_result);
-    res_type = igvn->type(alloc_result)->isa_oopptr();
-    if (res_type == nullptr) {
+    const TypeOopPtr* alloc_result_toop = igvn->type(alloc_result)->isa_oopptr();
+    if (alloc_result_toop == nullptr) {
       NOT_PRODUCT(fail_eliminate = "Neither instance or array allocation";)
       can_eliminate = false;
-    } else if (!res_type->klass_is_exact()) {
+    } else if (!alloc_result_toop->klass_is_exact()) {
       NOT_PRODUCT(fail_eliminate = "Not an exact type.";)
       can_eliminate = false;
-    } else if (res_type->isa_aryptr()) {
+    } else if (alloc_result_toop->isa_aryptr()) {
       int length = alloc->in(AllocateNode::ALength)->find_int_con(-1);
       if (length < 0) {
         NOT_PRODUCT(fail_eliminate = "Array's size is not constant";)
         can_eliminate = false;
       }
+    } else if (alloc_result_toop->is_valueklassptr()) {
+      is_valueklassptr = true;
     }
   }
 
@@ -886,7 +888,8 @@ bool PhaseMacroExpand::can_eliminate_allocation(PhaseIterGVN* igvn, AllocateNode
             ValueTypeNode* vt = u->as_ValueType();
             for (uint i = 0; i < vt->field_count(); ++i) {
               if (vt->field_value(i) == use && !vt->field(i)->is_flat()) {
-                can_eliminate = false; // Use in non-flat field
+                NOT_PRODUCT(fail_eliminate = "use in non-flat field";)
+                can_eliminate = false;
                 break;
               }
             }
@@ -897,8 +900,8 @@ bool PhaseMacroExpand::can_eliminate_allocation(PhaseIterGVN* igvn, AllocateNode
         }
       } else if (use->Opcode() == Op_StoreX && use->in(MemNode::Address) == res) {
         // Store to mark word of value type larval buffer
-        assert(res_type->is_valueklassptr(), "Unexpected store to mark word");
-      } else if (res_type->is_valueklassptr() && (use->Opcode() == Op_MemBarRelease || use->Opcode() == Op_MemBarStoreStore)) {
+        assert(is_valueklassptr, "Unexpected store to mark word");
+      } else if (is_valueklassptr && (use->Opcode() == Op_MemBarRelease || use->Opcode() == Op_MemBarStoreStore)) {
         // Value type buffer allocations are followed by a membar
       } else if (reduce_merge_precheck &&
                  (use->is_Phi() || use->is_EncodeP() ||
@@ -928,6 +931,8 @@ bool PhaseMacroExpand::can_eliminate_allocation(PhaseIterGVN* igvn, AllocateNode
       }
     }
   }
+
+  assert(can_eliminate == (fail_eliminate == nullptr), "missing failure reason");
 
 #ifndef PRODUCT
   if (PrintEliminateAllocations && safepoints != nullptr) {
