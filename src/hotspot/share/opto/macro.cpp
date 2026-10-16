@@ -1072,7 +1072,7 @@ bool PhaseMacroExpand::enumerate_field_values_at_safepoint_for_allocation(Alloca
     // find the array's elements which will be needed for safepoint debug information
     success = add_array_elems_to_safepoint(alloc, res_type->is_aryptr(), sfpt, field_values);
   } else {
-    fatal("unsupported: %s", Type::str(res_type));
+    assert("unsupported: %s", Type::str(res_type));
     return false;
   }
   assert(!field_values->contains(nullptr), "missing field value");
