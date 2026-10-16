@@ -351,7 +351,7 @@ Node* PhaseMacroExpand::make_arraycopy_load(ArrayCopyNode* ac, intptr_t offset, 
       assert(adr_type == _igvn.type(base)->is_aryptr()->add_field_offset_and_offset(off), "incorrect address type");
       if (ac->in(ArrayCopyNode::Src) == ac->in(ArrayCopyNode::Dest)) {
         // Don't emit a new load from src if src == dst but try to get the value from memory instead
-        return value_from_mem(ac, ctl, ft, ftype, (const TypeAryPtr*)adr_type, alloc);
+        return value_from_mem(ac->memory(), ctl, ft, ftype, (const TypeAryPtr*)adr_type, alloc);
       }
     } else {
       if (ac->in(ArrayCopyNode::Src) == ac->in(ArrayCopyNode::Dest)) {
@@ -570,15 +570,18 @@ Node* PhaseMacroExpand::value_from_alloc(BasicType ft, const TypeOopPtr* adr_t, 
   return init_value;
 }
 
+Node* PhaseMacroExpand::value_from_safepoint(SafePointNode* sfpt, BasicType ft, const Type* ftype, const TypeOopPtr* adr_t, AllocateNode* alloc) {
+  return value_from_mem(sfpt->memory(), sfpt->control(), ft, ftype, adr_t, alloc);
+}
+
 // Search the last value stored into the object's field.
-Node* PhaseMacroExpand::value_from_mem(Node* origin, Node* ctl, BasicType ft, const Type* ftype, const TypeOopPtr* adr_t, AllocateNode* alloc) {
+Node* PhaseMacroExpand::value_from_mem(Node* orig_mem, Node* ctl, BasicType ft, const Type* ftype, const TypeOopPtr* adr_t, AllocateNode* alloc) {
   assert(adr_t->is_known_instance_field(), "instance required");
   int instance_id = adr_t->instance_id();
   assert((uint)instance_id == alloc->_idx, "wrong allocation");
 
   int alias_idx = C->get_alias_index(adr_t);
   int offset = adr_t->flat_offset();
-  Node* orig_mem = origin->in(TypeFunc::Memory);
   Node *start_mem = C->start()->proj_out_or_null(TypeFunc::Memory);
   Node *alloc_mem = alloc->proj_out_or_null(TypeFunc::Memory, /*io_use:*/false);
   assert(alloc_mem != nullptr, "Allocation without a memory projection.");
@@ -712,7 +715,7 @@ Node* PhaseMacroExpand::value_type_from_mem(ciValueKlass* vk, const TypeAryPtr* 
   } else {
     int nm_offset_in_element = offset_in_element + vk->null_marker_offset_in_payload();
     const TypeAryPtr* nm_adr_type = elem_adr_type->with_field_offset(nm_offset_in_element);
-    Node* nm_value = value_from_mem(sfpt, sfpt->control(), T_BOOLEAN, TypeInt::BOOL, nm_adr_type, alloc);
+    Node* nm_value = value_from_safepoint(sfpt, T_BOOLEAN, TypeInt::BOOL, nm_adr_type, alloc);
     bool force_scalarization_failure = StressEliminateAllocations &&
                                        (C->stress().random() % StressEliminateAllocationsMean == 0);
     if (nm_value != nullptr && !force_scalarization_failure) {
@@ -740,7 +743,7 @@ Node* PhaseMacroExpand::value_type_from_mem(ciValueKlass* vk, const TypeAryPtr* 
       }
       // Each value type field has its own memory slice
       const TypeAryPtr* field_adr_type = elem_adr_type->with_field_offset(field_offset_in_element);
-      field_value = value_from_mem(sfpt, sfpt->control(), bt, ft, field_adr_type, alloc);
+      field_value = value_from_safepoint(sfpt, bt, ft, field_adr_type, alloc);
       bool force_scalarization_failure = StressEliminateAllocations &&
                                          (C->stress().random() % StressEliminateAllocationsMean == 0);
       if (field_value == nullptr || force_scalarization_failure) {
@@ -1091,7 +1094,7 @@ bool PhaseMacroExpand::add_array_elems_to_safepoint(AllocateNode* alloc, const T
       assert(elem_klass->maybe_flat_in_array(), "must be flat in array");
       elem_val = value_type_from_mem(elem_klass, elem_adr_type, elem_idx, 0, array_type->is_null_free(), alloc, sfpt);
     } else {
-      elem_val = value_from_mem(sfpt, sfpt->control(), basic_elem_type, elem_type, elem_adr_type, alloc);
+      elem_val = value_from_safepoint(sfpt, basic_elem_type, elem_type, elem_adr_type, alloc);
     }
     bool force_scalarization_failure = StressEliminateAllocations &&
                                        (C->stress().random() % StressEliminateAllocationsMean == 0);
@@ -1157,7 +1160,7 @@ bool PhaseMacroExpand::add_inst_fields_to_safepoint(ciInstanceKlass* iklass, All
       // The null marker of a field is added right after we scalarize that field
       if (!field->is_null_free()) {
         int nm_offset = offset_minus_header + field->null_marker_offset();
-        Node* null_marker = value_from_mem(sfpt, sfpt->control(), T_BOOLEAN, TypeInt::BOOL, base_type->with_offset(nm_offset), alloc);
+        Node* null_marker = value_from_safepoint(sfpt, T_BOOLEAN, TypeInt::BOOL, base_type->with_offset(nm_offset), alloc);
         bool force_scalarization_failure = StressEliminateAllocations &&
                                            (C->stress().random() % StressEliminateAllocationsMean == 0);
         if (null_marker == nullptr || force_scalarization_failure) {
@@ -1190,7 +1193,7 @@ bool PhaseMacroExpand::add_inst_fields_to_safepoint(ciInstanceKlass* iklass, All
     }
 
     const TypeInstPtr* field_addr_type = base_type->add_offset(offset)->isa_instptr();
-    Node* field_val = value_from_mem(sfpt, sfpt->control(), basic_elem_type, field_type, field_addr_type, alloc);
+    Node* field_val = value_from_safepoint(sfpt, basic_elem_type, field_type, field_addr_type, alloc);
     bool force_scalarization_failure = StressEliminateAllocations &&
                                        (C->stress().random() % StressEliminateAllocationsMean == 0);
     if (field_val == nullptr || force_scalarization_failure) {
