@@ -110,9 +110,18 @@ private:
                               Node* valid_length_test);
   void yank_alloc_node(AllocateNode* alloc);
 
-  void process_field_value_at_safepoint(const Type* field_type, Node* field_val, SafePointNode* sfpt, Unique_Node_List* value_worklist);
-  bool add_array_elems_to_safepoint(AllocateNode* alloc, const TypeAryPtr* array_type, SafePointNode* sfpt, Unique_Node_List* value_worklist);
-  bool add_inst_fields_to_safepoint(ciInstanceKlass* iklass, AllocateNode* alloc, Node* base, int offset_minus_header, SafePointNode* sfpt, Unique_Node_List* value_worklist);
+  Node* process_field_value_at_safepoint(const Type* field_type, Node* field_val);
+
+  bool add_array_elems_to_safepoint(AllocateNode* alloc,
+                                    const TypeAryPtr* array_type,
+                                    SafePointNode* sfpt,
+                                    Node_List* field_values);
+  bool add_inst_fields_to_safepoint(ciInstanceKlass* iklass,
+                                    AllocateNode* alloc,
+                                    Node* base,
+                                    int offset_minus_header,
+                                    SafePointNode* sfpt,
+                                    Node_List* field_values);
   Node* value_from_alloc(BasicType ft, const TypeOopPtr* adr_t, AllocateNode* alloc);
   Node* value_from_safepoint(SafePointNode* sfpt, BasicType ft, const Type* ftype, const TypeOopPtr* adr_t, AllocateNode* alloc);
   Node* value_from_mem(Node* orig_mem, Node* ctl, BasicType ft, const Type* ftype, const TypeOopPtr* adr_t, AllocateNode* alloc);
@@ -125,6 +134,11 @@ private:
   bool scalar_replacement(AllocateNode* alloc, Unique_Node_List& safepoints);
   void process_users_of_allocation(AllocateNode* alloc, bool value_type_alloc = false);
   void remove_call(CallNode* call, CallProjections* callprojs);
+
+  bool enumerate_field_values_at_safepoint_for_allocation(AllocateNode* alloc,
+                                                          SafePointNode* sfpt,
+                                                          Node_List* field_values,
+                                                          Unique_Node_List* value_worklist);
 
   void eliminate_gc_barrier(Node *p2x);
   void mark_eliminated_box(Node* box, Node* obj);
