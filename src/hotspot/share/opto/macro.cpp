@@ -1007,14 +1007,14 @@ void PhaseMacroExpand::undo_previous_scalarizations(Node_List& safepoints_done, 
 
 #ifdef ASSERT
   // Verify if a value can be written into a field.
-  void verify_value_type_compatibility(const Type* value_type, const Type* field_type) {
+  bool value_type_compatibility(const Type* value_type, const Type* field_type) {
     BasicType value_bt = value_type->basic_type();
     BasicType field_bt = field_type->basic_type();
 
     // Primitive types must match or have a matching reinterpreted variant
     if (is_java_primitive(value_bt) &&
         (value_bt == field_bt || MemNode::get_reinterpret_variant(value_bt) == field_bt)) {
-      return;
+      return true;
     }
 
     // I have been struggling to make a similar assert for non-primitive
@@ -1028,7 +1028,7 @@ void PhaseMacroExpand::undo_previous_scalarizations(Node_List& safepoints_done, 
     // that it should get an oop from an interface, but the value lost
     // that information, and so it is not a subtype.
     // There may be other issues, feel free to investigate further!
-    if (!is_java_primitive(value_bt)) { return; }
+    if (!is_java_primitive(value_bt)) { return true; }
 
     tty->print_cr("value not compatible for field: %s vs %s",
                   type2name(value_bt),
@@ -1039,11 +1039,69 @@ void PhaseMacroExpand::undo_previous_scalarizations(Node_List& safepoints_done, 
     tty->print("field_type: ");
     field_type->dump();
     tty->cr();
-    assert(false, "value_type does not fit field_type");
+    return false;
   }
-#endif
+#endif // ASSERT
 
-void PhaseMacroExpand::process_field_value_at_safepoint(const Type* field_type, Node* field_val, SafePointNode* sfpt, Unique_Node_List* value_worklist) {
+
+bool PhaseMacroExpand::enumerate_field_values_at_safepoint_for_allocation(AllocateNode* alloc,
+                                                                          SafePointNode* sfpt,
+                                                                          Node_List* field_values,
+                                                                          Unique_Node_List* value_worklist) {
+  assert(field_values->size() == 0, "not empty");
+
+  CheckCastPPNode* alloc_result = alloc->unique_result_cast();
+  const TypeOopPtr* res_type = _igvn.type(alloc_result)->isa_oopptr();
+
+  bool success;
+  if (res_type->isa_instptr()) {
+    // find the fields of the class which will be needed for safepoint debug information
+    if (res_type->is_valueklassptr()) {
+      // Nullable value types have a null marker field which is added to the safepoint when scalarizing them (see
+      // ValueTypeNode::make_scalar_in_safepoint()). When having circular value types, we stop scalarizing at depth 1
+      // to avoid an endless recursion. Therefore, we do not have a SafePointScalarObjectNode node here, yet.
+      // We are about to create a SafePointScalarObjectNode as if this is a normal object. Add an additional int input
+      // with value 1 which sets the null marker to true to indicate that the object is always non-null. This input is checked
+      // later in PhaseOutput::filLocArray() for value types.
+      field_values->push(_igvn.intcon(1));
+    }
+    ciInstanceKlass* iklass = res_type->is_instptr()->instance_klass();
+    success = add_inst_fields_to_safepoint(iklass, alloc, alloc_result, 0, sfpt, field_values);
+    // assert((int)field_values->size() == iklass->nof_nonstatic_fields() || !success, "mismatch");
+  } else if (res_type->isa_aryptr()) {
+    // find the array's elements which will be needed for safepoint debug information
+    success = add_array_elems_to_safepoint(alloc, res_type->is_aryptr(), sfpt, field_values);
+  } else {
+    fatal("unsupported: %s", Type::str(res_type));
+    return false;
+  }
+  assert(!field_values->contains(nullptr), "missing field value");
+  if (success) {
+    for (uint i = 0; i < field_values->size(); i++) {
+      Node* field_val = field_values->at(i);
+
+      // Keep track of value types to scalarize them later
+      if (field_val->is_ValueType()) {
+        value_worklist->push(field_val);
+      } else if (field_val->is_Phi()) {
+        PhiNode* phi = field_val->as_Phi();
+        // Eagerly replace value type phis now since we could be removing a value type allocation where we must
+        // scalarize all its fields in safepoints.
+        field_val = phi->try_push_value_types_down(&_igvn, true);
+        if (field_val->is_ValueType()) {
+          value_worklist->push(field_val);
+        }
+      }
+      field_values->map(i, field_val);
+    }
+  } else {
+    field_values->clear();
+    return false;
+  }
+  return true;
+}
+
+Node* PhaseMacroExpand::process_field_value_at_safepoint(const Type* field_type, Node* field_val) {
   if (UseCompressedOops && field_type->isa_narrowoop()) {
     // Enable "DecodeN(EncodeP(Allocate)) --> Allocate" transformation
     // to be able scalar replace the allocation.
@@ -1053,24 +1111,11 @@ void PhaseMacroExpand::process_field_value_at_safepoint(const Type* field_type, 
       field_val = transform_later(new DecodeNNode(field_val, field_val->get_ptr_type()));
     }
   }
-
-  // Keep track of value types to scalarize them later
-  if (field_val->is_ValueType()) {
-    value_worklist->push(field_val);
-  } else if (field_val->is_Phi()) {
-    PhiNode* phi = field_val->as_Phi();
-    // Eagerly replace value type phis now since we could be removing a value type allocation where we must
-    // scalarize all its fields in safepoints.
-    field_val = phi->try_push_value_types_down(&_igvn, true);
-    if (field_val->is_ValueType()) {
-      value_worklist->push(field_val);
-    }
-  }
-  DEBUG_ONLY(verify_value_type_compatibility(field_val->bottom_type(), field_type);)
-  sfpt->add_req(field_val);
+  assert(value_type_compatibility(field_val->bottom_type(), field_type), "mismatch");
+  return field_val;
 }
 
-bool PhaseMacroExpand::add_array_elems_to_safepoint(AllocateNode* alloc, const TypeAryPtr* array_type, SafePointNode* sfpt, Unique_Node_List* value_worklist) {
+bool PhaseMacroExpand::add_array_elems_to_safepoint(AllocateNode* alloc, const TypeAryPtr* array_type, SafePointNode* sfpt, Node_List* field_values) {
   const Type* elem_type = array_type->elem();
   BasicType basic_elem_type = elem_type->array_element_basic_type();
 
@@ -1115,7 +1160,7 @@ bool PhaseMacroExpand::add_array_elems_to_safepoint(AllocateNode* alloc, const T
       return false;
     }
 
-    process_field_value_at_safepoint(elem_type, elem_val, sfpt, value_worklist);
+    field_values->push(process_field_value_at_safepoint(elem_type, elem_val));
   }
 
   return true;
@@ -1124,7 +1169,7 @@ bool PhaseMacroExpand::add_array_elems_to_safepoint(AllocateNode* alloc, const T
 // Recursively adds all flattened fields of a type 'iklass' inside 'base' to 'sfpt'.
 // 'offset_minus_header' refers to the offset of the payload of 'iklass' inside 'base' minus the
 // payload offset of 'iklass'. If 'base' is of type 'iklass' then 'offset_minus_header' == 0.
-bool PhaseMacroExpand::add_inst_fields_to_safepoint(ciInstanceKlass* iklass, AllocateNode* alloc, Node* base, int offset_minus_header, SafePointNode* sfpt, Unique_Node_List* value_worklist) {
+bool PhaseMacroExpand::add_inst_fields_to_safepoint(ciInstanceKlass* iklass, AllocateNode* alloc, Node* base, int offset_minus_header, SafePointNode* sfpt, Node_List* field_values) {
   const TypeInstPtr* base_type = _igvn.type(base)->is_instptr();
   auto report_failure = [&](int offset, bool is_forced_failure) {
 #ifndef PRODUCT
@@ -1152,7 +1197,7 @@ bool PhaseMacroExpand::add_inst_fields_to_safepoint(ciInstanceKlass* iklass, All
     if (field->is_flat()) {
       ciValueKlass* fvk = field->type()->as_value_klass();
       int field_offset_minus_header = offset_minus_header + field->offset_in_bytes() - fvk->payload_offset();
-      bool success = add_inst_fields_to_safepoint(fvk, alloc, base, field_offset_minus_header, sfpt, value_worklist);
+      bool success = add_inst_fields_to_safepoint(fvk, alloc, base, field_offset_minus_header, sfpt, field_values);
       if (!success) {
         return false;
       }
@@ -1167,7 +1212,7 @@ bool PhaseMacroExpand::add_inst_fields_to_safepoint(ciInstanceKlass* iklass, All
           report_failure(nm_offset, null_marker != nullptr);
           return false;
         }
-        process_field_value_at_safepoint(TypeInt::BOOL, null_marker, sfpt, value_worklist);
+        field_values->push(process_field_value_at_safepoint(TypeInt::BOOL, null_marker));
       }
 
       continue;
@@ -1200,79 +1245,45 @@ bool PhaseMacroExpand::add_inst_fields_to_safepoint(ciInstanceKlass* iklass, All
       report_failure(offset, field_val != nullptr);
       return false;
     }
-    process_field_value_at_safepoint(field_type, field_val, sfpt, value_worklist);
+    field_values->push(process_field_value_at_safepoint(field_type, field_val));
   }
 
   return true;
 }
 
-SafePointScalarObjectNode* PhaseMacroExpand::create_scalarized_object_description(AllocateNode* alloc, SafePointNode* sfpt,
-                                                                                  Unique_Node_List* value_worklist) {
+SafePointScalarObjectNode* PhaseMacroExpand::create_scalarized_object_description(AllocateNode* alloc, SafePointNode* sfpt, Unique_Node_List* value_worklist) {
   assert(sfpt->jvms()->endoff() == sfpt->req(), "no extra edges past debug info allowed");
 
   // Fields of scalar objs are referenced only at the end
   // of regular debuginfo at the last (youngest) JVMS.
   // Record relative start index.
-  ciInstanceKlass* iklass    = nullptr;
-  const TypeOopPtr* res_type = nullptr;
-  int nfields                = 0;
-  uint first_ind             = (sfpt->req() - sfpt->jvms()->scloff());
-  CheckCastPPNode* alloc_result = alloc->unique_result_cast_or_null();
 
-  assert(sfpt->jvms() != nullptr, "missed JVMS");
-  uint before_sfpt_req = sfpt->req();
-
-  if (alloc_result != nullptr) { // Could be null when there are no users
-    res_type = _igvn.type(alloc_result)->isa_oopptr();
-
+  // ResourceMark rm;
+  Node_List field_values;
+  if (enumerate_field_values_at_safepoint_for_allocation(alloc, sfpt, &field_values, value_worklist)) {
+    const TypeOopPtr* res_type = _igvn.type(alloc->unique_result_cast())->isa_oopptr();
+    uint nfields;
     if (res_type->isa_instptr()) {
       // find the fields of the class which will be needed for safepoint debug information
-      iklass = res_type->is_instptr()->instance_klass();
-      nfields = iklass->nof_nonstatic_fields();
+      nfields = res_type->is_instptr()->instance_klass()->nof_nonstatic_fields();
     } else {
       // find the array's elements which will be needed for safepoint debug information
       nfields = alloc->in(AllocateNode::ALength)->find_int_con(-1);
       assert(nfields >= 0, "must be an array klass.");
     }
+    uint first_ind = (sfpt->req() - sfpt->jvms()->scloff());
+    SafePointScalarObjectNode* sobj = new SafePointScalarObjectNode(res_type, alloc, first_ind, sfpt->jvms()->depth(), nfields);
+    sobj->init_req(0, C->root());
+    transform_later(sobj);
 
-    if (res_type->is_valueklassptr()) {
-      // Nullable value types have a null marker field which is added to the safepoint when scalarizing them (see
-      // ValueTypeNode::make_scalar_in_safepoint()). When having circular value types, we stop scalarizing at depth 1
-      // to avoid an endless recursion. Therefore, we do not have a SafePointScalarObjectNode node here, yet.
-      // We are about to create a SafePointScalarObjectNode as if this is a normal object. Add an additional int input
-      // with value 1 which sets the null marker to true to indicate that the object is always non-null. This input is checked
-      // later in PhaseOutput::filLocArray() for value types.
-      sfpt->add_req(_igvn.intcon(1));
+    for (uint i = 0; i < field_values.size(); i++) {
+      Node* field_val = field_values.at(i);
+      sfpt->add_req(field_val);
     }
-  }
-
-  SafePointScalarObjectNode* sobj = new SafePointScalarObjectNode(res_type, alloc, first_ind, sfpt->jvms()->depth(), nfields);
-  sobj->init_req(0, C->root());
-  transform_later(sobj);
-
-  if (alloc_result == nullptr) {
     sfpt->jvms()->set_endoff(sfpt->req());
     return sobj;
   }
-
-  bool success;
-  if (iklass == nullptr) {
-    success = add_array_elems_to_safepoint(alloc, res_type->is_aryptr(), sfpt, value_worklist);
-  } else {
-    success = add_inst_fields_to_safepoint(iklass, alloc, alloc_result, 0, sfpt, value_worklist);
-  }
-
-  // We weren't able to find a value for this field, remove all the fields added to the safepoint
-  if (!success) {
-    for (uint i = sfpt->req() - 1; i >= before_sfpt_req; i--) {
-      sfpt->del_req(i);
-    }
-    _igvn._worklist.push(sfpt);
-    return nullptr;
-  }
-
-  sfpt->jvms()->set_endoff(sfpt->req());
-  return sobj;
+  return nullptr; // failed to scalarize field accesses
 }
 
 // Do scalar replacement.
