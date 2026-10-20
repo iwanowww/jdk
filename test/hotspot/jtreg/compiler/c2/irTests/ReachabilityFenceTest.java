@@ -40,6 +40,36 @@ import jdk.internal.misc.Unsafe;
 public class ReachabilityFenceTest {
     private static int SIZE = 100;
 
+    static class WrapperObj {
+        final Object obj;
+
+        WrapperObj(Object obj) {
+            this.obj = obj;
+        }
+    }
+
+    static class WrapperTuple {
+        final Object first;
+        final Object second;
+        final Object third;
+
+        WrapperTuple(Object first, Object second, Object third) {
+            this.first = first;
+            this.second = second;
+            this.third = third;
+        }
+    }
+
+    static class WrapperPair {
+        final Object obj;
+        final int i;
+
+        WrapperPair(Object obj, int i) {
+            this.obj = obj;
+            this.i = i;
+        }
+    }
+
     /* ===================================== On-heap version ===================================== */
 
     private static int[] a = new int[SIZE];
@@ -59,6 +89,122 @@ public class ReachabilityFenceTest {
                 Reference.reachabilityFence(a);
                 Reference.reachabilityFence(b);
                 Reference.reachabilityFence(c);
+            }
+        }
+    }
+
+    @Test
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_PARSING)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.PHASEIDEAL_BEFORE_EA)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_ITERATIVE_EA)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_LOOP_OPTS)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.FINAL_CODE)
+    static void testCountedLoopIntWrapped() {
+        for (int i = 0; i < a.length; i++) {
+            try {
+                c[i] = a[i] + b[i];
+            } finally {
+                // After scalarization, each RF is migrated to corresponding object field.
+                Reference.reachabilityFence(new WrapperObj(a)); // 1 -> 1 RF
+                Reference.reachabilityFence(new WrapperObj(b)); // 1 -> 1 RF
+                Reference.reachabilityFence(new WrapperObj(c)); // 1 -> 1 RF
+            }
+        }
+    }
+
+    @Test
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "1"}, phase = CompilePhase.AFTER_PARSING)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "1"}, phase = CompilePhase.PHASEIDEAL_BEFORE_EA)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_ITERATIVE_EA)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_LOOP_OPTS)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.FINAL_CODE)
+    static void testCountedLoopIntWrappedTuple() {
+        for (int i = 0; i < a.length; i++) {
+            try {
+                c[i] = a[i] + b[i];
+            } finally {
+                // After scalarization, each object field gets its own RF.
+                Reference.reachabilityFence(new WrapperTuple(a, b, c)); // 1 -> 3 RFs
+            }
+        }
+    }
+
+    @Test
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_PARSING)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.PHASEIDEAL_BEFORE_EA)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_ITERATIVE_EA)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_LOOP_OPTS)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.FINAL_CODE)
+    static void testCountedLoopIntWrappedTupleNull() {
+        for (int i = 0; i < a.length; i++) {
+            try {
+                c[i] = a[i] + b[i];
+            } finally {
+                // Null components are redundant.
+                Reference.reachabilityFence(new WrapperTuple(a, null, null)); // 1 -> 3 -> 1 RF
+                Reference.reachabilityFence(new WrapperTuple(null, b, null)); // 1 -> 3 -> 1 RF
+                Reference.reachabilityFence(new WrapperTuple(null, null, c)); // 1 -> 3 -> 1 RF
+            }
+        }
+    }
+
+    @Test
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_PARSING)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.PHASEIDEAL_BEFORE_EA)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_ITERATIVE_EA)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_LOOP_OPTS)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.FINAL_CODE)
+    static void testCountedLoopIntWrappedTupleLocal() {
+        for (int i = 0; i < a.length; i++) {
+            try {
+                c[i] = a[i] + b[i];
+            } finally {
+                // RFs on freshly allocated empty objects are redundant.
+                Reference.reachabilityFence(new WrapperTuple(           a, new Object(), new Object())); // 1 -> 3 -> 1 RF
+                Reference.reachabilityFence(new WrapperTuple(new Object(),            b, new Object())); // 1 -> 3 -> 1 RF
+                Reference.reachabilityFence(new WrapperTuple(new Object(), new Object(),            c)); // 1 -> 3 -> 1 RF
+            }
+        }
+    }
+
+    @Test
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_PARSING)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.PHASEIDEAL_BEFORE_EA)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_ITERATIVE_EA)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_LOOP_OPTS)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.FINAL_CODE)
+    static void testCountedLoopIntWrappedPairLI() {
+        for (int i = 0; i < a.length; i++) {
+            try {
+                c[i] = a[i] + b[i];
+            } finally {
+                // Only object fields matter.
+                Reference.reachabilityFence(new WrapperPair(a, i)); // 1 -> 1 RF
+                Reference.reachabilityFence(new WrapperPair(b, i)); // 1 -> 1 RF
+                Reference.reachabilityFence(new WrapperPair(c, i)); // 1 -> 1 RF
+            }
+        }
+    }
+
+    @Test
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "1"}, phase = CompilePhase.AFTER_PARSING)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "1"}, phase = CompilePhase.PHASEIDEAL_BEFORE_EA)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_ITERATIVE_EA)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_LOOP_OPTS)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.FINAL_CODE)
+    static void testCountedLoopIntWrappedArray() {
+        for (int i = 0; i < a.length; i++) {
+            try {
+                c[i] = a[i] + b[i];
+            } finally {
+                // After scalarization, each array element has its own RF.
+                Reference.reachabilityFence(new Object[] { a, b, c }); // 1 -> 3 RFs
             }
         }
     }
