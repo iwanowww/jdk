@@ -78,6 +78,7 @@ public enum CompilePhase {
     EA_AFTER_PHI_ADDP_REDUCTION(       "EA: 5. Phi -> AddP Reduction"),
     EA_AFTER_PHI_CMP_REDUCTION(        "EA: 5. Phi -> Cmp Reduction"),
     AFTER_EA(                       "After Escape Analysis"),
+    AFTER_ITERATIVE_EA(             "After Iterative Escape Analysis"),
     ITER_GVN_AFTER_EA(              "Iter GVN after EA"),
     BEFORE_BEAUTIFY_LOOPS(          "Before Beautify Loops"),
     AFTER_BEAUTIFY_LOOPS(           "After Beautify Loops"),
