@@ -3179,6 +3179,13 @@ void Compile::Optimize() {
     print_method(PHASE_ITER_GVN_AFTER_ELIMINATION, 2);
   }
 
+#ifdef ASSERT
+  for (int i = 0; i < C->reachability_fences_count(); i++) {
+    ReachabilityFenceNode* rf = C->reachability_fence(i);
+    assert(rf->in(0)->unique_ctrl_out_or_null() != nullptr, "multiple control use");
+  }
+#endif // ASSERT
+
   _print_phase_loop_opts = has_loops();
   if (_print_phase_loop_opts) {
     print_method(PHASE_BEFORE_LOOP_OPTS, 2);
@@ -3242,6 +3249,18 @@ void Compile::Optimize() {
       // Try again if candidates exist and made progress
       // by removing some allocations and/or locks.
     } while (progress);
+
+    print_method(PHASE_AFTER_ITERATIVE_EA, 2);
+  }
+
+  // After escape analayis is over, reachability fences don't need memory anymore.
+  if (C->reachability_fences_count() > 0) {
+    for (int i = 0; i < C->reachability_fences_count(); i++) {
+      C->reachability_fence(i)->clear_memory(igvn);
+    }
+    assert(!failing(), "");
+    igvn.optimize();
+    if (failing()) return;
   }
 
   process_flat_accesses(igvn);
@@ -4798,10 +4817,10 @@ void Compile::final_graph_reshaping_walk(Node_Stack& nstack, Node* root, Final_R
   // decoding the oop for that is not needed.
   for (int i = 0; i < C->reachability_fences_count(); i++) {
     ReachabilityFenceNode* rf = C->reachability_fence(i);
-    DecodeNNode* dn = rf->in(1)->isa_DecodeN();
+    DecodeNNode* dn = rf->in(ReachabilityFenceNode::Referent)->isa_DecodeN();
     if (dn != nullptr) {
       if (!dn->has_non_debug_uses() || Matcher::narrow_oop_use_complex_address()) {
-        rf->set_req(1, dn->in(1));
+        rf->set_req(ReachabilityFenceNode::Referent, dn->in(1));
         if (dn->outcnt() == 0) {
           dn->disconnect_inputs(this);
         }

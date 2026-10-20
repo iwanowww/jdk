@@ -37,6 +37,7 @@ class  Int128TBinaryNode;
 class  SubTypeCheckNode;
 class  Node;
 class  PhaseIterGVN;
+class  ReachabilityFenceNode;
 
 class PhaseMacroExpand : public Phase {
 private:
@@ -113,25 +114,34 @@ private:
   Node* process_field_value_at_safepoint(const Type* field_type, Node* field_val);
 
   bool add_array_elems_to_safepoint(AllocateNode* alloc,
+                                    Node* ctrl, Node* mem,
                                     const TypeAryPtr* array_type,
-                                    SafePointNode* sfpt,
-                                    Node_List* field_values);
+                                    Node_List* field_values,
+                                    Node* info);
   bool add_inst_fields_to_safepoint(ciInstanceKlass* iklass,
                                     AllocateNode* alloc,
-                                    Node* base,
-                                    int offset_minus_header,
-                                    SafePointNode* sfpt,
-                                    Node_List* field_values);
+                                    Node* ctrl, Node* mem,
+                                    Node* base, int offset_minus_header,
+                                    Node_List* field_values,
+                                    Node* info);
+
   Node* value_from_alloc(BasicType ft, const TypeOopPtr* adr_t, AllocateNode* alloc);
-  Node* value_from_safepoint(SafePointNode* sfpt, BasicType ft, const Type* ftype, const TypeOopPtr* adr_t, AllocateNode* alloc);
-  Node* value_from_mem(Node* orig_mem, Node* ctl, BasicType ft, const Type* ftype, const TypeOopPtr* adr_t, AllocateNode* alloc);
+  Node* value_from_mem(Node* mem, Node* ctrl, BasicType ft, const Type* ftype, const TypeOopPtr* adr_t, AllocateNode* alloc);
   Node* value_from_mem_phi(Node* mem, BasicType ft, const Type* ftype, const TypeOopPtr* adr_t, AllocateNode* alloc, Node_Stack* value_phis, int level);
-  Node* value_type_from_mem(ciValueKlass* vk, const TypeAryPtr* elem_adr_type, int elem_idx, int offset_in_element, bool null_free, AllocateNode* alloc, SafePointNode* sfpt);
+  Node* value_from_safepoint(SafePointNode* sfpt, BasicType ft, const Type* ftype, const TypeOopPtr* adr_t, AllocateNode* alloc);
+  Node* value_type_from_mem(Node* mem, Node* ctrl,
+                            ciValueKlass* vk,
+                            const TypeAryPtr* elem_adr_type,
+                            int elem_idx,
+                            int offset_in_element,
+                            bool null_free,
+                            AllocateNode* alloc,
+                            Node* info);
 
   bool eliminate_boxing_node(CallStaticJavaNode* call);
   bool eliminate_allocate_node(AllocateNode *alloc);
-  void undo_previous_scalarizations(Node_List& safepoints_done, Node_List& scalar_objects_done, AllocateNode* alloc);
-  bool scalar_replacement(AllocateNode* alloc, Unique_Node_List& safepoints);
+  void undo_previous_scalarizations(AllocateNode* alloc, Node_List& safepoints_done, Node_List& scalar_objects_done, Node_List& new_reachability_fences);
+  bool scalar_replacement(AllocateNode* alloc, Unique_Node_List& safepoints, Unique_Node_List& reachability_fences);
   void process_users_of_allocation(AllocateNode* alloc, bool value_type_alloc = false);
   void remove_call(CallNode* call, CallProjections* callprojs);
 
@@ -139,6 +149,12 @@ private:
                                                           SafePointNode* sfpt,
                                                           Node_List* field_values,
                                                           Unique_Node_List* value_worklist);
+
+  bool enumerate_field_values_for_allocation(AllocateNode* alloc,
+                                             Node* ctrl, Node* mem,
+                                             Node_List* field_values,
+                                             Unique_Node_List* value_worklist,
+                                             Node* info);
 
   void eliminate_gc_barrier(Node *p2x);
   void mark_eliminated_box(Node* box, Node* obj);
@@ -264,9 +280,12 @@ public:
   bool expand_macro_nodes();
   void eliminate_opaque_looplimit_macro_nodes();
 
-  SafePointScalarObjectNode* create_scalarized_object_description(AllocateNode *alloc, SafePointNode* sfpt, Unique_Node_List* value_worklist);
-  static bool can_eliminate_allocation(PhaseIterGVN* igvn, AllocateNode* alloc, Unique_Node_List* safepoints);
+  SafePointScalarObjectNode* create_scalarized_object_description(AllocateNode* alloc, SafePointNode* sfpt, Unique_Node_List* value_worklist);
 
+  static bool can_eliminate_allocation(PhaseIterGVN* igvn,
+                                       AllocateNode* alloc,
+                                       Unique_Node_List* safepoints,
+                                       Unique_Node_List* reachability_fences);
 
   PhaseIterGVN &igvn() const { return _igvn; }
 
