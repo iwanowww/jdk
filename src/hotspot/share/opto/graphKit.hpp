@@ -932,7 +932,7 @@ class GraphKit : public Phase {
   class SavedState : public StackObj {
     GraphKit* _kit;
     int _sp;
-    JVMState* _jvms;
+    uint _jvms_sp;
     SafePointNode* _map;
     Unique_Node_List _ctrl_succ;
     bool _discarded;

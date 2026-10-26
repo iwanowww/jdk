@@ -210,6 +210,7 @@ class MulVLNode;
 class ExpandVNode;
 class CompressVNode;
 class CompressMNode;
+class MinMaxVNode;
 class C2_MacroAssembler;
 
 
@@ -774,6 +775,7 @@ public:
         DEFINE_CLASS_ID(NegV, Vector, 8)
         DEFINE_CLASS_ID(SaturatingVector, Vector, 9)
         DEFINE_CLASS_ID(MulVL, Vector, 10)
+        DEFINE_CLASS_ID(MinMaxV, Vector, 11)
       DEFINE_CLASS_ID(ValueType, Type, 8)
       DEFINE_CLASS_ID(Con, Type, 9)
           DEFINE_CLASS_ID(ConI, Con, 0)
@@ -1066,6 +1068,7 @@ public:
   DEFINE_CLASS_QUERY(StoreVectorMasked)
   DEFINE_CLASS_QUERY(StoreVectorScatterMasked)
   DEFINE_CLASS_QUERY(SaturatingVector)
+  DEFINE_CLASS_QUERY(MinMaxV)
   DEFINE_CLASS_QUERY(ShiftV)
   DEFINE_CLASS_QUERY(Unlock)
 
