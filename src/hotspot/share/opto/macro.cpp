@@ -1649,9 +1649,9 @@ bool PhaseMacroExpand::eliminate_allocate_node(AllocateNode *alloc) {
   if (!alloc->_is_scalar_replaceable) {
     assert(alloc->is_unused() || value_type_alloc, "sanity");
     // We can only eliminate allocation if all debug info references
-    // are already replaced with SafePointScalarObject because
-    // we can't search for a fields value without instance_id.
-    if (safepoints.size() > 0) {
+    // are already replaced with SafePointScalarObject and no reachability fences left
+    // because we can't search for a fields value without instance_id.
+    if (safepoints.size() > 0 || reachability_fences.size() > 0) {
       return false;
     }
   }

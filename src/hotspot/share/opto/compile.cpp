@@ -3293,7 +3293,7 @@ void Compile::Optimize() {
     print_method(PHASE_AFTER_ITERATIVE_EA, 2);
   }
 
-  // After escape analayis is over, reachability fences don't need memory anymore.
+  // After escape analysis is over, reachability fences don't need memory anymore.
   if (C->reachability_fences_count() > 0) {
     for (int i = 0; i < C->reachability_fences_count(); i++) {
       C->reachability_fence(i)->clear_memory(igvn);
