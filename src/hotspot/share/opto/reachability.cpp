@@ -409,8 +409,11 @@ bool PhaseIdealLoop::expand_reachability_fences() {
     for (int i = 0; i < C->reachability_fences_count(); i++) {
       ReachabilityFenceNode* rf = C->reachability_fence(i);
       assert(!rf->is_redundant(igvn()), "missed");
+      Node* referent = rf->referent();
+      assert(!referent->is_ValueType(), "VT referent not supported");
+
       if (PreserveReachabilityFencesOnConstants) {
-        const Type* referent_t = igvn().type(rf->referent());
+        const Type* referent_t = igvn().type(referent);
         assert(referent_t != TypePtr::NULL_PTR, "redundant rf");
         bool is_constant_rf = referent_t->singleton();
         if (is_constant_rf) {
@@ -430,33 +433,12 @@ bool PhaseIdealLoop::expand_reachability_fences() {
         // Non-RF users are ignored for a similar reason: they can go away before or after expansion
         // takes place, so no guarantees reachability information is preserved.
       } else {
-        // referent_worklist.ensure_empty();
-        // field_worklist.ensure_empty();
-        // field_worklist.push(rf->referent());
-        // for (uint j = 0; j < field_worklist.size(); j++) {
-        //   Node* referent = field_worklist.at(j);
-        //   if (referent->is_ValueType()) {
-        //     for (uint k = 0; k < referent->as_ValueType()->field_count(); k++) {
-        //       Node* field_value = referent->as_ValueType()->field_value(k);
-        //       field_worklist.push(field_value);
-        //     }
-        //   } else if (referent->bottom_type()->isa_oopptr()) {
-        //     referent_worklist.push(referent);
-        //   }
-        // }
-        // field_worklist.clear();
-
-        // for (uint j = 0; j < referent_worklist.size(); j++) {
-        //   Node* referent = referent_worklist.at(j);
-        Node* referent = rf->referent();
-        assert(!referent->is_ValueType(), "VT referent not supported");
         do {
-          assert(referent != nullptr, "missing");
           sfpt_worklist.ensure_empty();
           enumerate_interfering_sfpts(rf, referent, this, stack, visited, sfpt_worklist);
 
-          // It's safe to remove a reachability fence node when there are either interfering safepoints found or
-          // referent has other users so it stays alive when RF node goes away.
+          // It's safe to remove a reachability fence node when there is either an interfering safepoint found or
+          // the referent has other uses so it stays alive when RF node goes away.
           safe_to_remove = (sfpt_worklist.size() > 0) || (referent->outcnt() > 1);
 
           for (uint k = 0; k < sfpt_worklist.size(); k++) {
@@ -468,30 +450,15 @@ bool PhaseIdealLoop::expand_reachability_fences() {
               reachability_edges.push(p);
             }
           }
+
           sfpt_worklist.clear();
-          if (!safe_to_remove) {
-            // Try to uncast
-            if (referent->is_ConstraintCast()) {
-              referent = referent->in(1); // uncast and retry
-              continue;
-            } else if (referent->is_Load()) {
-              break; // stop; don't touch holder object
-            } else if (referent->is_DecodeN() || referent->is_Parm() || referent->is_Phi() ||
-                       referent->is_CMove() || referent->is_Proj() || referent->is_Con()) {
-              assert(!referent->is_DecodeN() ||
-                     !referent->as_DecodeN()->in(1)->is_ConstraintCast(),
-                     "DecodeN (Check/CastPP) not expected");
-              // nothing to do;
-              break;
-            } else {
-              assert(false, "not supported: %s", referent->Name());
-              break;
-            }
+
+          if (!safe_to_remove && referent->is_ConstraintCast()) {
+            referent = referent->in(1); // uncast and retry
+            continue;
           }
           break;
         } while (true);
-        // }
-        // referent_worklist.clear();
       }
       if (safe_to_remove) {
         for_removal.push(rf);
