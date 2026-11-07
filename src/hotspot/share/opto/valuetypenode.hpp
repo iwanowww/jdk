@@ -247,6 +247,7 @@ public:
 
   bool is_mismatched() const;
 
+  bool has_debug_use(const Node* n) const;
   bool has_non_debug_use(const Node* n) const {
     return find_edge(n) <= TypeFunc::Parms + 2;
   }

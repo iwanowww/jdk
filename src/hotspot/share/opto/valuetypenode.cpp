@@ -328,6 +328,11 @@ void ValueTypeNode::make_scalar_in_safepoint(PhaseIterGVN* igvn, Unique_Node_Lis
   assert(jvms != nullptr, "missing JVMS");
   uint first_ind = (sfpt->req() - jvms->scloff());
 
+  SafePointNode::NodeEdgeTempStorage non_debug_edges_worklist(*igvn);
+  sfpt->remove_non_debug_edges(non_debug_edges_worklist);
+
+  assert(!non_debug_edges_worklist.contains(this), "VT nodes as reachability edges not supported");
+
   // Iterate over the value type fields in order of increasing offset and add the
   // field values to the safepoint. Nullable value types have a null marker field that
   // needs to be checked before using the field values.
@@ -349,6 +354,10 @@ void ValueTypeNode::make_scalar_in_safepoint(PhaseIterGVN* igvn, Unique_Node_Lis
       sfpt->set_req(i, sobj);
     }
   }
+
+  sfpt->restore_non_debug_edges(non_debug_edges_worklist);
+
+  assert(sobj->outcnt() > 0, "unused");
 }
 
 bool ValueTypeNode::make_scalar_in_safepoints(PhaseIterGVN* igvn, bool allow_oop) {
@@ -393,7 +402,9 @@ bool ValueTypeNode::make_scalar_in_safepoints(PhaseIterGVN* igvn, bool allow_oop
       const Node* n = worklist.pop();
       for (DUIterator_Fast imax, i = n->fast_outs(imax); i < imax; i++) {
         Node* use = n->fast_out(i);
-        if (use->is_SafePoint() && !use->is_CallLeaf() && (!use->is_Call() || use->as_Call()->has_debug_use(n))) {
+        if (use->is_SafePoint() && !use->is_CallLeaf() &&
+            (!use->is_Call() || use->as_Call()->has_debug_use(n)) &&
+            (!use->is_StoreFlat() || use->as_StoreFlat()->has_debug_use(n))) {
           safepoints.push(use->as_SafePoint());
         } else if (use->is_ConstraintCast()) {
           worklist.push(use);
@@ -2525,4 +2536,15 @@ bool LoadFlatNode::is_mismatched() const {
 
 bool StoreFlatNode::is_mismatched() const {
   return (_decorators & C2_MISMATCHED) != 0;
+}
+
+bool StoreFlatNode::has_debug_use(const Node* n) const {
+  if (jvms() != nullptr) {
+    for (uint i = jvms()->debug_start(); i < jvms()->debug_end(); i++) {
+      if (in(i) == n) {
+        return true;
+      }
+    }
+  }
+  return false;
 }

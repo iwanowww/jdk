@@ -178,7 +178,6 @@ static JVMState* clone_jvms(Compile* C, SafePointNode* sfpt) {
 
 void PhaseVector::scalarize_vbox_node(VectorBoxNode* vec_box) const {
   Node* vec_value = vec_box->in(VectorBoxNode::Value);
-  PhaseGVN& gvn = *C->initial_gvn();
 
   // Process merged VBAs
 
@@ -200,7 +199,6 @@ void PhaseVector::scalarize_vbox_node(VectorBoxNode* vec_box) const {
 
       JVMState* jvms = clone_jvms(C, call);
       GraphKit kit(jvms);
-      PhaseGVN& gvn = kit.gvn();
 
       // Adjust JVMS from post-call to pre-call state: put args on stack
       uint nargs = call->method()->arg_size();
@@ -212,8 +210,8 @@ void PhaseVector::scalarize_vbox_node(VectorBoxNode* vec_box) const {
         if (arg_type->is_valueklassptr() && !call->method()->mismatch() && call->method()->is_scalarized_arg(parm_idx)) {
           bool nullable = arg_type->maybe_null();
           ciValueKlass* vk = arg_type->value_klass();
-          ValueTypeNode* it = ValueTypeNode::make_from_multi(&kit, call, vk, in_idx, true, !nullable);
-          kit.push(gvn.transform(it));
+          Node* it = kit.gvn().transform(ValueTypeNode::make_from_multi(&kit, call, vk, in_idx, true, !nullable));
+          kit.push(it);
         } else {
           kit.push(call->in(in_idx));
           in_idx++;
@@ -284,18 +282,21 @@ void PhaseVector::scalarize_vbox_node(VectorBoxNode* vec_box) const {
   if (is_mask && vec_value->Opcode() != Op_VectorStoreMask) {
     const TypeVect* vt = vec_value->bottom_type()->is_vect();
     BasicType bt = vt->element_basic_type();
-    vec_value = gvn.transform(VectorStoreMaskNode::make(gvn, vec_value, bt, vt->length()));
+    vec_value = _igvn.transform(VectorStoreMaskNode::make(_igvn, vec_value, bt, vt->length()));
   }
 
   while (safepoints.size() > 0) {
     SafePointNode* sfpt = safepoints.pop();
+
+    SafePointNode::NodeEdgeTempStorage non_debug_edges_worklist(_igvn);
+    sfpt->remove_non_debug_edges(non_debug_edges_worklist);
 
     uint first_ind = (sfpt->req() - sfpt->jvms()->scloff());
     Node* sobj = new SafePointScalarObjectNode(vec_box->box_type(), vec_box, first_ind, sfpt->jvms()->depth(), n_fields);
     sobj->init_req(0, C->root());
     sfpt->add_req(vec_value);
 
-    sobj = gvn.transform(sobj);
+    sobj = _igvn.transform(sobj);
 
     JVMState *jvms = sfpt->jvms();
 
@@ -308,6 +309,9 @@ void PhaseVector::scalarize_vbox_node(VectorBoxNode* vec_box) const {
         sfpt->set_req(i, sobj);
       }
     }
+
+    sfpt->restore_non_debug_edges(non_debug_edges_worklist);
+
     C->record_for_igvn(sfpt);
   }
 }
