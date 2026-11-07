@@ -1625,6 +1625,7 @@ public:
   void insert_rf(Node* ctrl, Node* referent);
   void replace_rf(ReachabilityFenceNode* old_node, Node* new_node);
   void remove_rf(ReachabilityFenceNode* rf);
+  bool add_reachability_edge_to_safepoint(Node* referent, SafePointNode* sfpt);
  public:
   bool optimize_reachability_fences();
   bool expand_reachability_fences();

@@ -78,6 +78,7 @@ public:
   virtual Node* Ideal(PhaseGVN* phase, bool can_reshape);
   virtual Node* Identity(PhaseGVN* phase);
 
+  Node* memory() const { return in(Memory); }
   Node* referent() const { return in(Referent); }
   bool is_redundant(PhaseGVN& gvn);
   bool clear_referent(PhaseIterGVN& phase);

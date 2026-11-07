@@ -1362,6 +1362,12 @@ bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc,
           Node* field_value = field_values.pop();
           if (field_value == C->top()) {
             // dead path; ignore
+          } else if (field_value->is_ValueType()) {
+            // Process VT field values instead.
+            ValueTypeNode* vt_field_value = field_value->as_ValueType();
+            for (uint j = 0; j < vt_field_value->field_count(); j++) {
+              field_values.push(vt_field_value->field_value(j));
+            }
           } else if (field_value->bottom_type()->isa_oopptr()) {
             Node* ctrl_out = ctrl_rf->unique_ctrl_out();
             ReachabilityFenceNode* field_rf = new ReachabilityFenceNode(C, ctrl_rf, mem_rf, field_value);

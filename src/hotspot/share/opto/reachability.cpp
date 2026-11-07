@@ -26,6 +26,7 @@
 #include "opto/callnode.hpp"
 #include "opto/compile.hpp"
 #include "opto/loopnode.hpp"
+#include "opto/narrowptrnode.hpp"
 #include "opto/phaseX.hpp"
 #include "opto/reachability.hpp"
 #include "opto/regalloc.hpp"
@@ -309,20 +310,28 @@ static void enumerate_interfering_sfpts_linear_traversal(Node* ctrl_start, Node_
   }
 }
 
+static Node* early_ctrl_for_referent(Node* referent, PhaseIdealLoop* phase) {
+  if (referent->is_Phi()) {
+    return referent->as_Phi()->in(0)->as_Region();
+  }
+  return phase->get_early_ctrl(referent);
+}
+
 // Enumerate all safepoints which are reachable from the RF to its referent through CFG.
 // Start at RF node and traverse CFG upwards until referent's control node is reached.
-static void enumerate_interfering_sfpts(ReachabilityFenceNode* rf, PhaseIdealLoop* phase,
+static void enumerate_interfering_sfpts(ReachabilityFenceNode* ctrl_late,
+                                        Node* referent,
+                                        PhaseIdealLoop* phase,
                                         Node_Stack<RegionNode>& stack, VectorSet& visited,
                                         Node_List<SafePointNode>& interfering_sfpts) {
   assert(stack.is_empty(), "required");
   assert(visited.is_empty(), "required");
 
-  Node* referent = rf->referent();
-  Node* referent_ctrl = phase->get_ctrl(referent);
-  assert(phase->is_dominator(referent_ctrl, rf), "sanity");
+  Node* referent_ctrl = early_ctrl_for_referent(referent, phase);
+  assert(phase->is_dominator(referent_ctrl, ctrl_late), "sanity");
 
   visited.set(referent_ctrl->_idx); // end point
-  enumerate_interfering_sfpts_linear_traversal(rf, stack, visited, interfering_sfpts); // starting point in CFG
+  enumerate_interfering_sfpts_linear_traversal(ctrl_late, stack, visited, interfering_sfpts); // starting point in CFG
   while (stack.is_nonempty()) {
     RegionNode* cur = stack.node();
     uint idx = stack.index();
@@ -362,6 +371,19 @@ static bool dominates_another_rf(ReachabilityFenceNode* rf, PhaseIdealLoop* phas
   return false;
 }
 
+// Add reachability edge to a safepoint node as a non-debug edge following debug information.
+bool PhaseIdealLoop::add_reachability_edge_to_safepoint(Node* referent, SafePointNode* sfpt) {
+  assert(referent->bottom_type()->isa_oopptr(), "not an oop");
+  assert(!referent->is_ValueType(), "reachability edge to VT is not supported");
+  assert(is_dominator(early_ctrl_for_referent(referent, this), sfpt), "unschedulable");
+  if (sfpt->find_edge(referent) == -1) {
+    sfpt->add_req(referent);
+    igvn()._worklist.push(sfpt);
+    return true;
+  }
+  return false; // no new edges added
+}
+
 // Phase 2: migrate reachability info to safepoints.
 // All RFs are replaced with edges from corresponding referents to interfering safepoints.
 // Interfering safepoints are safepoint nodes which are reachable from the RF to its referent through CFG.
@@ -370,7 +392,7 @@ bool PhaseIdealLoop::expand_reachability_fences() {
 
   assert(OptimizeReachabilityFences, "required");
   assert(C->post_loop_opts_phase(), "required");
-  DEBUG_ONLY( int no_of_constant_rfs = 0; )
+  DEBUG_ONLY( int no_of_preserved_rfs = 0; )
 
   ResourceMark rm;
   Unique_Node_List<ReachabilityFenceNode> for_removal;
@@ -378,7 +400,9 @@ bool PhaseIdealLoop::expand_reachability_fences() {
   GrowableArray<ReachabilityEdge> reachability_edges;
   {
     // Reuse temporary structures to avoid allocating them for every single RF node.
-    Node_List<SafePointNode> sfpt_worklist;
+    Unique_Node_List<SafePointNode> sfpt_worklist;
+    // Unique_Node_List<Node> referent_worklist;
+    // Unique_Node_List<Node> field_worklist;
     Node_Stack<RegionNode> stack(0);
     VectorSet visited;
 
@@ -390,10 +414,11 @@ bool PhaseIdealLoop::expand_reachability_fences() {
         assert(referent_t != TypePtr::NULL_PTR, "redundant rf");
         bool is_constant_rf = referent_t->singleton();
         if (is_constant_rf) {
-          DEBUG_ONLY( no_of_constant_rfs += 1; )
+          DEBUG_ONLY( no_of_preserved_rfs += 1; )
           continue; // leave RFs on constants intact
         }
       }
+      bool safe_to_remove = false;
       if (dominates_another_rf(rf, this)) {
         // Redundant fence: dominates another RF with the same referent.
         // RF is redundant for some referent oop when the referent has another RF which
@@ -405,21 +430,74 @@ bool PhaseIdealLoop::expand_reachability_fences() {
         // Non-RF users are ignored for a similar reason: they can go away before or after expansion
         // takes place, so no guarantees reachability information is preserved.
       } else {
-        assert(sfpt_worklist.size() == 0, "not empty");
-        enumerate_interfering_sfpts(rf, this, stack, visited, sfpt_worklist);
+        // referent_worklist.ensure_empty();
+        // field_worklist.ensure_empty();
+        // field_worklist.push(rf->referent());
+        // for (uint j = 0; j < field_worklist.size(); j++) {
+        //   Node* referent = field_worklist.at(j);
+        //   if (referent->is_ValueType()) {
+        //     for (uint k = 0; k < referent->as_ValueType()->field_count(); k++) {
+        //       Node* field_value = referent->as_ValueType()->field_value(k);
+        //       field_worklist.push(field_value);
+        //     }
+        //   } else if (referent->bottom_type()->isa_oopptr()) {
+        //     referent_worklist.push(referent);
+        //   }
+        // }
+        // field_worklist.clear();
 
+        // for (uint j = 0; j < referent_worklist.size(); j++) {
+        //   Node* referent = referent_worklist.at(j);
         Node* referent = rf->referent();
-        while (sfpt_worklist.size() > 0) {
-          SafePointNode* sfpt = sfpt_worklist.pop();
-          assert(is_dominator(get_ctrl(referent), sfpt), "");
-          assert(sfpt->req() == rf_base_offset(sfpt), "no extra edges allowed");
-          if (sfpt->find_edge(referent) == -1) {
-            ReachabilityEdge p(sfpt, referent);
-            reachability_edges.push(p);
+        assert(!referent->is_ValueType(), "VT referent not supported");
+        do {
+          assert(referent != nullptr, "missing");
+          sfpt_worklist.ensure_empty();
+          enumerate_interfering_sfpts(rf, referent, this, stack, visited, sfpt_worklist);
+
+          // It's safe to remove a reachability fence node when there are either interfering safepoints found or
+          // referent has other users so it stays alive when RF node goes away.
+          safe_to_remove = (sfpt_worklist.size() > 0) || (referent->outcnt() > 1);
+
+          for (uint k = 0; k < sfpt_worklist.size(); k++) {
+            SafePointNode* sfpt = sfpt_worklist.at(k);
+            assert(is_dominator(early_ctrl_for_referent(referent, this), sfpt), "");
+            assert(sfpt->req() == rf_base_offset(sfpt), "no extra edges allowed");
+            if (sfpt->find_edge(referent) == -1) {
+              ReachabilityEdge p(sfpt, referent);
+              reachability_edges.push(p);
+            }
           }
-        }
+          sfpt_worklist.clear();
+          if (!safe_to_remove) {
+            // Try to uncast
+            if (referent->is_ConstraintCast()) {
+              referent = referent->in(1); // uncast and retry
+              continue;
+            } else if (referent->is_Load()) {
+              break; // stop; don't touch holder object
+            } else if (referent->is_DecodeN() || referent->is_Parm() || referent->is_Phi() ||
+                       referent->is_CMove() || referent->is_Proj() || referent->is_Con()) {
+              assert(!referent->is_DecodeN() ||
+                     !referent->as_DecodeN()->in(1)->is_ConstraintCast(),
+                     "DecodeN (Check/CastPP) not expected");
+              // nothing to do;
+              break;
+            } else {
+              assert(false, "not supported: %s", referent->Name());
+              break;
+            }
+          }
+          break;
+        } while (true);
+        // }
+        // referent_worklist.clear();
       }
-      for_removal.push(rf);
+      if (safe_to_remove) {
+        for_removal.push(rf);
+      } else {
+        DEBUG_ONLY( no_of_preserved_rfs += 1; )
+      }
     }
   }
   // Materialize reachability edges.
@@ -427,10 +505,7 @@ bool PhaseIdealLoop::expand_reachability_fences() {
     ReachabilityEdge p = reachability_edges.pop();
     SafePointNode* sfpt = p.first;
     Node* referent = p.second;
-    if (sfpt->find_edge(referent) == -1) {
-      sfpt->add_req(referent);
-      igvn()._worklist.push(sfpt);
-    }
+    add_reachability_edge_to_safepoint(referent, sfpt);
   }
   // Eliminate processed RFs. They become redundant once reachability edges are added.
   bool progress = (for_removal.size() > 0);
@@ -438,7 +513,7 @@ bool PhaseIdealLoop::expand_reachability_fences() {
     remove_rf(for_removal.pop());
   }
 
-  assert(C->reachability_fences_count() == no_of_constant_rfs, "");
+  assert(C->reachability_fences_count() == no_of_preserved_rfs, "");
   return progress;
 }
 

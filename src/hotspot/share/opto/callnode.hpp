@@ -572,6 +572,11 @@ public:
         }
       }
     }
+#ifdef ASSERT
+    bool contains(const Node* n) {
+      return !is_empty() && (_node_hook->find_edge(n) > 0);
+    }
+#endif // ASSERT
   };
 
   void remove_non_debug_edges(NodeEdgeTempStorage& non_debug_edges);
