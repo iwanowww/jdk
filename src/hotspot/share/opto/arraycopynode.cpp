@@ -713,6 +713,9 @@ Node *ArrayCopyNode::Ideal(PhaseGVN *phase, bool can_reshape) {
   new_map->set_i_o(in(TypeFunc::I_O));
   phase->record_for_igvn(new_map);
 
+  NodeEdgeTempStorage non_debug_edges_worklist(*phase->is_IterGVN());
+  remove_non_debug_edges(non_debug_edges_worklist);
+
   GraphKit kit(new_jvms, phase);
 
   SafePointNode* backward_map = nullptr;
@@ -772,9 +775,11 @@ Node *ArrayCopyNode::Ideal(PhaseGVN *phase, bool can_reshape) {
       // put in worklist, so that if it happens to be dead it is removed
       phase->is_IterGVN()->_worklist.push(mem);
     }
+    restore_non_debug_edges(non_debug_edges_worklist);
     return nullptr;
   }
 
+  restore_non_debug_edges(non_debug_edges_worklist);
   return mem;
 }
 

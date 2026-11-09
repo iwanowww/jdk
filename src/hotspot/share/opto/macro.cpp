@@ -848,7 +848,12 @@ bool PhaseMacroExpand::can_eliminate_allocation(PhaseIterGVN* igvn,
       } else if (use->is_ReachabilityFence() && OptimizeReachabilityFences) {
         // ok to eliminate
         if (reachability_fences != nullptr) {
-          reachability_fences->push(use->as_ReachabilityFence());
+          if (use->as_ReachabilityFence()->memory()->is_top()) {
+            NOT_PRODUCT(fail_eliminate = "ReachabilityFence does not have memory";)
+            can_eliminate = false;
+          } else {
+            reachability_fences->push(use->as_ReachabilityFence());
+          }
         }
       } else if (use->is_SafePoint()) {
         SafePointNode* sfpt = use->as_SafePoint();
@@ -1356,6 +1361,11 @@ bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc,
       ReachabilityFenceNode* reachability_fence = reachability_fences.at(i)->as_ReachabilityFence();
       Node* ctrl_rf = reachability_fence->in(ReachabilityFenceNode::Control);
       Node* mem_rf = reachability_fence->in(ReachabilityFenceNode::Memory);
+      if (mem_rf->is_top()) {
+        assert(false, "missing memory on a reachability fence node");
+        undo_previous_scalarizations(alloc, safepoints_done, scalar_objects_done, field_reachability_fences);
+        return false; // can't scalarize reachability fence uses without memory info
+      }
       Node_List<Node> field_values;
       if (enumerate_field_values_for_allocation(alloc, ctrl_rf, mem_rf, &field_values, &value_worklist, reachability_fence /*info*/)) {
         while (field_values.size() > 0) {
@@ -1388,6 +1398,8 @@ bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc,
     clear_reachability_fences(reachability_fences, _igvn);
   } else {
     if (reachability_fences.size() > 0) {
+      assert(field_reachability_fences.size() == 0, "not empty");
+      undo_previous_scalarizations(alloc, safepoints_done, scalar_objects_done, field_reachability_fences);
       return false; // can't scalarize reachability fence uses
     }
   }

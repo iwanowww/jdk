@@ -268,7 +268,7 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
     }
   }
 
-  // Populate RFs outside loops.
+  // Populate RFs outside loops. Memory information is lost.
   while (worklist.is_nonempty()) {
     LoopExit p = worklist.pop();
     Node* referent = p.first;
