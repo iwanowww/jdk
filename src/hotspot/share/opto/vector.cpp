@@ -288,7 +288,7 @@ void PhaseVector::scalarize_vbox_node(VectorBoxNode* vec_box) const {
   while (safepoints.size() > 0) {
     SafePointNode* sfpt = safepoints.pop();
 
-    SafePointNode::NodeEdgeTempStorage non_debug_edges_worklist(_igvn);
+    SafePointNode::NodeEdgeTempStorage non_debug_edges_worklist(&_igvn);
     sfpt->remove_non_debug_edges(non_debug_edges_worklist);
 
     uint first_ind = (sfpt->req() - sfpt->jvms()->scloff());

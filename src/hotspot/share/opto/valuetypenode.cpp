@@ -328,7 +328,7 @@ void ValueTypeNode::make_scalar_in_safepoint(PhaseIterGVN* igvn, Unique_Node_Lis
   assert(jvms != nullptr, "missing JVMS");
   uint first_ind = (sfpt->req() - jvms->scloff());
 
-  SafePointNode::NodeEdgeTempStorage non_debug_edges_worklist(*igvn);
+  SafePointNode::NodeEdgeTempStorage non_debug_edges_worklist(igvn);
   sfpt->remove_non_debug_edges(non_debug_edges_worklist);
 
   assert(!non_debug_edges_worklist.contains(this), "VT nodes as reachability edges not supported");

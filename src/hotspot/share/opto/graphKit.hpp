@@ -68,7 +68,7 @@ class GraphKit : public Phase {
 
  private:
   int               _sp;        // JVM Expression Stack Pointer; don't modify directly!
-
+  bool              _safepoints_allowed;
  private:
   SafePointNode*     map_not_null() const {
     assert(_map != nullptr, "must call stopped() to test for reset compiler map");
@@ -917,6 +917,11 @@ class GraphKit : public Phase {
   Node* box_vector(Node* in, const TypeInstPtr* vbox_type, BasicType elem_bt, int num_elem, bool deoptimize_on_exception = false);
   Node* unbox_vector(Node* in, const TypeInstPtr* vbox_type, BasicType elem_bt, int num_elem);
   Node* vector_shift_count(Node* cnt, int shift_op, BasicType bt, int num_elem);
+
+  void forbid_safepoints() {
+    assert(_safepoints_allowed, "already forbidden");
+    _safepoints_allowed = false;
+  }
 
   // Helper class to support reverting to a previous parsing state.
   // When an intrinsic makes changes before bailing out, it's necessary to restore the graph

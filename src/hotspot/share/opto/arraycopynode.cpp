@@ -696,16 +696,18 @@ Node *ArrayCopyNode::Ideal(PhaseGVN *phase, bool can_reshape) {
 
   JVMState* new_jvms = nullptr;
   SafePointNode* new_map = nullptr;
-  if (!is_clonebasic()) {
-    new_jvms = jvms()->clone_shallow(phase->C);
-    new_map = new SafePointNode(req(), new_jvms);
-    for (uint i = TypeFunc::FramePtr; i < req(); i++) {
-      new_map->init_req(i, in(i));
-    }
-    new_jvms->set_map(new_map);
-  } else {
+  if (is_clonebasic()) {
     new_jvms = new (phase->C) JVMState(0);
     new_map = new SafePointNode(TypeFunc::Parms, new_jvms);
+    new_jvms->set_map(new_map);
+  } else {
+    // Drops non-debug inputs for simplicity. The code doesn't produce any safepoints during expansion.
+    assert(req() == jvms()->endoff() || can_reshape, "no non-debug inputs during parsing allowed");
+    new_jvms = jvms()->clone_shallow(phase->C);
+    new_map = new SafePointNode(jvms()->endoff(), new_jvms);
+    for (uint i = TypeFunc::FramePtr; i < jvms()->endoff(); i++) {
+      new_map->init_req(i, in(i));
+    }
     new_jvms->set_map(new_map);
   }
   new_map->set_control(in(TypeFunc::Control));
@@ -713,10 +715,8 @@ Node *ArrayCopyNode::Ideal(PhaseGVN *phase, bool can_reshape) {
   new_map->set_i_o(in(TypeFunc::I_O));
   phase->record_for_igvn(new_map);
 
-  NodeEdgeTempStorage non_debug_edges_worklist(*phase->is_IterGVN());
-  remove_non_debug_edges(non_debug_edges_worklist);
-
   GraphKit kit(new_jvms, phase);
+  kit.forbid_safepoints();
 
   SafePointNode* backward_map = nullptr;
   SafePointNode* forward_map = nullptr;
@@ -775,11 +775,8 @@ Node *ArrayCopyNode::Ideal(PhaseGVN *phase, bool can_reshape) {
       // put in worklist, so that if it happens to be dead it is removed
       phase->is_IterGVN()->_worklist.push(mem);
     }
-    restore_non_debug_edges(non_debug_edges_worklist);
     return nullptr;
   }
-
-  restore_non_debug_edges(non_debug_edges_worklist);
   return mem;
 }
 

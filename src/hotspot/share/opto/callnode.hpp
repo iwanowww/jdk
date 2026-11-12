@@ -522,11 +522,11 @@ public:
   class NodeEdgeTempStorage : public StackObj {
     friend class SafePointNode;
 
-    PhaseIterGVN& _igvn;
+    PhaseIterGVN* _igvn;
     Node*         _node_hook;
 
 #ifdef ASSERT
-    enum State { state_initial, state_populated, state_processed };
+    enum State { state_initial, state_populated, state_processed, state_invalid };
 
     State _state; // monotonically transitions from initial to processed state.
 #endif // ASSERT
@@ -535,6 +535,7 @@ public:
       return _node_hook == nullptr || _node_hook->req() == 1;
     }
     void push(Node* n) {
+      assert(_state == state_initial, "not processed");
       assert(n != nullptr, "");
       if (_node_hook == nullptr) {
         _node_hook = new Node(nullptr);
@@ -542,6 +543,7 @@ public:
       _node_hook->add_req(n);
     }
     Node* pop() {
+      assert(_state == state_populated, "not processed");
       assert(!is_empty(), "");
       int idx = _node_hook->req()-1;
       Node* r = _node_hook->in(idx);
@@ -551,20 +553,30 @@ public:
     }
 
   public:
-    NodeEdgeTempStorage(PhaseIterGVN &igvn) : _igvn(igvn), _node_hook(nullptr)
+    NodeEdgeTempStorage(PhaseIterGVN* igvn) : _igvn(igvn), _node_hook(nullptr)
                                               DEBUG_ONLY(COMMA _state(state_initial)) {
       assert(is_empty(), "");
+#ifdef ASSERT
+      if (_igvn == nullptr) {
+        _state = state_invalid;
+      }
+#endif // ASSERT
     }
 
+    NodeEdgeTempStorage() : _igvn(nullptr), _node_hook(nullptr)
+                            DEBUG_ONLY(COMMA _state(state_invalid)) {}
+
     ~NodeEdgeTempStorage() {
-      assert(_state == state_processed, "not processed");
+      assert(_state == state_processed || _state == state_invalid, "not processed");
       assert(is_empty(), "");
       if (_node_hook != nullptr) {
-        _node_hook->destruct(&_igvn);
+        assert(_state == state_processed, "");
+        _node_hook->destruct(_igvn);
       }
     }
 
     void remove_edge_if_present(Node* n) {
+      assert(_state == state_populated, "not processed");
       if (!is_empty()) {
         int idx = _node_hook->find_edge(n);
         if (idx > 0) {
@@ -574,6 +586,7 @@ public:
     }
 #ifdef ASSERT
     bool contains(const Node* n) {
+      assert(_state == state_populated, "not processed");
       return !is_empty() && (_node_hook->find_edge(n) > 0);
     }
 #endif // ASSERT

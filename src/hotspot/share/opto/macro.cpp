@@ -981,7 +981,7 @@ void PhaseMacroExpand::undo_previous_scalarizations(AllocateNode* alloc,
     const SafePointScalarObjectNode* scobj = scalar_objects_done.pop();
     assert(scobj->alloc() == alloc, "sanity");
 
-    SafePointNode::NodeEdgeTempStorage non_debug_edges_worklist(igvn());
+    SafePointNode::NodeEdgeTempStorage non_debug_edges_worklist(&igvn());
     sfpt_done->remove_non_debug_edges(non_debug_edges_worklist);
 
     // Remove the scalarized-object description appended to the safepoint
@@ -1328,7 +1328,7 @@ bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc,
   while (safepoints.size() > 0) {
     SafePointNode* sfpt = safepoints.pop();
 
-    SafePointNode::NodeEdgeTempStorage non_debug_edges_worklist(igvn());
+    SafePointNode::NodeEdgeTempStorage non_debug_edges_worklist(&igvn());
 
     // All sfpt inputs are implicitly included into debug info during the scalarization process below.
     // Keep non-debug inputs separately, so they stay non-debug.

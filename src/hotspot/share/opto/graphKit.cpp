@@ -72,7 +72,8 @@ GraphKit::GraphKit(JVMState* jvms, PhaseGVN* gvn)
   : Phase(Phase::Parser),
     _env(C->env()),
     _gvn((gvn != nullptr) ? *gvn : *C->initial_gvn()),
-    _barrier_set(BarrierSet::barrier_set()->barrier_set_c2())
+    _barrier_set(BarrierSet::barrier_set()->barrier_set_c2()),
+    _safepoints_allowed(true)
 {
   assert(gvn == nullptr || !gvn->is_IterGVN() || gvn->is_IterGVN()->delay_transform(), "delay transform should be enabled");
   _exceptions = jvms->map()->next_exception();
@@ -90,7 +91,8 @@ GraphKit::GraphKit()
   : Phase(Phase::Parser),
     _env(C->env()),
     _gvn(*C->initial_gvn()),
-    _barrier_set(BarrierSet::barrier_set()->barrier_set_c2())
+    _barrier_set(BarrierSet::barrier_set()->barrier_set_c2()),
+    _safepoints_allowed(true)
 {
   _exceptions = nullptr;
   set_map(nullptr);
@@ -103,9 +105,12 @@ GraphKit::GraphKit(const SafePointNode* sft, PhaseIterGVN& igvn)
     _env(C->env()),
     _gvn(igvn),
     _exceptions(nullptr),
-    _barrier_set(BarrierSet::barrier_set()->barrier_set_c2()) {
+    _barrier_set(BarrierSet::barrier_set()->barrier_set_c2()),
+    _safepoints_allowed(true)
+{
   assert(igvn.delay_transform(), "must delay transformation during macro expansion");
   assert(sft->next_exception() == nullptr, "must not have a pending exception");
+  assert(sft->req() == sft->jvms()->debug_end(), "must not have non-debug enges");
   JVMState* cloned_jvms = sft->jvms()->clone_deep(C);
   SafePointNode* cloned_map = new SafePointNode(sft->req(), cloned_jvms);
   for (uint i = 0; i < sft->req(); i++) {
@@ -975,6 +980,8 @@ static bool should_reexecute_implied_by_bytecode(JVMState *jvms, bool is_anewarr
 
 // Helper function for adding JVMState and debug information to node
 void GraphKit::add_safepoint_edges(SafePointNode* call, bool must_throw) {
+  assert(_safepoints_allowed, "not allowed");
+
   // Add the safepoint edges to the call (or other safepoint).
 
   // Make sure dead locals are set to top.  This
