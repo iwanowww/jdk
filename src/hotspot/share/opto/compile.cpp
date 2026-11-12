@@ -3483,7 +3483,7 @@ void Compile::Optimize() {
 
   // Process value type nodes again and remove them. From here
   // on we don't need to keep track of field values anymore.
-  process_value_types(igvn);
+  process_value_types(igvn, /* remove= */ true);
   if (failing()) {
     return;
   }
