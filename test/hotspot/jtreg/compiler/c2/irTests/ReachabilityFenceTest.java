@@ -38,6 +38,59 @@ import jdk.internal.misc.Unsafe;
  * @run driver compiler.c2.irTests.ReachabilityFenceTest
  */
 public class ReachabilityFenceTest {
+    static Object obj1 = new Object();
+    static Object obj2 = new Object();
+
+    @Test
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "1"}, phase = CompilePhase.AFTER_PARSING)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "0"}, phase = CompilePhase.AFTER_ITER_GVN)
+    static Object testRedundantFences01() {
+        Object obj = obj1;
+        try {
+            return obj;
+        } finally {
+            Reference.reachabilityFence(obj);
+            Reference.reachabilityFence(obj);
+        }
+    }
+
+    @Test
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "2"}, phase = CompilePhase.AFTER_PARSING)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "0"}, phase = CompilePhase.AFTER_ITER_GVN)
+    static Object testRedundantFences02() {
+        Object o1 = obj1;
+        Object o2 = obj2;
+        try {
+            return null;
+        } finally {
+            Reference.reachabilityFence(o1);
+            Reference.reachabilityFence(o2);
+            Reference.reachabilityFence(o1);
+            Reference.reachabilityFence(o2);
+        }
+    }
+
+    @Test
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "1"}, phase = CompilePhase.AFTER_PARSING)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "0"}, phase = CompilePhase.AFTER_ITER_GVN)
+    static Object testRedundantFences03() {
+        Object o1 = obj1;
+        Object o2 = null;
+        try {
+            if (o1 != null) {
+                o2 = o1;
+            }
+            return o1;
+        } finally {
+            Reference.reachabilityFence(o1);
+            Reference.reachabilityFence(o2);
+            Reference.reachabilityFence(o1);
+            Reference.reachabilityFence(o2);
+        }
+    }
+
+    /* =========================================================================================== */
+
     private static int SIZE = 100;
 
     static class WrapperObj {
