@@ -847,7 +847,7 @@ public:
 
   static bool clear_argument_if_only_used_as_buffer_at_calls(const Node* result_cast, PhaseIterGVN& igvn);
 
-  void process_value_types(PhaseIterGVN &igvn, bool remove = false);
+  void process_value_types(PhaseIterGVN& igvn, bool remove = false);
 
   void add_flat_access(Node* n);
   void remove_flat_access(Node* n);

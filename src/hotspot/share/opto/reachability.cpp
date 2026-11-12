@@ -318,34 +318,50 @@ static void enumerate_interfering_sfpts_linear_traversal(Node* ctrl_start, Node_
   }
 }
 
+static Node* normal_return_ctrl(CallNode* call) {
+  CallProjections* callprojs = call->extract_projections(false /*separate_io_proj*/,
+                                                         false /*do_asserts*/,
+                                                         true  /*allow_handlers*/);
+  if (callprojs->fallthrough_catchproj != nullptr) {
+    return callprojs->fallthrough_catchproj;
+  }
+  assert(callprojs->catchall_catchproj == nullptr, "normal control is missing");
+  return callprojs->fallthrough_proj;
+}
+
 static Node* early_ctrl_for_referent(Node* referent, PhaseIdealLoop* phase) {
   if (referent->is_Phi()) {
     return referent->as_Phi()->in(0)->as_Region();
   }
-  return phase->get_early_ctrl(referent);
+  Node* early_ctrl = phase->get_early_ctrl(referent);
+  if (early_ctrl->is_Call() && referent->is_Proj() && referent->as_Proj()->in(0) == early_ctrl) {
+    // Result is not accessible on exception-throwing projection.
+    early_ctrl = normal_return_ctrl(early_ctrl->as_Call());
+    assert(early_ctrl != nullptr, "normal control missing");
+  }
+  return early_ctrl;
 }
 
-// Enumerate all safepoints which are reachable from the RF to its referent through CFG.
-// Start at RF node and traverse CFG upwards until referent's control node is reached.
-static void enumerate_interfering_sfpts(ReachabilityFenceNode* ctrl_late,
-                                        Node* referent,
+// Enumerate all safepoints which are reachable between ctrl_start and ctrl_end in CFG.
+// Start at ctrl_start node and traverse CFG upwards until ctrl_end is reached.
+static void enumerate_interfering_sfpts(Node* ctrl_start,
+                                        Node* ctrl_end,
                                         PhaseIdealLoop* phase,
                                         Node_Stack<RegionNode>& stack, VectorSet& visited,
                                         Node_List<SafePointNode>& interfering_sfpts) {
+  assert(ctrl_start->is_CFG(), "not a CFG node");
+  assert(ctrl_end->is_CFG(), "not a CFG node");
   assert(stack.is_empty(), "required");
   assert(visited.is_empty(), "required");
 
-  Node* referent_ctrl = early_ctrl_for_referent(referent, phase);
-  assert(phase->is_dominator(referent_ctrl, ctrl_late), "sanity");
-
-  visited.set(referent_ctrl->_idx); // end point
-  enumerate_interfering_sfpts_linear_traversal(ctrl_late, stack, visited, interfering_sfpts); // starting point in CFG
+  visited.set(ctrl_end->_idx); // end point
+  enumerate_interfering_sfpts_linear_traversal(ctrl_start, stack, visited, interfering_sfpts); // starting point in CFG
   while (stack.is_nonempty()) {
     RegionNode* cur = stack.node();
     uint idx = stack.index();
 
     assert(cur != nullptr, "");
-    assert(phase->is_dominator(referent_ctrl, cur), "");
+    assert(phase->is_dominator(ctrl_end, cur), "");
     assert(idx > 0 && idx <= cur->req(), "%d %d", idx, cur->req());
 
     if (idx < cur->req()) {
@@ -429,6 +445,8 @@ bool PhaseIdealLoop::expand_reachability_fences() {
           continue; // leave RFs on constants intact
         }
       }
+      // Tells whether it is safe to remove RF node after expansion or not.
+      // FIXME: describe problematic scenarios. Referent has to stay alive in presence of interfering safepoints.
       bool safe_to_remove = false;
       if (dominates_another_rf(rf, this)) {
         // Redundant fence: dominates another RF with the same referent.
@@ -440,33 +458,42 @@ bool PhaseIdealLoop::expand_reachability_fences() {
         // Otherwise, there's a chance for the superseding RF node to go away before expansion.
         // Non-RF users are ignored for a similar reason: they can go away before or after expansion
         // takes place, so no guarantees reachability information is preserved.
+        safe_to_remove = true;
       } else {
+        sfpt_worklist.ensure_empty();
+
+        enumerate_interfering_sfpts(rf, C->start(), this, stack, visited, sfpt_worklist);
+
+        safe_to_remove = (sfpt_worklist.size() == 0) || (referent->outcnt() > 1); // no safepoints to care about
+
         do {
-          sfpt_worklist.ensure_empty();
-          enumerate_interfering_sfpts(rf, referent, this, stack, visited, sfpt_worklist);
-
-          // It's safe to remove a reachability fence node when there is either an interfering safepoint found or
-          // the referent has other uses so it stays alive when RF node goes away.
-          safe_to_remove = (sfpt_worklist.size() > 0) || (referent->outcnt() > 1);
-
+          Node* referent_ctrl = early_ctrl_for_referent(referent, this);
           for (uint k = 0; k < sfpt_worklist.size(); k++) {
             SafePointNode* sfpt = sfpt_worklist.at(k);
-            assert(is_dominator(early_ctrl_for_referent(referent, this), sfpt), "");
             assert(sfpt->req() == rf_base_offset(sfpt), "no extra edges allowed");
-            if (sfpt->find_edge(referent) == -1) {
-              ReachabilityEdge p(sfpt, referent);
-              reachability_edges.push(p);
+
+            // TODO
+            if (referent_ctrl != sfpt && is_dominator(referent_ctrl, sfpt)) {
+              if (!sfpt->is_Call() || sfpt->as_Call()->guaranteed_safepoint()) {
+                safe_to_remove = true;
+              }
+              if (sfpt->find_edge(referent) == -1) {
+                ReachabilityEdge p(sfpt, referent);
+                reachability_edges.push(p);
+              }
             }
           }
 
-          sfpt_worklist.clear();
-
-          if (!safe_to_remove && referent->is_ConstraintCast()) {
-            referent = referent->in(1); // uncast and retry
-            continue;
+          if (!safe_to_remove &&
+              referent->is_ConstraintCast() && referent->in(1)->bottom_type()->isa_oopptr()) {
+            referent = referent->in(1);
+            continue; // try one more time
+          } else {
+            break;
           }
-          break;
         } while (true);
+
+        sfpt_worklist.clear(); // cleanup for reuse
       }
       if (safe_to_remove) {
         for_removal.push(rf);
@@ -500,7 +527,7 @@ static Node* sfpt_ctrl_out(SafePointNode* sfpt) {
   if (sfpt->is_Call()) {
     CallProjections* callprojs = sfpt->as_Call()->extract_projections(false /*separate_io_proj*/,
                                                                       false /*do_asserts*/,
-                                                                      true /*allow_handlers*/);
+                                                                      true  /*allow_handlers*/);
     // Calls can have multiple control projections. However, reachability edge expansion
     // happens during final graph reshaping which is performed very late in compilation pipeline.
     // The assumption here is that the control path chosen for insertion can't go away.
@@ -535,6 +562,7 @@ void Compile::expand_reachability_edges(Unique_Node_List<SafePointNode>& safepoi
     uint rf_offset = rf_base_offset(sfpt);
     if (sfpt->jvms() != nullptr && sfpt->req() > rf_offset) {
       assert(is_interfering_sfpt_candidate(sfpt), "");
+      // Find a point in CFG right after safepoint to insert reachability fence.
       Node* ctrl_out = sfpt_ctrl_out(sfpt);
       Node* ctrl_end = ctrl_out->unique_ctrl_out();
 

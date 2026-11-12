@@ -2110,7 +2110,7 @@ bool Compile::clear_argument_if_only_used_as_buffer_at_calls(const Node* result_
   return true;
 }
 
-void Compile::process_value_types(PhaseIterGVN &igvn, bool remove) {
+void Compile::process_value_types(PhaseIterGVN& igvn, bool remove) {
 #ifdef ASSERT
   {
     ResourceMark rm;
@@ -3322,14 +3322,18 @@ void Compile::Optimize() {
     print_method(PHASE_AFTER_ITERATIVE_EA, 2);
   }
 
-  // After escape analysis is over, reachability fences don't need memory anymore.
   if (C->reachability_fences_count() > 0) {
+    // After escape analysis is over, reachability fences don't need memory anymore.
     for (int i = 0; i < C->reachability_fences_count(); i++) {
       C->reachability_fence(i)->clear_memory(igvn);
     }
     assert(!failing(), "");
     igvn.optimize();
-    if (failing()) return;
+    if (failing())  return;
+
+    // Optimize (RF -> VT) pattern once EA is over.
+    process_value_types(igvn);
+    if (failing())  return;
   }
 
   process_flat_accesses(igvn);
@@ -3479,7 +3483,7 @@ void Compile::Optimize() {
 
   // Process value type nodes again and remove them. From here
   // on we don't need to keep track of field values anymore.
-  process_value_types(igvn, /* remove= */ true);
+  process_value_types(igvn);
   if (failing()) {
     return;
   }
