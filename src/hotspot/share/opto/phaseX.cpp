@@ -2439,6 +2439,14 @@ void PhaseIterGVN::add_users_of_use_to_worklist(Node* n, Node* use, Unique_Node_
     }
   }
 
+  if (use->is_ReachabilityFence()) {
+    for (Node* descendant = use->unique_ctrl_out_or_null();
+         descendant != nullptr && descendant->is_ReachabilityFence();
+         descendant = descendant->unique_ctrl_out_or_null()) {
+      worklist.push(descendant);
+    }
+  }
+
   const int use_op = use->Opcode();
   if (use->is_Cmp()) {       // Enable CMP/BOOL optimization
     add_users_to_worklist0(use, worklist); // Put Bool on worklist

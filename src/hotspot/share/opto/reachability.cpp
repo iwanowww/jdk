@@ -96,6 +96,11 @@ bool ReachabilityFenceNode::is_redundant(PhaseGVN& gvn) {
   if (referent_t == TypePtr::NULL_PTR) {
     return true; // no-op fence: null referent
   }
+  for (Node* ancestor = in(0); ancestor->is_ReachabilityFence(); ancestor = ancestor->in(0)) {
+    if (ancestor->as_ReachabilityFence()->referent() == referent()) {
+      return true; // back-to-back reachability fences
+    }
+  }
   if (!OptimizeReachabilityFences) {
     return false; // keep reachability fence nodes intact
   }
@@ -223,7 +228,10 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
 
   for (int i = 0; i < C->reachability_fences_count(); i++) {
     ReachabilityFenceNode* rf = C->reachability_fence(i);
-    assert(!rf->is_redundant(igvn()), "required");
+    if (rf->is_redundant(igvn())) {
+      redundant_rfs.push(rf);
+      continue; // skip
+    }
     if (rf->in(ReachabilityFenceNode::Memory) != C->top()) {
       continue; // skip; wait until memory is not needed
     }

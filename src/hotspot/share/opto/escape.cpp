@@ -42,6 +42,7 @@
 #include "opto/movenode.hpp"
 #include "opto/narrowptrnode.hpp"
 #include "opto/phaseX.hpp"
+#include "opto/reachability.hpp"
 #include "opto/rootnode.hpp"
 #include "opto/valuetypenode.hpp"
 #include "utilities/macros.hpp"
@@ -1904,6 +1905,15 @@ void ConnectionGraph::add_node_to_connection_graph(Node* n, Unique_Node_List<Nod
       }
       break;
     }
+    case Op_ReachabilityFence: {
+      if (OptimizeReachabilityFences) {
+        // nothing to do
+      } else {
+        add_local_var(n, PointsToNode::GlobalEscape);
+        delayed_worklist->push(n);
+      }
+      break;
+    }
     default:
       ; // Do nothing for nodes not related to EA.
   }
@@ -2097,6 +2107,19 @@ void ConnectionGraph::add_final_edges(Node *n) {
       }
       break;
     }
+    case Op_ReachabilityFence: {
+      if (OptimizeReachabilityFences) {
+        // nothing to do
+      } else {
+        Node* referent = n->as_ReachabilityFence()->referent();
+        PointsToNode* ptn = ptnode_adr(referent->_idx);
+        assert(ptn != nullptr, "should be defined already");
+        set_escape_state(ptn, PointsToNode::GlobalEscape NOT_PRODUCT(COMMA "reachability fence"));
+        add_edge(n_ptn, ptn);
+      }
+      break;
+    }
+
     default: {
       // This method should be called only for EA specific nodes which may
       // miss some edges when they were created.
