@@ -716,7 +716,6 @@ Node *ArrayCopyNode::Ideal(PhaseGVN *phase, bool can_reshape) {
   phase->record_for_igvn(new_map);
 
   GraphKit kit(new_jvms, phase);
-  kit.forbid_safepoints();
 
   SafePointNode* backward_map = nullptr;
   SafePointNode* forward_map = nullptr;

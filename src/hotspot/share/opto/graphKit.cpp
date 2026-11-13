@@ -106,7 +106,7 @@ GraphKit::GraphKit(const SafePointNode* sft, PhaseIterGVN& igvn)
     _gvn(igvn),
     _exceptions(nullptr),
     _barrier_set(BarrierSet::barrier_set()->barrier_set_c2()),
-    _safepoints_allowed(true)
+    _safepoints_allowed(!C->post_loop_opts_phase())
 {
   assert(igvn.delay_transform(), "must delay transformation during macro expansion");
   assert(sft->next_exception() == nullptr, "must not have a pending exception");
