@@ -46,6 +46,7 @@ public:
   ReachabilityFenceNode(Compile* C, Node* ctrl, Node* mem, Node* referent)
       : Node(3) {
     assert(ctrl != nullptr && mem != nullptr && referent != nullptr, "required");
+    assert(ctrl->is_CFG(), "not a control");
     assert(referent->bottom_type()->isa_oopptr() ||
            referent->bottom_type()->isa_narrowoop() != nullptr ||
            referent->bottom_type() == TypePtr::NULL_PTR,

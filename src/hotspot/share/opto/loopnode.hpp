@@ -52,6 +52,7 @@ class VectorSet;
 class VSharedData;
 class Invariance;
 struct small_cache;
+class ReachabilityEdge;
 
 //
 //                  I D E A L I Z E D   L O O P S
@@ -1626,6 +1627,14 @@ public:
   void replace_rf(ReachabilityFenceNode* old_node, Node* new_node);
   void remove_rf(ReachabilityFenceNode* rf);
   bool add_reachability_edge_to_safepoint(Node* referent, SafePointNode* sfpt);
+  void populate_reachability_edge_worklists(Node_List<ReachabilityFenceNode>& for_processing,
+                                            Node_List<ReachabilityFenceNode>& for_removal);
+  void process_reachability_fence(ReachabilityFenceNode* reachability_fence,
+                                  GrowableArray<ReachabilityEdge>& reachability_edges, // out-param
+                                  Node_List<SafePointNode>& sfpt_worklist,
+                                  GrowableArray<ReachabilityEdge>& reachability_edges_worklist,
+                                  Node_Stack<RegionNode>& stack,
+                                  VectorSet& visited);
  public:
   bool optimize_reachability_fences();
   bool expand_reachability_fences();
