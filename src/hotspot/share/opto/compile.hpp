@@ -434,6 +434,8 @@ class Compile : public Phase {
   DEBUG_ONLY(Unique_Node_List<Node>* _modified_nodes;)   // List of nodes which inputs were modified
   DEBUG_ONLY(bool       _phase_optimize_finished;) // Used for live node verification while creating new nodes
 
+  Unique_Node_List<Node>* _assert_alive_nodes; // List of nodes which inputs were modified
+
   DEBUG_ONLY(bool       _phase_verify_ideal_loop;) // Are we in PhaseIdealLoop verification?
 
   // Arenas for new-space and old-space nodes.
@@ -450,6 +452,10 @@ public:
     _node_arena = old_arena_ptr;
     return filled_arena_ptr;
   }
+
+  void assert_alive_node(Node* n);
+  void replace_alive_node(Node* old, Node* newn);
+
 private:
   RootNode*             _root;                  // Unique root of compilation, or null after bail-out.
   Node*                 _top;                   // Unique top node.  (Reset by various phases.)

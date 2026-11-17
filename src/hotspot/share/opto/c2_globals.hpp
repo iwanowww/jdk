@@ -84,6 +84,9 @@
           "Aggressively insert reachability fences "                        \
           "for all oop method arguments")                                   \
                                                                             \
+  product(bool, TraceReachabilityFences, false, DIAGNOSTIC,                 \
+          "Trace reachability fence logic")                                 \
+                                                                            \
   develop(uint, StressBailoutMean, 100000,                                  \
           "The expected number of failing() checks made until "             \
           "a random bailout.")                                              \

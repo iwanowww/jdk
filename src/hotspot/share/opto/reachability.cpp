@@ -333,12 +333,35 @@ static Node* early_ctrl_for_referent(Node* referent, PhaseIdealLoop* phase) {
   if (referent->is_Phi()) {
     return referent->as_Phi()->in(0)->as_Region();
   }
-  Node* early_ctrl = phase->get_early_ctrl(referent);
-  if (early_ctrl->is_Call() && referent->is_Proj() && referent->as_Proj()->in(0) == early_ctrl) {
+  if (referent->is_Proj() && referent->as_Proj()->in(0)->is_Call()) {
     // Result is not accessible on exception-throwing projection.
+    assert(phase->get_ctrl(referent) == referent->as_Proj()->in(0)->as_Call(), "");
+    Node* fallthrough = normal_return_ctrl(referent->as_Proj()->in(0)->as_Call());
+    assert(fallthrough != nullptr, "normal control missing");
+    assert(fallthrough->bottom_type() == Type::CONTROL,
+           "what else? %s %d", fallthrough->Name(), fallthrough->_idx);
+    return fallthrough;
+  }
+  Node* early_ctrl = phase->get_early_ctrl(referent);
+  assert(phase->is_dominator(early_ctrl, phase->get_ctrl(referent)),
+         "wrong projection: referent not from success projection?");
+  // Normalize early control so it can be used as a place to insert a reachability fence.
+  if (early_ctrl->is_Proj() && early_ctrl->as_Proj()->in(0)->is_Call()) {
+    early_ctrl = normal_return_ctrl(early_ctrl->as_Proj()->in(0)->as_Call());
+    assert(early_ctrl != nullptr, "normal control missing");
+  } else if (early_ctrl->is_Call()) {
     early_ctrl = normal_return_ctrl(early_ctrl->as_Call());
     assert(early_ctrl != nullptr, "normal control missing");
+    assert(phase->is_dominator(early_ctrl, phase->get_ctrl(referent)) ||
+           phase->get_early_ctrl(referent) == phase->get_ctrl(referent) || // both report the same Call node
+           (phase->get_ctrl(referent)->is_Proj() &&
+            phase->get_ctrl(referent)->as_Proj()->in(0) == phase->get_early_ctrl(referent)), // ... or through a Proj
+           "wrong projection: referent not from success projection?");
+  } else if (early_ctrl->is_Start() || early_ctrl->is_Initialize() || early_ctrl->is_MemBar()) {
+    early_ctrl = early_ctrl->as_Multi()->proj_out(0);
   }
+  assert(early_ctrl->bottom_type() == Type::CONTROL,
+         "what else? %s %d", early_ctrl->Name(), early_ctrl->_idx);
   return early_ctrl;
 }
 
@@ -397,7 +420,9 @@ static bool dominates_another_rf(ReachabilityFenceNode* rf, PhaseIdealLoop* phas
 
 // Add reachability edge to a safepoint node as a non-debug edge following debug information.
 bool PhaseIdealLoop::add_reachability_edge_to_safepoint(Node* referent, SafePointNode* sfpt) {
-  assert(referent->bottom_type()->isa_oopptr(), "not an oop");
+  assert(referent->bottom_type()->isa_oopptr() ||
+         referent->bottom_type()->isa_narrowoop(),
+         "not an oop: %s %d = %s", referent->Name(), referent->_idx, Type::str(referent->bottom_type()));
   assert(!referent->is_ValueType(), "reachability edge to VT is not supported");
   assert(is_dominator(early_ctrl_for_referent(referent, this), sfpt), "unschedulable");
   if (sfpt->find_edge(referent) == -1) {
@@ -406,6 +431,20 @@ bool PhaseIdealLoop::add_reachability_edge_to_safepoint(Node* referent, SafePoin
     return true;
   }
   return false; // no new edges added
+}
+
+static bool is_proj_to_alloc(Node* n) {
+  if (n->is_Proj()) {
+    if (n->as_Proj()->in(0)->is_Allocate()) {
+      return true;
+    }
+    if (n->as_Proj()->in(0)->is_CallStaticJava() &&
+        (n->as_Proj()->in(0)->as_CallStaticJava()->entry_point() == OptoRuntime::new_array_Java() ||
+         n->as_Proj()->in(0)->as_CallStaticJava()->entry_point() == OptoRuntime::new_array_nozero_Java())) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // Phase 2: migrate reachability info to safepoints.
@@ -418,15 +457,34 @@ bool PhaseIdealLoop::expand_reachability_fences() {
   assert(C->post_loop_opts_phase(), "required");
   DEBUG_ONLY( int no_of_preserved_rfs = 0; )
 
-  ResourceMark rm;
+  class ReachabilityEdge : public ResourceObj {
+   public:
+    enum Type { invalid, edgeType, fenceType };
+
+    Type   _type;
+    Node* _ctrl;
+    Node* _referent;
+
+    ReachabilityEdge() : _type(invalid), _ctrl(nullptr), _referent(nullptr) {}
+    ReachabilityEdge(Type type, Node* ctrl, Node* referent)
+    : _type(type), _ctrl(ctrl), _referent(referent) {}
+
+    static ReachabilityEdge edge(Node* referent, SafePointNode* sfpt) {
+      return ReachabilityEdge(edgeType, sfpt, referent);
+    }
+
+    static ReachabilityEdge fence(Node* referent, Node* ctrl) {
+      return ReachabilityEdge(fenceType, ctrl, referent);
+    }
+  };
+
+  //ResourceMark rm;
   Unique_Node_List<ReachabilityFenceNode> for_removal;
-  typedef Pair<SafePointNode*,Node*> ReachabilityEdge;
   GrowableArray<ReachabilityEdge> reachability_edges;
+  GrowableArray<ReachabilityEdge> reachability_edges_worklist;
   {
     // Reuse temporary structures to avoid allocating them for every single RF node.
-    Unique_Node_List<SafePointNode> sfpt_worklist;
-    // Unique_Node_List<Node> referent_worklist;
-    // Unique_Node_List<Node> field_worklist;
+    Node_List<SafePointNode> sfpt_worklist;
     Node_Stack<RegionNode> stack(0);
     VectorSet visited;
 
@@ -436,11 +494,24 @@ bool PhaseIdealLoop::expand_reachability_fences() {
       Node* referent = rf->referent();
       assert(!referent->is_ValueType(), "VT referent not supported");
 
+#ifndef PRODUCT
+      if (TraceReachabilityFences) {
+        tty->print("EXPAND: ReachabilityFence: N%d => %s N%d: ",
+                      rf->_idx, referent->Name(), referent->_idx);
+      }
+#endif // !PRODUCT
+
       if (PreserveReachabilityFencesOnConstants) {
         const Type* referent_t = igvn().type(referent);
         assert(referent_t != TypePtr::NULL_PTR, "redundant rf");
         bool is_constant_rf = referent_t->singleton();
         if (is_constant_rf) {
+#ifndef PRODUCT
+          if (TraceReachabilityFences) {
+            tty->print_raw_cr("constant");
+          }
+#endif // !PRODUCT
+
           DEBUG_ONLY( no_of_preserved_rfs += 1; )
           continue; // leave RFs on constants intact
         }
@@ -448,6 +519,8 @@ bool PhaseIdealLoop::expand_reachability_fences() {
       // Tells whether it is safe to remove RF node after expansion or not.
       // FIXME: describe problematic scenarios. Referent has to stay alive in presence of interfering safepoints.
       bool safe_to_remove = false;
+      bool referent_can_go_away = false;
+      uint no_of_sfpts = 0 ;
       if (dominates_another_rf(rf, this)) {
         // Redundant fence: dominates another RF with the same referent.
         // RF is redundant for some referent oop when the referent has another RF which
@@ -458,44 +531,138 @@ bool PhaseIdealLoop::expand_reachability_fences() {
         // Otherwise, there's a chance for the superseding RF node to go away before expansion.
         // Non-RF users are ignored for a similar reason: they can go away before or after expansion
         // takes place, so no guarantees reachability information is preserved.
+#ifndef PRODUCT
+        if (TraceReachabilityFences) {
+          tty->print_raw_cr("redundant");
+        }
+#endif // !PRODUCT
         safe_to_remove = true;
+        referent_can_go_away = true; // let the other RF track the referent
       } else {
-        sfpt_worklist.ensure_empty();
+        assert(sfpt_worklist.size() == 0, "not empty");
 
         enumerate_interfering_sfpts(rf, C->start(), this, stack, visited, sfpt_worklist);
 
-        safe_to_remove = (sfpt_worklist.size() == 0) || (referent->outcnt() > 1); // no safepoints to care about
-
-        do {
-          Node* referent_ctrl = early_ctrl_for_referent(referent, this);
+#ifndef PRODUCT
+        if (TraceReachabilityFences) {
           for (uint k = 0; k < sfpt_worklist.size(); k++) {
             SafePointNode* sfpt = sfpt_worklist.at(k);
-            assert(sfpt->req() == rf_base_offset(sfpt), "no extra edges allowed");
+            tty->print(" %sN%d", sfpt->Name(), sfpt->_idx);
+          }
+          tty->cr();
+        }
+#endif // !PRODUCT
 
-            // TODO
-            if (referent_ctrl != sfpt && is_dominator(referent_ctrl, sfpt)) {
-              if (!sfpt->is_Call() || sfpt->as_Call()->guaranteed_safepoint()) {
-                safe_to_remove = true;
-              }
-              if (sfpt->find_edge(referent) == -1) {
-                ReachabilityEdge p(sfpt, referent);
-                reachability_edges.push(p);
+        no_of_sfpts = sfpt_worklist.size();
+        safe_to_remove = (no_of_sfpts == 0); // no safepoints to care about
+        referent_can_go_away = (no_of_sfpts == 0);
+        uint no_of_processed_sfpts = 0;
+        while (!safe_to_remove) {
+          Node* referent_ctrl = early_ctrl_for_referent(referent, this);
+          assert(referent_ctrl->bottom_type() == Type::CONTROL,
+                 "not a control? %s %d", referent_ctrl->Name(), referent_ctrl->_idx);
+
+#ifndef PRODUCT
+          if (TraceReachabilityFences) {
+            tty->print("  * R %s%d / C %s%d: ",
+                       referent->Name(), referent->_idx,
+                       referent_ctrl->Name(), referent_ctrl->_idx);
+          }
+#endif // !PRODUCT
+          for (uint k = 0; k < sfpt_worklist.size(); k++) {
+            SafePointNode* sfpt = sfpt_worklist.at(k);
+            if (sfpt != nullptr) { // not yet processed
+              assert(sfpt->req() == rf_base_offset(sfpt), "no extra edges allowed");
+
+              // TODO
+              if (referent_ctrl != sfpt && is_dominator(referent_ctrl, sfpt)) {
+                NOT_PRODUCT( if (TraceReachabilityFences) { tty->print("  S%d", sfpt->_idx); } )
+                if (sfpt->find_edge(referent) == -1) {
+                  NOT_PRODUCT( if (TraceReachabilityFences) { tty->print("+E%d", referent->_idx); } )
+                  ReachabilityEdge edge = ReachabilityEdge::edge(referent, sfpt);
+                  reachability_edges.push(edge);
+                }
+                sfpt_worklist.map(k, nullptr); // processed
+                no_of_processed_sfpts++;
               }
             }
           }
 
-          if (!safe_to_remove &&
-              referent->is_ConstraintCast() && referent->in(1)->bottom_type()->isa_oopptr()) {
+          NOT_PRODUCT( if (TraceReachabilityFences) { tty->cr(); } )
+
+          assert(no_of_processed_sfpts <= sfpt_worklist.size(), "sanity");
+
+          if (sfpt_worklist.size() == no_of_processed_sfpts) {
+            referent_can_go_away = true;
+            safe_to_remove = true; // no more safepoints left
+            break;
+          } else if (referent->is_ConstraintCast()) {
+            if (is_proj_to_alloc(referent->in(1))) {
+              safe_to_remove = true; // no need to climb beyond the allocation
+              referent_can_go_away = true;
+              break;
+            } else {
+              assert(referent->in(1)->bottom_type()->isa_oopptr(),
+                     "not an oop? %s %s %d",
+                     Type::str(referent->in(1)->bottom_type()), referent->in(1)->Name(), referent->in(1)->_idx);
+              referent = referent->in(1);
+              safe_to_remove = false; // one step up and try again
+            }
+          } else if (referent->is_DecodeN()) {
             referent = referent->in(1);
-            continue; // try one more time
+            safe_to_remove = false; // one step up and try again
+          } else if (referent->is_Parm()) {
+            assert(sfpt_worklist.size() == no_of_processed_sfpts, "missing safepoints?");
+            referent_can_go_away = true; // nothing keeps unused Parm nodes around
+            safe_to_remove = true; // nothing to do
+          } else if (referent->is_Proj() &&
+                     referent->as_Proj()->in(0)->is_Call()) {
+            CallNode* call = referent->as_Proj()->in(0)->as_Call();
+            if ((call->is_CallStaticJava() &&
+                (call->as_CallStaticJava()->is_boxing_or_unboxing_call())) ||
+                 call->is_CallLeafPure()) {
+              // can go away during macro expansion if result projection disappears
+              safe_to_remove = true;
+              referent_can_go_away = true;
+            } else {
+              referent = referent->as_Proj()->in(0); // Proj can go away, but the call should stay
+              safe_to_remove = true; // no need to explicitly keep call result alive
+            }
+          } else if (referent->is_CreateEx()) {
+            // safe to drop; freshly created exception
+            referent_can_go_away = true; // nothing keeps unused CreateEx nodes around
+            safe_to_remove = true; // nothing to do
           } else {
+            assert(referent->bottom_type()->isa_oopptr() ||
+                   referent->bottom_type()->isa_narrowoop(),
+                   "not an oop? %s %s %d", Type::str(referent->bottom_type()), referent->Name(), referent->_idx);
+            assert(referent->is_Phi() ||
+                   referent->is_CMove() ||
+                   referent->is_Load() ||
+                   referent->is_LoadStore(), "what else could it be? %s %d", referent->Name(), referent->_idx);
+            // Stop here and leave a reachability fence behind.
+#ifndef PRODUCT
+            if (TraceReachabilityFences) {
+              tty->print_cr("  * F %s%d <= C %s%d: ",
+                         referent->Name(), referent->_idx,
+                         referent_ctrl->Name(), referent_ctrl->_idx);
+            }
+#endif // !PRODUCT
+            assert(!referent_ctrl->is_Start(), "wrong ctrl to insert a fence");
+
+            ReachabilityEdge fence = ReachabilityEdge::fence(referent, referent_ctrl);
+            reachability_edges.push(fence);
+            safe_to_remove = true;
             break;
           }
-        } while (true);
-
+        }
         sfpt_worklist.clear(); // cleanup for reuse
       }
+      assert(safe_to_remove, "");
       if (safe_to_remove) {
+        if (!referent_can_go_away) {
+          C->assert_alive_node(referent);
+        }
         for_removal.push(rf);
       } else {
         DEBUG_ONLY( no_of_preserved_rfs += 1; )
@@ -503,19 +670,25 @@ bool PhaseIdealLoop::expand_reachability_fences() {
     }
   }
   // Materialize reachability edges.
+  DEBUG_ONLY( int no_of_inserted_rfs  = 0; )
   while (reachability_edges.length() > 0) {
     ReachabilityEdge p = reachability_edges.pop();
-    SafePointNode* sfpt = p.first;
-    Node* referent = p.second;
-    add_reachability_edge_to_safepoint(referent, sfpt);
+    if (p._type == ReachabilityEdge::edgeType) {
+      add_reachability_edge_to_safepoint(p._referent, p._ctrl->as_SafePoint());
+    } else if (p._type == ReachabilityEdge::fenceType) {
+      DEBUG_ONLY( no_of_inserted_rfs += 1; )
+      insert_rf(p._ctrl, p._referent);
+    } else {
+      ShouldNotReachHere();
+    }
   }
   // Eliminate processed RFs. They become redundant once reachability edges are added.
   bool progress = (for_removal.size() > 0);
-  while (for_removal.size() > 0) {
+  while (for_removal.size() > 0 && !UseNewCode) {
     remove_rf(for_removal.pop());
   }
 
-  assert(C->reachability_fences_count() == no_of_preserved_rfs, "");
+  assert(C->reachability_fences_count() == no_of_preserved_rfs + no_of_inserted_rfs || UseNewCode, "");
   return progress;
 }
 

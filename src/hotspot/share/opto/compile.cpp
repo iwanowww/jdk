@@ -305,6 +305,8 @@ void Compile::gvn_replace_by(Node* n, Node* nn) {
     PhaseIterGVN::add_users_of_use_to_worklist(nn, use, *_igvn_worklist);
     i -= uses_found;    // we deleted 1 or more copies of this edge
   }
+
+  replace_alive_node(n, nn);
 }
 
 
@@ -438,6 +440,10 @@ void Compile::remove_useless_node(Node* dead) {
     if (dead->is_CallStaticJava()) {
       remove_unstable_if_trap(dead->as_CallStaticJava(), false);
     }
+  }
+  if (_assert_alive_nodes->member(dead)) {
+    DEBUG_ONLY( dead->dump(); )
+    assert(false, "died: %s %d", dead->Name(), dead->_idx);
   }
 }
 
@@ -812,6 +818,8 @@ Compile::Compile(ciEnv* ci_env, ciMethod* target, int osr_bci,
   _igvn_worklist = new (comp_arena()) Unique_Node_List<Node>(comp_arena());
   _types = new (comp_arena()) Type_Array(comp_arena());
   _node_hash = new (comp_arena()) NodeHash(comp_arena(), estimated_size);
+  _assert_alive_nodes = new (comp_arena()) Unique_Node_List<Node>(comp_arena());
+
   PhaseGVN gvn;
   set_initial_gvn(&gvn);
 
@@ -1085,6 +1093,8 @@ Compile::Compile(ciEnv* ci_env,
   _igvn_worklist = new (comp_arena()) Unique_Node_List<Node>(comp_arena());
   _types = new (comp_arena()) Type_Array(comp_arena());
   _node_hash = new (comp_arena()) NodeHash(comp_arena(), 255);
+
+  _assert_alive_nodes = new (comp_arena()) Unique_Node_List<Node>(comp_arena());
 
   {
     PhaseGVN gvn;
@@ -6295,6 +6305,20 @@ Node* Compile::narrow_value(BasicType bt, Node* value, const Type* type, PhaseGV
 
 void Compile::record_method_not_compilable_oom() {
   record_method_not_compilable(CompilationMemoryStatistic::failure_reason_memlimit());
+}
+
+void Compile::assert_alive_node(Node* n) {
+  assert(n->outcnt() > 0, "");
+  _assert_alive_nodes->push(n);
+}
+
+void Compile::replace_alive_node(Node* old, Node* neww) {
+  if (_assert_alive_nodes != nullptr) {
+    if (_assert_alive_nodes->member(old)) {
+      _assert_alive_nodes->yank(old);
+      _assert_alive_nodes->push(neww);
+    }
+  }
 }
 
 #ifndef PRODUCT

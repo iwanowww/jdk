@@ -2339,6 +2339,8 @@ void PhaseIterGVN::subsume_node( Node *old, Node *nn ) {
     }
   }
 
+  C->replace_alive_node(old, nn);
+
   // Smash all inputs to 'old', isolating him completely
   Node *temp = new Node(1);
   temp->init_req(0,nn);     // Add a use to nn to prevent him from dying
@@ -2362,6 +2364,7 @@ void PhaseIterGVN::subsume_node( Node *old, Node *nn ) {
 void PhaseIterGVN::replace_in_uses(Node* n, Node* m) {
   assert(n != nullptr, "sanity");
   add_users_to_worklist(n);
+  C->replace_alive_node(n, m);
   for (DUIterator_Fast imax, i = n->fast_outs(imax); i < imax; i++) {
     Node* u = n->fast_out(i);
     rehash_node_delayed(u);
