@@ -746,8 +746,10 @@ bool PhaseIdealLoop::expand_reachability_fences() {
     } else if (p._type == ReachabilityEdge::fenceType) {
       Node* referent = p._referent;
       Node* fence_ctrl = p._ctrl;
-      if (referent->is_ConstraintCast() && is_proj_to_alloc(referent->in(1))) {
-        // no need to climb beyond an allocation
+      if (referent->is_ConstraintCast() && (is_proj_to_alloc(referent->in(1)) ||
+                                            referent->in(1)->bottom_type() == TypeRawPtr::NOTNULL)) {
+        // No need to climb beyond an allocation site.
+        // NB! In some pathological cases, an allocation may be hidden behind multiple layers of Phis.
       } else if (referent->is_Parm()) {
         // nothing to do and nothing keeps unused Parm nodes around
         assert(fence_ctrl->is_Start(), "not a Start? %s %d",
