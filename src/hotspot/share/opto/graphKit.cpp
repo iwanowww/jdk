@@ -72,13 +72,28 @@ GraphKit::GraphKit(JVMState* jvms, PhaseGVN* gvn)
   : Phase(Phase::Parser),
     _env(C->env()),
     _gvn((gvn != nullptr) ? *gvn : *C->initial_gvn()),
-    _barrier_set(BarrierSet::barrier_set()->barrier_set_c2()),
-    _safepoints_allowed(true)
+    _barrier_set(BarrierSet::barrier_set()->barrier_set_c2())
 {
   assert(gvn == nullptr || !gvn->is_IterGVN() || gvn->is_IterGVN()->delay_transform(), "delay transform should be enabled");
   _exceptions = jvms->map()->next_exception();
   if (_exceptions != nullptr)  jvms->map()->set_next_exception(nullptr);
-  set_jvms(jvms);
+  if (jvms->map()->req() < jvms->endoff()) {
+    JVMState* cloned_jvms = jvms->clone_deep(C);
+    SafePointNode* cloned_map = new SafePointNode(jvms->map()->req(), cloned_jvms);
+    for (uint i = 0; i < jvms->debug_end(); i++) {
+      cloned_map->init_req(i, jvms->map()->in(i));
+    }
+    for (uint i = jvms->debug_end(); i < jvms->map()->req(); i++) {
+      _post_debug_sfpt_edges.push(jvms->map()->in(i));
+    }
+    gvn->record_for_igvn(cloned_map);
+    for (JVMState* current = cloned_jvms; current != nullptr; current = current->caller()) {
+      current->set_map(cloned_map);
+    }
+    set_jvms(cloned_jvms);
+  } else {
+    set_jvms(jvms);
+  }
 #ifdef ASSERT
   if (_gvn.is_IterGVN() != nullptr) {
     assert(_gvn.is_IterGVN()->delay_transform(), "Transformation must be delayed if IterGVN is used");
@@ -91,8 +106,7 @@ GraphKit::GraphKit()
   : Phase(Phase::Parser),
     _env(C->env()),
     _gvn(*C->initial_gvn()),
-    _barrier_set(BarrierSet::barrier_set()->barrier_set_c2()),
-    _safepoints_allowed(true)
+    _barrier_set(BarrierSet::barrier_set()->barrier_set_c2())
 {
   _exceptions = nullptr;
   set_map(nullptr);
@@ -105,16 +119,18 @@ GraphKit::GraphKit(const SafePointNode* sft, PhaseIterGVN& igvn)
     _env(C->env()),
     _gvn(igvn),
     _exceptions(nullptr),
-    _barrier_set(BarrierSet::barrier_set()->barrier_set_c2()),
-    _safepoints_allowed(!C->post_loop_opts_phase())
+    _barrier_set(BarrierSet::barrier_set()->barrier_set_c2())
 {
   assert(igvn.delay_transform(), "must delay transformation during macro expansion");
   assert(sft->next_exception() == nullptr, "must not have a pending exception");
   assert(sft->req() == sft->jvms()->debug_end(), "must not have non-debug enges");
   JVMState* cloned_jvms = sft->jvms()->clone_deep(C);
   SafePointNode* cloned_map = new SafePointNode(sft->req(), cloned_jvms);
-  for (uint i = 0; i < sft->req(); i++) {
+  for (uint i = 0; i < sft->jvms()->debug_end(); i++) {
     cloned_map->init_req(i, sft->in(i));
+  }
+  for (uint i = sft->jvms()->debug_end(); i < sft->req(); i++) {
+    _post_debug_sfpt_edges.push(sft->in(i));
   }
   igvn.record_for_igvn(cloned_map);
   for (JVMState* current = cloned_jvms; current != nullptr; current = current->caller()) {
@@ -982,9 +998,6 @@ static bool should_reexecute_implied_by_bytecode(JVMState *jvms, bool is_anewarr
 void GraphKit::add_safepoint_edges(SafePointNode* call, bool must_throw) {
   // Add the safepoint edges to the call (or other safepoint).
 
-  // GraphKit doesn't support non-debug safepoint edges (e.g., reachability edges).
-  assert(!C->post_loop_opts_phase(), "too late to insert safepoints");
-
   // Make sure dead locals are set to top.  This
   // should help register allocation time and cut down on the size
   // of the deoptimization information.
@@ -1147,6 +1160,14 @@ void GraphKit::add_safepoint_edges(SafePointNode* call, bool must_throw) {
   assert(call->jvms()->debug_start() == non_debug_edges, "");
   assert(call->jvms()->debug_end()   == call->req(), "");
   assert(call->jvms()->debug_depth() == call->req() - non_debug_edges, "");
+
+  for (int i = 0; i < _post_debug_sfpt_edges.length(); i++) {
+    Node* post_debug_edge = _post_debug_sfpt_edges.at(i);
+    call->add_req(post_debug_edge);
+  }
+
+  assert(call->jvms()->debug_end() + _post_debug_sfpt_edges.length() == call->req(), "");
+  assert(call->jvms()->debug_depth() == call->req() - non_debug_edges - _post_debug_sfpt_edges.length(), "");
 }
 
 bool GraphKit::compute_stack_effects(int& inputs, int& depth) {
