@@ -774,14 +774,15 @@ void PhaseIdealLoop::add_reachability_fence(Node* referent, Node* ctrl) {
     // No special care is needed for arguments.
   } else if (referent->is_Proj() &&
               referent->as_Proj()->in(0)->is_Call()) {
+
     CallNode* call = referent->as_Proj()->in(0)->as_Call();
     if ((call->is_CallStaticJava() &&
         (call->as_CallStaticJava()->is_boxing_or_unboxing_call())) ||
          call->is_CallLeafPure()) {
       // Can go away during macro expansion if result projection disappears.
     } else {
-      // No need to explicitly keep call result alive.
-      C->assert_alive_node(referent->as_Proj()->in(0)); // Proj can go away, but the call should stay
+      // Proj can go away, but the call should stay unless dominating part of CFG dies.
+      // C->assert_alive_node(referent->as_Proj()->in(0));
     }
   } else if (referent->is_CreateEx()) {
     // Safe to drop a freshly created exception.
@@ -789,7 +790,8 @@ void PhaseIdealLoop::add_reachability_fence(Node* referent, Node* ctrl) {
     assert(referent->bottom_type()->isa_oopptr() ||
            referent->bottom_type()->isa_narrowoop(),
            "not an oop? %s %s %d", Type::str(referent->bottom_type()), referent->Name(), referent->_idx);
-    assert((referent->is_Con() && PreserveReachabilityFencesOnConstants) ||
+    assert(referent->Opcode() == Op_CastI2N ||
+           (referent->is_Con() && PreserveReachabilityFencesOnConstants) ||
            ((referent->is_Load() || referent->is_LoadStore()) && !referent->in(MemNode::Address)->is_AddP()),
            "what else could it be? %s %d", referent->Name(), referent->_idx);
     // Stop here and leave a reachability fence behind.
