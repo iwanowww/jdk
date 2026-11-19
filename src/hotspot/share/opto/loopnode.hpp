@@ -1632,6 +1632,12 @@ public:
                                             Node_List<ReachabilityFenceNode>& for_removal);
   void process_reachability_fence(ReachabilityFenceNode* reachability_fence,
                                    GrowableArray<ReachabilityEdge>& reachability_edges); // out-param
+  void process_reachability_fence_edge(const ReachabilityEdge& fence,
+                                       bool is_initial_pass,
+                                       const Node_List<SafePointNode>& sfpt_candidates,
+                                       VectorSet& visited_phis,
+                                       GrowableArray<ReachabilityEdge>& worklist,
+                                       GrowableArray<ReachabilityEdge>& reachability_edges);
  public:
   bool optimize_reachability_fences();
   bool expand_reachability_fences();

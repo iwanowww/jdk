@@ -530,6 +530,170 @@ static bool is_proj_to_alloc(Node* n) {
   return false;
 }
 
+#ifdef ASSERT
+static bool validate_addr_shape(AddPNode* adr) {
+  // Move fence to base oop.
+  Node* base = adr->in(AddPNode::Base);
+  Node* addr = adr->in(AddPNode::Address);
+  if (base == addr) {
+    return true;
+  }
+  while (addr->is_AddP()) {
+    if (base == addr->in(AddPNode::Base) &&
+        base == addr->in(AddPNode::Address)) {
+      return true;
+    }
+    addr = addr->in(AddPNode::Address);
+  }
+#ifdef ASSERT
+  adr->dump(3);
+  assert(false, "wrong shape of address expression");
+#endif // ASSERT
+  return false;
+}
+#endif // ASSERT
+
+static bool move_referent_up(Node* referent,
+                             Node* referent_ctrl,
+                             VectorSet& visited_phis,
+                             GrowableArray<ReachabilityEdge>& worklist) {
+  // Try to move referent up.
+  if (referent->is_ConstraintCast() && referent->in(1)->bottom_type()->isa_oopptr()) { // ignore raw oops
+    worklist.push(ReachabilityEdge::fence(referent->in(1), referent_ctrl));
+    return true;
+  } else if (referent->is_DecodeN() || referent->is_EncodeP()) {
+    worklist.push(ReachabilityEdge::fence(referent->in(1), referent_ctrl));
+    return true;
+  } else if (referent->is_Phi()) {
+    if (visited_phis.test_set(referent->as_Phi()->_idx)) {
+      // Push reachability fence through phi.
+    RegionNode* r = referent->as_Phi()->in(0)->as_Region();
+      for (uint k = 1; k < r->req(); k++) {
+        ReachabilityEdge fence = ReachabilityEdge::fence(referent->as_Phi()->in(k), r->in(k));
+        worklist.push(fence);
+      }
+    }
+    return true;
+  } else if (referent->is_CMove()) {
+    CMoveNode* cmov = referent->as_CMove();
+
+    ReachabilityEdge fence_on_false = ReachabilityEdge::fence(cmov->in(CMoveNode::IfFalse), referent_ctrl);
+    worklist.push(fence_on_false);
+
+    ReachabilityEdge fence_on_true = ReachabilityEdge::fence(cmov->in(CMoveNode::IfTrue), referent_ctrl);
+    worklist.push(fence_on_true);
+    return true;
+  } else if ((referent->is_Load() || referent->is_LoadStore()) &&
+              referent->in(MemNode::Address)->is_AddP() &&
+              !referent->in(MemNode::Address)->in(AddPNode::Base)->is_top()) {
+    // Move fence to base oop.
+    AddPNode* ld_adr = referent->in(MemNode::Address)->as_AddP();
+    Node* base = ld_adr->in(AddPNode::Base);
+    assert(validate_addr_shape(ld_adr), "");
+    ReachabilityEdge fence_on_base = ReachabilityEdge::fence(base, referent_ctrl);
+    worklist.push(fence_on_base);
+    return true;
+  } else {
+    assert(referent->is_Parm()              ||
+           referent->is_CreateEx()          ||
+           referent->Opcode() == Op_CastI2N ||
+           (referent->is_ConstraintCast() && (referent->in(1)->bottom_type() == TypeRawPtr::NOTNULL)) ||
+           (referent->is_Proj() && referent->as_Proj()->in(0)->is_Call())                             ||
+           ((referent->is_Load() || referent->is_LoadStore()) &&
+             !referent->in(MemNode::Address)->is_AddP() &&
+             !referent->in(MemNode::Address)->in(AddPNode::Base)->is_top()),
+           "what else could it be? %s %d", referent->Name(), referent->_idx);
+    return false;
+  }
+}
+
+static bool enumerate_reachability_edges(PhaseIdealLoop* phase,
+                                         Node* referent,
+                                         Node* referent_ctrl,
+                                         Node* fence_ctrl,
+                                         bool is_initial_pass,
+                                         const Node_List<SafePointNode>& sfpt_candidates,
+                                         GrowableArray<ReachabilityEdge>& reachability_edges) {
+  uint no_of_sfpts = sfpt_candidates.size();
+  uint no_of_processed_sfpts = 0;
+
+  for (uint k = 0; k < sfpt_candidates.size(); k++) {
+    SafePointNode* sfpt = sfpt_candidates.at(k);
+    if (sfpt != nullptr) { // not yet processed
+      assert(sfpt->req() == rf_base_offset(sfpt), "no extra edges allowed");
+
+      // The assumption is that on each step up the referent chain
+      // domination over interfering candidates monotonically changes towards true.
+      assert(phase->is_dominator(referent_ctrl, sfpt) ||
+             !phase->is_dominator(fence_ctrl, sfpt), "non-monotonic");
+
+      // TODO
+      if (referent_ctrl != sfpt && phase->is_dominator(referent_ctrl, sfpt)) {
+        // Has the safepoint been already processed?
+        bool is_processed = !is_initial_pass && phase->is_dominator(fence_ctrl, sfpt);
+        if (!is_processed) {
+          NOT_PRODUCT( if (TraceReachabilityFences) { tty->print("  S%d", sfpt->_idx); } )
+          if (sfpt->find_edge(referent) == -1) {
+            NOT_PRODUCT( if (TraceReachabilityFences) { tty->print("+E%d", referent->_idx); } )
+            ReachabilityEdge edge = ReachabilityEdge::edge(referent, sfpt);
+            reachability_edges.push(edge);
+          }
+        }
+        no_of_processed_sfpts++;
+      }
+    }
+  }
+
+  NOT_PRODUCT( if (TraceReachabilityFences) {
+    tty->print_cr(" (%2d/%2d)", no_of_processed_sfpts, no_of_sfpts);
+  } )
+
+  assert(no_of_processed_sfpts <= no_of_sfpts, "sanity");
+  return (no_of_processed_sfpts < no_of_sfpts); // more work to do?
+}
+
+void PhaseIdealLoop::process_reachability_fence_edge(const ReachabilityEdge& fence,
+                                                     bool is_initial_pass,
+                                                     const Node_List<SafePointNode>& sfpt_candidates,
+                                                     VectorSet& visited_phis,
+                                                     GrowableArray<ReachabilityEdge>& worklist,
+                                                     GrowableArray<ReachabilityEdge>& reachability_edges) {
+  assert(fence._type == ReachabilityEdge::fenceType, "not a fence");
+  assert(igvn().type(fence._referent)->singleton() == false, "constant referent");
+
+  Node* referent = fence._referent;
+
+  Node* referent_ctrl = ctrl_for_referent(referent, this);
+  if (referent_ctrl == fence._ctrl) {
+    // Try to move referent up.
+    if (move_referent_up(referent, referent_ctrl, visited_phis, worklist)) {
+      // Populates worklist with extra work.
+    } else {
+#ifndef PRODUCT
+      if (TraceReachabilityFences) {
+        tty->print_cr("  * F %s%d <= C %s%d: ",
+                      referent->Name(), referent->_idx,
+                      referent_ctrl->Name(), referent_ctrl->_idx);
+      }
+#endif // !PRODUCT
+      reachability_edges.push(fence); // leave as is
+    }
+  } else {
+#ifndef PRODUCT
+    if (TraceReachabilityFences) {
+      tty->print("  * R %s%d / C %s%d",
+                 referent->Name(), referent->_idx,
+                 referent_ctrl->Name(), referent_ctrl->_idx);
+    }
+#endif // !PRODUCT
+    if (enumerate_reachability_edges(this, referent, referent_ctrl, fence._ctrl,
+                                     is_initial_pass, sfpt_candidates,
+                                  reachability_edges)) {
+      worklist.push(ReachabilityEdge::fence(referent, referent_ctrl));
+    }
+  }
+}
+
 void PhaseIdealLoop::process_reachability_fence(ReachabilityFenceNode* reachability_fence,
                                                 GrowableArray<ReachabilityEdge>& reachability_edges) { // out-param
   ResourceMark rm;
@@ -540,7 +704,6 @@ void PhaseIdealLoop::process_reachability_fence(ReachabilityFenceNode* reachabil
 
   enumerate_interfering_sfpts(reachability_fence, C->start(), this, stack, visited, sfpt_worklist);
 
-  uint no_of_sfpts = sfpt_worklist.size();
 #ifndef PRODUCT
   if (TraceReachabilityFences) {
     for (uint k = 0; k < sfpt_worklist.size(); k++) {
@@ -558,123 +721,17 @@ void PhaseIdealLoop::process_reachability_fence(ReachabilityFenceNode* reachabil
     ReachabilityEdge fence = reachability_edges_worklist.pop();
     assert(fence._type == ReachabilityEdge::fenceType, "not a fence");
 
-    uint no_of_processed_sfpts = 0;
-
-    Node* referent = fence._referent;
-
-    const Type* referent_t = igvn().type(referent);
-
-    if (referent_t == TypePtr::NULL_PTR) {
-      continue; // a no-op fence
-    } else if (referent_t->singleton()) {
-      if (PreserveReachabilityFencesOnConstants) {
+    const Type* referent_t = igvn().type(fence._referent);
+    if (referent_t->singleton()) {
+      // a fence on a constant is a no-op
+      if (PreserveReachabilityFencesOnConstants && referent_t != TypePtr::NULL_PTR) {
         reachability_edges.push(fence);
-      } else {
-        continue; // a fence on a constant is a no-op
       }
-    }
-
-    Node* referent_ctrl = ctrl_for_referent(referent, this);
-    if (referent_ctrl == fence._ctrl) {
-      // Try to move referent up.
-      if (referent->is_ConstraintCast() && referent->in(1)->bottom_type()->isa_oopptr()) { // ignore raw oops
-        reachability_edges_worklist.push(ReachabilityEdge::fence(referent->in(1), referent_ctrl));
-      } else if (referent->is_DecodeN()) {
-        reachability_edges_worklist.push(ReachabilityEdge::fence(referent->in(1), referent_ctrl));
-      } else if (referent->is_Phi()) {
-        if (visited.test_set(referent->as_Phi()->_idx)) {
-          // Push reachability fence through phi.
-          RegionNode* r = referent->as_Phi()->in(0)->as_Region();
-          for (uint k = 1; k < r->req(); k++) {
-            ReachabilityEdge fence = ReachabilityEdge::fence(referent->as_Phi()->in(k), r->in(k));
-            reachability_edges_worklist.push(fence);
-          }
-        }
-      } else if (referent->is_CMove()) {
-        CMoveNode* cmov = referent->as_CMove();
-
-        ReachabilityEdge fence_on_false = ReachabilityEdge::fence(cmov->in(CMoveNode::IfFalse), referent_ctrl);
-        reachability_edges_worklist.push(fence_on_false);
-
-        ReachabilityEdge fence_on_true = ReachabilityEdge::fence(cmov->in(CMoveNode::IfTrue), referent_ctrl);
-        reachability_edges_worklist.push(fence_on_true);
-      } else if ((referent->is_Load() || referent->is_LoadStore()) &&
-                  referent->in(MemNode::Address)->is_AddP()) {
-        // Move fence to base oop.
-        AddPNode* ld_adr = referent->in(MemNode::Address)->as_AddP();
-        Node* base = ld_adr->in(AddPNode::Base);
-        Node* addr = ld_adr->in(AddPNode::Address);
-        if (base == addr ||
-            (addr->is_AddP() && base == addr->in(AddPNode::Base) &&
-                                base == addr->in(AddPNode::Address)) ||
-            base->is_top()) {
-          ReachabilityEdge fence_on_base = ReachabilityEdge::fence(base, referent_ctrl);
-          reachability_edges_worklist.push(fence_on_base);
-        } else {
-#ifdef ASSERT
-          referent->dump(3);
-          assert(false, "wrong shape of load addr");
-#endif // ASSERT
-          reachability_edges.push(fence); // leave as is
-        }
-      } else {
-#ifndef PRODUCT
-        if (TraceReachabilityFences) {
-          tty->print_cr("  * F %s%d <= C %s%d: ",
-                     referent->Name(), referent->_idx,
-                     referent_ctrl->Name(), referent_ctrl->_idx);
-        }
-#endif // !PRODUCT
-        reachability_edges.push(fence); // leave as is
-      }
-      continue;
-    }
-
-#ifndef PRODUCT
-    if (TraceReachabilityFences) {
-      tty->print("  * R %s%d / C %s%d",
-                 referent->Name(), referent->_idx,
-                 referent_ctrl->Name(), referent_ctrl->_idx);
-    }
-#endif // !PRODUCT
-
-    for (uint k = 0; k < sfpt_worklist.size(); k++) {
-      SafePointNode* sfpt = sfpt_worklist.at(k);
-      if (sfpt != nullptr) { // not yet processed
-        assert(sfpt->req() == rf_base_offset(sfpt), "no extra edges allowed");
-
-        // The assumption is that on each step up the referent chain
-        // domination over interfering candidates monotonically changes towards true.
-        assert(is_dominator(referent_ctrl, sfpt) ||
-               !is_dominator(fence._ctrl, sfpt), "non-monotonic");
-
-        // TODO
-        if (referent_ctrl != sfpt && is_dominator(referent_ctrl, sfpt)) {
-          // Has the safepoint been already processed?
-          bool is_initial_pass = (fence._ctrl == reachability_fence);
-          bool is_processed = !is_initial_pass && is_dominator(fence._ctrl, sfpt);
-          if (!is_processed) {
-            NOT_PRODUCT( if (TraceReachabilityFences) { tty->print("  S%d", sfpt->_idx); } )
-            if (sfpt->find_edge(referent) == -1) {
-              NOT_PRODUCT( if (TraceReachabilityFences) { tty->print("+E%d", referent->_idx); } )
-              ReachabilityEdge edge = ReachabilityEdge::edge(referent, sfpt);
-              reachability_edges.push(edge);
-            }
-          }
-          no_of_processed_sfpts++;
-        }
-      }
-    }
-
-    NOT_PRODUCT( if (TraceReachabilityFences) {
-      tty->print_cr(" (%2d/%2d)", no_of_processed_sfpts, no_of_sfpts);
-    } )
-
-    assert(no_of_processed_sfpts <= sfpt_worklist.size(), "sanity");
-    if (no_of_processed_sfpts < sfpt_worklist.size()) {
-      reachability_edges_worklist.push(ReachabilityEdge::fence(referent, referent_ctrl));
     } else {
-      // nothing left to do
+      bool is_initial_pass = (fence._ctrl == reachability_fence);
+      process_reachability_fence_edge(fence, is_initial_pass,
+                                      sfpt_worklist, visited, reachability_edges_worklist,
+                                      reachability_edges);
     }
   }
 }
@@ -705,11 +762,47 @@ static Node* normalize_ctrl(Compile* C, Node* ctrl, Node* referent) {
   }
 }
 
-void PhaseIdealLoop::add_reachability_fence(Node* ctrl, Node* referent) {
-  assert(!ctrl->is_Start(),
-       "wrong ctrl to insert a fence: %s %d", ctrl->Name(), ctrl->_idx);
-  Node* normalized_ctrl = normalize_ctrl(C, ctrl, referent);
-  insert_rf(normalized_ctrl, referent);
+void PhaseIdealLoop::add_reachability_fence(Node* referent, Node* ctrl) {
+  assert(ctrl->is_Start() == referent->is_Parm(),
+         "wrong ctrl to insert a fence: %s %d", ctrl->Name(), ctrl->_idx);
+
+  if (referent->is_ConstraintCast() && (is_proj_to_alloc(referent->in(1)) ||
+                                        referent->in(1)->bottom_type() == TypeRawPtr::NOTNULL)) {
+    // No need to climb beyond an allocation site.
+    // NB! In some pathological cases, an allocation may be hidden behind multiple layers of Phis.
+  } else if (referent->is_Parm() && ctrl->is_Start()) {
+    // No special care is needed for arguments.
+  } else if (referent->is_Proj() &&
+              referent->as_Proj()->in(0)->is_Call()) {
+    CallNode* call = referent->as_Proj()->in(0)->as_Call();
+    if ((call->is_CallStaticJava() &&
+        (call->as_CallStaticJava()->is_boxing_or_unboxing_call())) ||
+         call->is_CallLeafPure()) {
+      // Can go away during macro expansion if result projection disappears.
+    } else {
+      // No need to explicitly keep call result alive.
+      C->assert_alive_node(referent->as_Proj()->in(0)); // Proj can go away, but the call should stay
+    }
+  } else if (referent->is_CreateEx()) {
+    // Safe to drop a freshly created exception.
+  } else {
+    assert(referent->bottom_type()->isa_oopptr() ||
+           referent->bottom_type()->isa_narrowoop(),
+           "not an oop? %s %s %d", Type::str(referent->bottom_type()), referent->Name(), referent->_idx);
+    assert((referent->is_Con() && PreserveReachabilityFencesOnConstants) ||
+           ((referent->is_Load() || referent->is_LoadStore()) && !referent->in(MemNode::Address)->is_AddP()),
+           "what else could it be? %s %d", referent->Name(), referent->_idx);
+    // Stop here and leave a reachability fence behind.
+#ifndef PRODUCT
+    if (TraceReachabilityFences) {
+      tty->print_cr("  * F %s%d <= C %s%d: ",
+                 referent->Name(), referent->_idx,
+                 ctrl->Name(), ctrl->_idx);
+    }
+#endif // !PRODUCT
+    Node* normalized_ctrl = normalize_ctrl(C, ctrl, referent);
+    insert_rf(normalized_ctrl, referent);
+  }
 }
 
 // Phase 2: migrate reachability info to safepoints.
@@ -722,10 +815,13 @@ bool PhaseIdealLoop::expand_reachability_fences() {
   assert(C->post_loop_opts_phase(), "required");
   DEBUG_ONLY( int no_of_preserved_rfs = 0; )
 
+  // Used to communicate between processing and bulk graph modification steps.
+  // Allocated in compiler arena, so reachability fence processing can access them
+  // while operating under a local resource mark.
   Node_List<ReachabilityFenceNode> for_removal(C->comp_arena(), C->reachability_fences_count());
   GrowableArray<ReachabilityEdge> reachability_edges(C->comp_arena(), C->reachability_fences_count(), 0, ReachabilityEdge());
 
-  {
+  { // NB! No modifications causing DOM tree changes are allowed.
     ResourceMark rm;
     Node_List<ReachabilityFenceNode> for_processing;
 
@@ -738,52 +834,13 @@ bool PhaseIdealLoop::expand_reachability_fences() {
     }
   }
   // Materialize reachability edges.
-  DEBUG_ONLY( int no_of_inserted_rfs  = 0; )
+  // NB! Reachability fence insertion modifies DOM tree.
   while (reachability_edges.length() > 0) {
     ReachabilityEdge p = reachability_edges.pop();
     if (p._type == ReachabilityEdge::edgeType) {
       add_reachability_edge_to_safepoint(p._referent, p._ctrl->as_SafePoint());
     } else if (p._type == ReachabilityEdge::fenceType) {
-      Node* referent = p._referent;
-      Node* fence_ctrl = p._ctrl;
-      if (referent->is_ConstraintCast() && (is_proj_to_alloc(referent->in(1)) ||
-                                            referent->in(1)->bottom_type() == TypeRawPtr::NOTNULL)) {
-        // No need to climb beyond an allocation site.
-        // NB! In some pathological cases, an allocation may be hidden behind multiple layers of Phis.
-      } else if (referent->is_Parm()) {
-        // nothing to do and nothing keeps unused Parm nodes around
-        assert(fence_ctrl->is_Start(), "not a Start? %s %d",
-               referent->Name(), referent->_idx);
-      } else if (referent->is_Proj() &&
-                  referent->as_Proj()->in(0)->is_Call()) {
-        CallNode* call = referent->as_Proj()->in(0)->as_Call();
-        if ((call->is_CallStaticJava() &&
-            (call->as_CallStaticJava()->is_boxing_or_unboxing_call())) ||
-             call->is_CallLeafPure()) {
-          // can go away during macro expansion if result projection disappears
-        } else {
-          C->assert_alive_node(referent->as_Proj()->in(0)); // Proj can go away, but the call should stay
-          // no need to explicitly keep call result alive
-        }
-      } else if (referent->is_CreateEx()) {
-        // safe to drop freshly created exception
-      } else {
-        assert(referent->bottom_type()->isa_oopptr() ||
-               referent->bottom_type()->isa_narrowoop(),
-               "not an oop? %s %s %d", Type::str(referent->bottom_type()), referent->Name(), referent->_idx);
-        DEBUG_ONLY( if (!referent->is_Load()) { referent->dump(3); } )
-        assert(referent->is_Load(), "what else could it be? %s %d", referent->Name(), referent->_idx);
-        // Stop here and leave a reachability fence behind.
-#ifndef PRODUCT
-        if (TraceReachabilityFences) {
-          tty->print_cr("  * F %s%d <= C %s%d: ",
-                     referent->Name(), referent->_idx,
-                     fence_ctrl->Name(), fence_ctrl->_idx);
-        }
-#endif // !PRODUCT
-        add_reachability_fence(fence_ctrl, referent);
-        DEBUG_ONLY( no_of_inserted_rfs += 1; )
-      }
+      add_reachability_fence(p._referent, p._ctrl);
     } else {
       ShouldNotReachHere();
     }
@@ -795,7 +852,6 @@ bool PhaseIdealLoop::expand_reachability_fences() {
     remove_rf(for_removal.pop());
   }
 
-  assert(C->reachability_fences_count() == no_of_preserved_rfs + no_of_inserted_rfs, "");
   return progress;
 }
 
