@@ -565,9 +565,9 @@ static bool move_referent_up(Node* referent,
     worklist.push(ReachabilityEdge::fence(referent->in(1), referent_ctrl));
     return true;
   } else if (referent->is_Phi()) {
-    if (visited_phis.test_set(referent->as_Phi()->_idx)) {
+    if (!visited_phis.test_set(referent->as_Phi()->_idx)) {
       // Push reachability fence through phi.
-    RegionNode* r = referent->as_Phi()->in(0)->as_Region();
+      RegionNode* r = referent->as_Phi()->in(0)->as_Region();
       for (uint k = 1; k < r->req(); k++) {
         ReachabilityEdge fence = ReachabilityEdge::fence(referent->as_Phi()->in(k), r->in(k));
         worklist.push(fence);
