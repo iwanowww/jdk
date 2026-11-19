@@ -980,9 +980,10 @@ static bool should_reexecute_implied_by_bytecode(JVMState *jvms, bool is_anewarr
 
 // Helper function for adding JVMState and debug information to node
 void GraphKit::add_safepoint_edges(SafePointNode* call, bool must_throw) {
-  assert(_safepoints_allowed, "not allowed");
-
   // Add the safepoint edges to the call (or other safepoint).
+
+  // GraphKit doesn't support non-debug safepoint edges (e.g., reachability edges).
+  assert(!C->post_loop_opts_phase(), "too late to insert safepoints");
 
   // Make sure dead locals are set to top.  This
   // should help register allocation time and cut down on the size
