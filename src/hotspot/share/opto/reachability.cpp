@@ -600,8 +600,8 @@ static bool move_referent_up(Node* referent,
            (referent->is_ConstraintCast() && (referent->in(1)->bottom_type() == TypeRawPtr::NOTNULL)) ||
            (referent->is_Proj() && referent->as_Proj()->in(0)->is_Call())                             ||
            ((referent->is_Load() || referent->is_LoadStore()) &&
-             !referent->in(MemNode::Address)->is_AddP() &&
-             !referent->in(MemNode::Address)->in(AddPNode::Base)->is_top()),
+             (!referent->in(MemNode::Address)->is_AddP() ||
+              referent->in(MemNode::Address)->in(AddPNode::Base)->is_top())),
            "what else could it be? %s %d", referent->Name(), referent->_idx);
     return false;
   }
