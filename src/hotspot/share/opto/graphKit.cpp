@@ -77,7 +77,7 @@ GraphKit::GraphKit(JVMState* jvms, PhaseGVN* gvn)
   assert(gvn == nullptr || !gvn->is_IterGVN() || gvn->is_IterGVN()->delay_transform(), "delay transform should be enabled");
   _exceptions = jvms->map()->next_exception();
   if (_exceptions != nullptr)  jvms->map()->set_next_exception(nullptr);
-  if (jvms->map()->req() < jvms->endoff()) {
+  if (jvms->map()->req() > jvms->endoff()) {
     JVMState* cloned_jvms = jvms->clone_deep(C);
     SafePointNode* cloned_map = new SafePointNode(jvms->map()->req(), cloned_jvms);
     for (uint i = 0; i < jvms->debug_end(); i++) {
