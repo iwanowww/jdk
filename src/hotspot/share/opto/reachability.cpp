@@ -32,6 +32,7 @@
 #include "opto/reachability.hpp"
 #include "opto/regalloc.hpp"
 #include "opto/runtime.hpp"
+#include "opto/valuetypenode.hpp"
 #include "utilities/pair.hpp"
 
 /*
@@ -319,6 +320,14 @@ static void enumerate_interfering_sfpts_linear_traversal(Node* ctrl_start, Node_
   }
 }
 
+#ifdef ASSERT
+static const char* dumpNode(Node* n) {
+  n->dump(3);
+  n->dump(-1);
+  return n->Name();
+}
+#endif // ASSERT
+
 static Node* normal_return_ctrl(CallNode* call) {
   CallProjections* callprojs = call->extract_projections(false /*separate_io_proj*/,
                                                          false /*do_asserts*/,
@@ -335,21 +344,32 @@ static Node* ctrl_for_referent(Node* referent, PhaseIdealLoop* phase) {
   if (referent->is_Phi()) {
     return referent->as_Phi()->in(0)->as_Region();
   }
-  if (referent->is_Proj() && referent->as_Proj()->in(0)->is_Call()) {
-    // Result is not accessible on exception-throwing projection.
-    assert(phase->get_ctrl(referent) == referent->as_Proj()->in(0)->as_Call(), "");
+  Node* early_ctrl = phase->get_early_ctrl(referent);
+  // Node* late_ctrl = phase->get_late_ctrl(referent, early_ctrl);
+  Node* ctrl = phase->get_ctrl(referent);
+  assert(phase->is_dominator(early_ctrl, ctrl), "wrong control");
+  if (early_ctrl->is_Call()) {
+    // Reproduce:
+    //  $JAVA_SLOW -Xcomp -XX:-TieredCompilation -XX:+StressReachabilityFences -XX:+TraceReachabilityFences -XX:CompileCommand=quiet -XX:CompileCommand=compileonly,jdk.internal.module.ServicesCatalog::putServicesCatalog
+    // if (referent->is_Proj() && referent->as_Proj()->in(0)->is_Call()) {
+    //   // Result is not accessible on exception-throwing projection.
+    // assert(phase->get_ctrl(referent) == referent->as_Proj()->in(0)->as_Call(), "");
 
-    Node* fallthrough = normal_return_ctrl(referent->as_Proj()->in(0)->as_Call());
+    // How to distinguish between normal and exceptional branches?
+    if (ctrl != early_ctrl) {
+      // compiler/c2/vectorapi/ShortGatherIndexMapTOCTOU.java w/ -XX:+StressReachabilityFences
+      return ctrl;
+    }
+    assert(referent->is_Proj() && referent->as_Proj()->in(0) == early_ctrl,
+           "not a Call proj: %s", dumpNode(referent));
+    Node* fallthrough = normal_return_ctrl(early_ctrl->as_Call());
 
     assert(fallthrough != nullptr, "normal control missing");
     assert(fallthrough->bottom_type() == Type::CONTROL,
            "what else? %s %d", fallthrough->Name(), fallthrough->_idx);
     return fallthrough;
   }
-  Node* early_ctrl = phase->get_early_ctrl(referent);
-  // Node* late_ctrl = phase->get_late_ctrl(referent, early_ctrl);
-  Node* ctrl = phase->get_ctrl(referent);
-  assert(phase->is_dominator(early_ctrl, ctrl), "wrong control");
+
   return early_ctrl;
 }
 
@@ -447,13 +467,6 @@ void PhaseIdealLoop::populate_reachability_edge_worklists(Node_List<Reachability
     assert(referent_t != TypePtr::NULL_PTR, "redundant rf");
     bool is_constant_rf = referent_t->singleton();
 
-#ifndef PRODUCT
-    if (TraceReachabilityFences) {
-      tty->print("EXPAND: ReachabilityFence: N%d => %s N%d: ",
-                    rf->_idx, referent->Name(), referent->_idx);
-    }
-#endif // !PRODUCT
-
     // Tells whether it is safe to remove RF node after expansion or not.
     // FIXME: describe problematic scenarios. Referent has to stay alive in presence of interfering safepoints.
     if (dominates_another_rf(rf, this)) {
@@ -468,14 +481,16 @@ void PhaseIdealLoop::populate_reachability_edge_worklists(Node_List<Reachability
       // takes place, so no guarantees reachability information is preserved.
 #ifndef PRODUCT
       if (TraceReachabilityFences) {
-        tty->print_raw_cr("redundant");
+        tty->print_cr("EXPAND: ReachabilityFence: N%d => %s N%d: redundant",
+                      rf->_idx, referent->Name(), referent->_idx);
       }
 #endif // !PRODUCT
       for_removal.push(rf);
     } else if (is_constant_rf) {
 #ifndef PRODUCT
       if (TraceReachabilityFences) {
-        tty->print_raw_cr("constant");
+        tty->print_cr("EXPAND: ReachabilityFence: N%d => %s N%d: constant",
+                      rf->_idx, referent->Name(), referent->_idx);
       }
 #endif // !PRODUCT
       if (PreserveReachabilityFencesOnConstants) {
@@ -486,10 +501,6 @@ void PhaseIdealLoop::populate_reachability_edge_worklists(Node_List<Reachability
     } else {
       for_processing.push(rf);
       for_removal.push(rf);
-
-      if (TraceReachabilityFences) {
-        tty->cr();
-      }
     }
   }
 }
@@ -545,10 +556,7 @@ static bool validate_addr_shape(AddPNode* adr) {
     }
     addr = addr->in(AddPNode::Address);
   }
-#ifdef ASSERT
-  adr->dump(3);
-  assert(false, "wrong shape of address expression");
-#endif // ASSERT
+  assert(false, "wrong shape of address expression: %s", dumpNode(adr));
   return false;
 }
 #endif // ASSERT
@@ -565,6 +573,7 @@ static bool move_referent_up(Node* referent,
     worklist.push(ReachabilityEdge::fence(referent->in(1), referent_ctrl));
     return true;
   } else if (referent->is_Phi()) {
+    assert(referent->as_Phi()->in(0)->as_Region() == referent_ctrl, "sanity");
     if (!visited_phis.test_set(referent->as_Phi()->_idx)) {
       // Push reachability fence through phi.
       RegionNode* r = referent->as_Phi()->in(0)->as_Region();
@@ -593,6 +602,17 @@ static bool move_referent_up(Node* referent,
     ReachabilityEdge fence_on_base = ReachabilityEdge::fence(base, referent_ctrl);
     worklist.push(fence_on_base);
     return true;
+  } else if (referent->is_ValueType()) {
+    ValueTypeNode* referent_vt = referent->as_ValueType();
+    for (uint i = 0; i < referent_vt->field_count(); i++) {
+      Node* field_value = referent_vt->field_value(i);
+      bool is_oop_field = field_value->bottom_type()->isa_oopptr() || field_value->bottom_type()->isa_narrowoop();
+      if (is_oop_field) {
+        ReachabilityEdge field_value_fence = ReachabilityEdge::fence(field_value, referent_ctrl);
+        worklist.push(field_value_fence);
+      }
+    }
+    return true;
   } else {
     assert(referent->is_Parm()              ||
            referent->is_CreateEx()          ||
@@ -602,7 +622,7 @@ static bool move_referent_up(Node* referent,
            ((referent->is_Load() || referent->is_LoadStore()) &&
              (!referent->in(MemNode::Address)->is_AddP() ||
               referent->in(MemNode::Address)->in(AddPNode::Base)->is_top())),
-           "what else could it be? %s %d", referent->Name(), referent->_idx);
+           "what else could it be? %s", dumpNode(referent));
     return false;
   }
 }
@@ -664,9 +684,10 @@ void PhaseIdealLoop::process_reachability_fence_edge(const ReachabilityEdge& fen
   Node* referent = fence._referent;
 
   Node* referent_ctrl = ctrl_for_referent(referent, this);
-  if (referent_ctrl == fence._ctrl) {
+  if (referent_ctrl == fence._ctrl || referent->is_ValueType()) { // no reachability edges with VTs, please
     // Try to move referent up.
-    if (move_referent_up(referent, referent_ctrl, visited_phis, worklist)) {
+    Node* ctrl = (referent->is_ValueType() ? fence._ctrl : referent_ctrl);
+    if (move_referent_up(referent, ctrl, visited_phis, worklist)) {
       // Populates worklist with extra work.
     } else {
 #ifndef PRODUCT
@@ -706,6 +727,9 @@ void PhaseIdealLoop::process_reachability_fence(ReachabilityFenceNode* reachabil
 
 #ifndef PRODUCT
   if (TraceReachabilityFences) {
+    tty->print("EXPAND: ReachabilityFence %d => %s %d:",
+               reachability_fence->_idx, reachability_fence->referent()->Name(), reachability_fence->_idx);
+
     for (uint k = 0; k < sfpt_worklist.size(); k++) {
       SafePointNode* sfpt = sfpt_worklist.at(k);
       tty->print(" %sN%d", sfpt->Name(), sfpt->_idx);
