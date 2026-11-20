@@ -895,7 +895,14 @@ void Node::ins_req( uint idx, Node *n ) {
 
 //-----------------------------find_edge---------------------------------------
 int Node::find_edge(const Node* n) const {
-  for (uint i = 0; i < len(); i++) {
+  return find_edge_in_range(n, 0, len());
+}
+
+//-----------------------------find_edge_in_range------------------------------
+int Node::find_edge_in_range(const Node* n, uint start, uint end) const {
+  assert(end >= start, "bad range");
+  assert(end <= len(), "bad range");
+  for (uint i = start; i < end; i++) {
     if (_in[i] == n)  return i;
   }
   return -1;

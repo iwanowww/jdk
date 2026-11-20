@@ -502,6 +502,7 @@ public:
   }
   // Find first occurrence of n among my edges:
   int find_edge(const Node* n) const;
+  int find_edge_in_range(const Node* n, uint start, uint end) const;
   int find_prec_edge(Node* n) {
     for (uint i = req(); i < len(); i++) {
       if (_in[i] == n) return i;

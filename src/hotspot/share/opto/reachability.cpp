@@ -512,7 +512,14 @@ bool PhaseIdealLoop::add_reachability_edge_to_safepoint(Node* referent, SafePoin
          "not an oop: %s %d = %s", referent->Name(), referent->_idx, Type::str(referent->bottom_type()));
   assert(!referent->is_ValueType(), "reachability edge to VT is not supported");
   assert(is_dominator(ctrl_for_referent(referent, this), sfpt), "unschedulable");
-  if (sfpt->find_edge(referent) == -1) {
+  // Debug inputs must be available to reconstruct interpreter state on deoptimization,
+  // so their oops are kept alive in the caller's oop map. Existing reachability edges
+  // also keep the referent alive across the safepoint. Outgoing call arguments, before
+  // debug_start(), are excluded from the caller's oop map (see OopFlow::build_oop_map).
+  // Their reachability is the callee's responsibility, and the callee may stop keeping
+  // an argument alive before returning. An argument edge alone therefore cannot replace
+  // a reachability edge, which keeps the referent alive across the entire call.
+  if (sfpt->find_edge_in_range(referent, sfpt->jvms()->debug_start(), sfpt->req()) == -1) {
     sfpt->add_req(referent);
     igvn()._worklist.push(sfpt);
     return true;
@@ -652,12 +659,9 @@ static bool enumerate_reachability_edges(PhaseIdealLoop* phase,
         // Has the safepoint been already processed?
         bool is_processed = !is_initial_pass && phase->is_dominator(fence_ctrl, sfpt);
         if (!is_processed) {
-          NOT_PRODUCT( if (TraceReachabilityFences) { tty->print("  S%d", sfpt->_idx); } )
-          if (sfpt->find_edge(referent) == -1) {
-            NOT_PRODUCT( if (TraceReachabilityFences) { tty->print("+E%d", referent->_idx); } )
-            ReachabilityEdge edge = ReachabilityEdge::edge(referent, sfpt);
-            reachability_edges.push(edge);
-          }
+          NOT_PRODUCT( if (TraceReachabilityFences) { tty->print("+E%d", referent->_idx); } )
+          ReachabilityEdge edge = ReachabilityEdge::edge(referent, sfpt);
+          reachability_edges.push(edge);
         }
         no_of_processed_sfpts++;
       }
