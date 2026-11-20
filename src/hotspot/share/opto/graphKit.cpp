@@ -86,7 +86,7 @@ GraphKit::GraphKit(JVMState* jvms, PhaseGVN* gvn)
     for (uint i = jvms->debug_end(); i < jvms->map()->req(); i++) {
       _post_debug_sfpt_edges.push(jvms->map()->in(i));
     }
-    gvn->record_for_igvn(cloned_map);
+    _gvn.record_for_igvn(cloned_map);
     for (JVMState* current = cloned_jvms; current != nullptr; current = current->caller()) {
       current->set_map(cloned_map);
     }

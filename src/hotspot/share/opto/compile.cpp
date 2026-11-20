@@ -2198,7 +2198,7 @@ void Compile::process_value_types(PhaseIterGVN& igvn, bool remove) {
   for (int i = 0; i < C->reachability_fences_count(); i++) {
     ReachabilityFenceNode* rf = C->reachability_fence(i);
     ValueTypeNode* referent_vt = rf->referent()->isa_ValueType();
-    if (referent_vt != nullptr && (OptimizeReachabilityFences || referent_vt->is_allocated(&igvn))) {
+    if (referent_vt != nullptr && (OptimizeReachabilityFences || !referent_vt->is_allocated(&igvn))) {
       assert(!remove, "too late");
       ResourceMark rm;
       Node* ctrl_in = rf->in(0);
