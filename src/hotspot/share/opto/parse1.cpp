@@ -1489,10 +1489,14 @@ void Parse::do_method_entry() {
     int max_locals = jvms()->loc_size();
     for (int idx = 0; idx < max_locals; idx++) {
       Node* loc = local(idx);
-      if (!loc->is_ValueType() &&
+      bool is_value = (loc->is_ValueType() || _gvn.type(loc)->is_valueklassptr());
+      if (!is_value &&
           loc->bottom_type()->isa_oopptr() != nullptr &&
           !is_auto_boxed_primitive(loc)) { // ignore auto-boxed primitives
         _stress_rf_hook->add_req(loc);
+      } else {
+        assert(_gvn.type(loc)->isa_narrowoop() == nullptr,
+               "narrow oop in a local? %s", loc->Name());
       }
     }
   }
