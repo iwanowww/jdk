@@ -3337,7 +3337,7 @@ void Compile::Optimize() {
     for (int i = 0; i < C->reachability_fences_count(); i++) {
       C->reachability_fence(i)->clear_memory(igvn);
     }
-    assert(!failing(), "");
+    assert(!failing_internal(), "no compilation failures expected yet");
     igvn.optimize();
     if (failing())  return;
 
