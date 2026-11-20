@@ -2193,35 +2193,33 @@ void Compile::process_value_types(PhaseIterGVN& igvn, bool remove) {
     }
     igvn.record_for_igvn(vt);
   }
-  if (OptimizeReachabilityFences) {
-    // Expand (ReachabilityFence (ValueType v1 ... vn)) into a sequence of
-    // ReachabilityFences on reference values (RF rk -> ... -> RF r1).
-    for (int i = 0; i < C->reachability_fences_count(); i++) {
-      ReachabilityFenceNode* rf = C->reachability_fence(i);
-      ValueTypeNode* referent_vt = rf->referent()->isa_ValueType();
-      if (referent_vt != nullptr) {
-        assert(!remove, "too late");
-        ResourceMark rm;
-        Node* ctrl_in = rf->in(0);
-        Unique_Node_List<ValueTypeNode> worklist;
-        worklist.push(referent_vt);
-        for (uint i = 0; i < worklist.size(); i++) {
-          ValueTypeNode* vt = worklist.at(i);
-          for (uint j = 0; j < vt->field_count(); j++) {
-            Node* field_value = vt->field_value(j);
-            if (field_value->is_ValueType()) {
-              worklist.push(field_value->as_ValueType());
-            } else if (field_value->bottom_type()->isa_oopptr()) {
-              // ... <- RF(r1) <- ... <- RF(rk) <- RF(r => null) <- ...
-              ctrl_in = igvn.transform(new ReachabilityFenceNode(C, ctrl_in, rf->memory(), field_value));
-              assert(rf->in(0) == ctrl_in || // new RF is a no-op
-                     rf->in(0) == ctrl_in->in(0), "");
-              igvn.replace_input_of(rf, 0, ctrl_in);
-            }
+  // Expand (ReachabilityFence (ValueType v1 ... vn)) into a sequence of
+  // ReachabilityFences on reference values (RF rk -> ... -> RF r1).
+  for (int i = 0; i < C->reachability_fences_count(); i++) {
+    ReachabilityFenceNode* rf = C->reachability_fence(i);
+    ValueTypeNode* referent_vt = rf->referent()->isa_ValueType();
+    if (referent_vt != nullptr && (OptimizeReachabilityFences || referent_vt->is_allocated(&igvn))) {
+      assert(!remove, "too late");
+      ResourceMark rm;
+      Node* ctrl_in = rf->in(0);
+      Unique_Node_List<ValueTypeNode> worklist;
+      worklist.push(referent_vt);
+      for (uint i = 0; i < worklist.size(); i++) {
+        ValueTypeNode* vt = worklist.at(i);
+        for (uint j = 0; j < vt->field_count(); j++) {
+          Node* field_value = vt->field_value(j);
+          if (field_value->is_ValueType()) {
+            worklist.push(field_value->as_ValueType());
+          } else if (field_value->bottom_type()->isa_oopptr()) {
+            // ... <- RF(r1) <- ... <- RF(rk) <- RF(r => null) <- ...
+            ctrl_in = igvn.transform(new ReachabilityFenceNode(C, ctrl_in, rf->memory(), field_value));
+            assert(rf->in(0) == ctrl_in || // new RF is a no-op
+                   rf->in(0) == ctrl_in->in(0), "");
+            igvn.replace_input_of(rf, 0, ctrl_in);
           }
         }
-        rf->clear_referent(igvn);
       }
+      rf->clear_referent(igvn);
     }
   }
   if (remove) {
