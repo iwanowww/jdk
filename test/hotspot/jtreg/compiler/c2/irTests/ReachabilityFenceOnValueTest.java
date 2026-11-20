@@ -372,7 +372,7 @@ public class ReachabilityFenceOnValueTest {
     @Test
     @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_PARSING)
     @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.AFTER_LOOP_OPTS)
-    @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
+    @IR(counts = {IRNode.REACHABILITY_FENCE, "0"}, phase = CompilePhase.EXPAND_REACHABILITY_FENCES)
     @IR(counts = {IRNode.REACHABILITY_FENCE, "3"}, phase = CompilePhase.FINAL_CODE)
     static void testCountedLoopLong() {
         for (long i = 0; i < bufA.size; i++) {

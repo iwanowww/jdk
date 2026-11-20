@@ -123,9 +123,8 @@ GraphKit::GraphKit(const SafePointNode* sft, PhaseIterGVN& igvn)
 {
   assert(igvn.delay_transform(), "must delay transformation during macro expansion");
   assert(sft->next_exception() == nullptr, "must not have a pending exception");
-  assert(sft->req() == sft->jvms()->debug_end(), "must not have non-debug enges");
   JVMState* cloned_jvms = sft->jvms()->clone_deep(C);
-  SafePointNode* cloned_map = new SafePointNode(sft->req(), cloned_jvms);
+  SafePointNode* cloned_map = new SafePointNode(sft->jvms()->debug_end(), cloned_jvms);
   for (uint i = 0; i < sft->jvms()->debug_end(); i++) {
     cloned_map->init_req(i, sft->in(i));
   }
