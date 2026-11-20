@@ -847,12 +847,14 @@ bool PhaseMacroExpand::can_eliminate_allocation(PhaseIterGVN* igvn,
         // ok to eliminate
       } else if (use->is_ReachabilityFence() && OptimizeReachabilityFences) {
         // ok to eliminate
-        if (reachability_fences != nullptr) {
-          if (use->as_ReachabilityFence()->memory()->is_top()) {
+        ReachabilityFenceNode* rf = use->as_ReachabilityFence();
+        // A prior macro elimination may have killed the path the fence is on.
+        if (reachability_fences != nullptr && !rf->in(ReachabilityFenceNode::Control)->is_top()) {
+          if (rf->memory()->is_top()) {
             NOT_PRODUCT(fail_eliminate = "ReachabilityFence does not have memory";)
             can_eliminate = false;
           } else {
-            reachability_fences->push(use->as_ReachabilityFence());
+            reachability_fences->push(rf);
           }
         }
       } else if (use->is_SafePoint()) {
@@ -1361,8 +1363,8 @@ bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc,
       ReachabilityFenceNode* reachability_fence = reachability_fences.at(i)->as_ReachabilityFence();
       Node* ctrl_rf = reachability_fence->in(ReachabilityFenceNode::Control);
       Node* mem_rf = reachability_fence->in(ReachabilityFenceNode::Memory);
-      if (mem_rf->is_top()) {
-        assert(false, "missing memory on a reachability fence node");
+      if (ctrl_rf->is_top() || mem_rf->is_top()) {
+        assert(false, "missing control or memory on a reachability fence node");
         undo_previous_scalarizations(alloc, safepoints_done, scalar_objects_done, field_reachability_fences);
         return false; // can't scalarize reachability fence uses without memory info
       }
