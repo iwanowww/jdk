@@ -79,7 +79,7 @@ GraphKit::GraphKit(JVMState* jvms, PhaseGVN* gvn)
   if (_exceptions != nullptr)  jvms->map()->set_next_exception(nullptr);
   if (jvms->map()->req() > jvms->endoff()) {
     JVMState* cloned_jvms = jvms->clone_deep(C);
-    SafePointNode* cloned_map = new SafePointNode(jvms->map()->req(), cloned_jvms);
+    SafePointNode* cloned_map = new SafePointNode(jvms->endoff(), cloned_jvms);
     for (uint i = 0; i < jvms->debug_end(); i++) {
       cloned_map->init_req(i, jvms->map()->in(i));
     }
