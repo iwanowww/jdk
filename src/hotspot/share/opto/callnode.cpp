@@ -1110,6 +1110,7 @@ void CallJavaNode::copy_call_debug_info(PhaseIterGVN* phase, SafePointNode* sfpt
 
   // JVMS may be shared so clone it before we modify it
   set_jvms(sfpt->jvms() != nullptr ? sfpt->jvms()->clone_deep(C) : nullptr);
+  copy_reachability_edges_count(sfpt);
   for (JVMState *jvms = this->jvms(); jvms != nullptr; jvms = jvms->caller()) {
     jvms->set_map(this);
     jvms->set_locoff(jvms->locoff()+jvms_adj);
@@ -1806,6 +1807,15 @@ Node *SafePointNode::Ideal(PhaseGVN *phase, bool can_reshape) {
 // Remove obviously duplicate safepoints
 Node* SafePointNode::Identity(PhaseGVN* phase) {
 
+  // Reachability edges are attached after loop optimizations. Removing this
+  // safepoint would also remove the only uses that keep its referents alive.
+  if (phase->C->post_loop_opts_phase() && jvms() != nullptr) {
+    verify_reachability_edges();
+    if (req() > jvms()->debug_end()) {
+      return this;
+    }
+  }
+
   // If you have back to back safepoints, remove one
   if (in(TypeFunc::Control)->is_SafePoint()) {
     Node* out_c = unique_ctrl_out_or_null();
@@ -1969,8 +1979,32 @@ void SafePointNode::restore_non_debug_edges(NodeEdgeTempStorage& non_debug_edges
   }
 
   assert(non_debug_edges.is_empty(), "edges not processed");
+  verify_reachability_edges();
   DEBUG_ONLY(non_debug_edges._state = NodeEdgeTempStorage::state_processed);
 }
+
+#ifdef ASSERT
+void SafePointNode::verify_reachability_edges() const {
+  if (jvms() == nullptr) {
+    assert(_reachability_edges_count == 0, "reachability edges require a JVM state");
+    return;
+  }
+  uint first = jvms()->debug_end();
+  if (req() == first + _reachability_edges_count + 1) {
+    assert(is_Call() && (as_Call()->entry_point() == OptoRuntime::new_array_Java() ||
+                         as_Call()->entry_point() == OptoRuntime::new_array_nozero_Java()), "");
+  } else {
+    assert(req() == first + _reachability_edges_count, "lost reachability edges");
+  }
+  for (uint i = first; i < first + _reachability_edges_count; i++) {
+    Node* referent = in(i);
+    assert(referent != nullptr && !referent->is_top() &&
+           (referent->bottom_type()->isa_oopptr() || referent->bottom_type()->isa_narrowoop() ||
+            referent->bottom_type() == TypePtr::NULL_PTR),
+           "invalid reachability edge");
+  }
+}
+#endif
 
 //==============  SafePointScalarObjectNode  ==============
 

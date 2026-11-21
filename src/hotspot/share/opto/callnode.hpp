@@ -356,6 +356,7 @@ protected:
   const TypePtr*  _in_adr_type;    // What type of memory does this node consume?
   ReplacedNodes   _replaced_nodes; // During parsing: list of pair of nodes from calls to GraphKit::replace_in_map()
   bool            _has_ea_local_in_scope; // NoEscape or ArgEscape objects in JVM States
+  DEBUG_ONLY(uint _reachability_edges_count;)
 
   void set_jvms(JVMState* s) {
   assert(s != nullptr, "assign null value to _jvms");
@@ -372,6 +373,7 @@ public:
       _out_adr_type(out_adr_type),
       _in_adr_type(in_adr_type),
       _has_ea_local_in_scope(false)
+      DEBUG_ONLY(COMMA _reachability_edges_count(0))
   {
     init_class_id(Class_SafePoint);
   }
@@ -609,6 +611,17 @@ public:
   virtual const RegMask &in_RegMask(uint) const;
   virtual const RegMask &out_RegMask() const;
   virtual uint           match_edge(uint idx) const;
+
+  // Reachability edge tracking (for verification purposes).
+  void record_reachability_edge() { DEBUG_ONLY(_reachability_edges_count++;) }
+  void record_reachability_edge_removal() {
+    DEBUG_ONLY(assert(_reachability_edges_count > 0, "no reachability edge to remove"); _reachability_edges_count--;)
+  }
+  void copy_reachability_edges_count(const SafePointNode* source) {
+    DEBUG_ONLY(_reachability_edges_count = source->_reachability_edges_count;)
+  }
+  void verify_reachability_edges() const PRODUCT_RETURN;
+  DEBUG_ONLY(uint reachability_edges_count() const { return _reachability_edges_count; })
 
 #ifndef PRODUCT
   virtual void           dump_spec(outputStream *st) const;

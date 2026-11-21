@@ -523,6 +523,7 @@ bool PhaseIdealLoop::add_reachability_edge_to_safepoint(Node* referent, SafePoin
   // a reachability edge, which keeps the referent alive across the entire call.
   if (sfpt->find_edge_in_range(referent, sfpt->jvms()->debug_start(), sfpt->req()) == -1) {
     sfpt->add_req(referent);
+    sfpt->record_reachability_edge();
     igvn()._worklist.push(sfpt);
     return true;
   }
@@ -954,6 +955,8 @@ void Compile::expand_reachability_edges(Unique_Node_List<SafePointNode>& safepoi
   for (uint i = 0; i < safepoints.size(); i++) {
     SafePointNode* sfpt = safepoints.at(i);
 
+    sfpt->verify_reachability_edges();
+
     uint rf_offset = rf_base_offset(sfpt);
     if (sfpt->jvms() != nullptr && sfpt->req() > rf_offset) {
       // Find a point in CFG right after safepoint to insert reachability fence.
@@ -972,12 +975,16 @@ void Compile::expand_reachability_edges(Unique_Node_List<SafePointNode>& safepoi
         }
       }
 
+      assert(sfpt->req() == rf_offset + sfpt->reachability_edges_count(),
+             "unexpected non-debug safepoint edges");
+
       bool is_interfering = is_interfering_sfpt_candidate(sfpt);
 
       while (sfpt->req() > rf_offset) {
         int idx = sfpt->req() - 1;
         Node* referent = sfpt->in(idx);
         sfpt->del_req(idx);
+        sfpt->record_reachability_edge_removal();
 
         if (is_interfering) {
           Node* new_rf = new ReachabilityFenceNode(C, ctrl_out, C->top(), referent);
@@ -995,6 +1002,8 @@ void Compile::expand_reachability_edges(Unique_Node_List<SafePointNode>& safepoi
       if (extra_edge != nullptr) {
         sfpt->add_req(extra_edge); // Add valid_length_test_input edge back
       }
+
+      sfpt->verify_reachability_edges();
     }
   }
 }
