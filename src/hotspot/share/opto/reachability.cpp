@@ -956,7 +956,6 @@ void Compile::expand_reachability_edges(Unique_Node_List<SafePointNode>& safepoi
 
     uint rf_offset = rf_base_offset(sfpt);
     if (sfpt->jvms() != nullptr && sfpt->req() > rf_offset) {
-      assert(is_interfering_sfpt_candidate(sfpt), "");
       // Find a point in CFG right after safepoint to insert reachability fence.
       Node* ctrl_out = sfpt_ctrl_out(sfpt);
       Node* ctrl_end = ctrl_out->unique_ctrl_out();
@@ -973,14 +972,24 @@ void Compile::expand_reachability_edges(Unique_Node_List<SafePointNode>& safepoi
         }
       }
 
+      bool is_interfering = is_interfering_sfpt_candidate(sfpt);
+
       while (sfpt->req() > rf_offset) {
         int idx = sfpt->req() - 1;
         Node* referent = sfpt->in(idx);
         sfpt->del_req(idx);
 
-        Node* new_rf = new ReachabilityFenceNode(C, ctrl_out, C->top(), referent);
-        ctrl_end->replace_edge(ctrl_out, new_rf);
-        ctrl_end = new_rf;
+        if (is_interfering) {
+          Node* new_rf = new ReachabilityFenceNode(C, ctrl_out, C->top(), referent);
+          ctrl_end->replace_edge(ctrl_out, new_rf);
+          ctrl_end = new_rf;
+        } else {
+          // Drop reachability edges on non-interfering safepoints.
+          // Happens when a call/safepoint is replaced with an uncommon trap during late expansion.
+          assert(sfpt->is_CallStaticJava() && sfpt->as_CallStaticJava()->is_uncommon_trap(),
+                 "not an uncommon trap: %s %s", sfpt->Name(),
+                 sfpt->is_Call() ? sfpt->as_Call()->_name : "");
+        }
       }
 
       if (extra_edge != nullptr) {
