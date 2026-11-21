@@ -47,10 +47,20 @@ public:
       : Node(3) {
     assert(ctrl != nullptr && mem != nullptr && referent != nullptr, "required");
     assert(ctrl->is_CFG(), "not a control");
+    // A fence operand denotes a Java object (or null), never an interior pointer.
+    // Even a zero-offset AddP must be canonicalized to its base first: the
+    // reachability worklist does not process AddP as a direct referent.
+    assert(!referent->is_AddP(), "AddP is not a Java reference referent");
     assert(referent->bottom_type()->isa_oopptr() ||
            referent->bottom_type()->isa_narrowoop() != nullptr ||
            referent->bottom_type() == TypePtr::NULL_PTR,
            "not an oop: %s %s", Type::str(referent->bottom_type()), referent->Name());
+    assert(referent->bottom_type()->isa_oopptr() == nullptr ||
+           referent->bottom_type()->is_oopptr()->offset() == 0,
+           "referent must be an oop base, not a derived pointer");
+    assert(referent->bottom_type()->isa_narrowoop() == nullptr ||
+           referent->bottom_type()->is_narrowoop()->get_ptrtype()->offset() == 0,
+           "referent must be a narrow oop base, not a derived pointer");
     init_class_id(Class_ReachabilityFence);
     init_req(Control,  ctrl);
     init_req(Memory,   mem);

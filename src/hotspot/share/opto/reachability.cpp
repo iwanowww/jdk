@@ -528,7 +528,7 @@ bool PhaseIdealLoop::add_reachability_edge_to_safepoint(Node* referent, SafePoin
 }
 
 static bool is_proj_to_alloc(Node* n) {
-  if (n->is_Proj()) {
+  if (n->is_Proj() && n->as_Proj()->_con == TypeFunc::Parms) {
     if (n->as_Proj()->in(0)->is_Allocate()) {
       return true;
     }
@@ -549,22 +549,39 @@ static bool is_proj_to_alloc(Node* n) {
 }
 
 #ifdef ASSERT
-static bool validate_addr_shape(AddPNode* adr) {
-  // Move fence to base oop.
-  Node* base = adr->in(AddPNode::Base);
-  Node* addr = adr->in(AddPNode::Address);
-  if (base == addr) {
-    return true;
-  }
-  while (addr->is_AddP()) {
-    if (base == addr->in(AddPNode::Base) &&
-        base == addr->in(AddPNode::Address)) {
-      return true;
+// A raw pointer is safe to stop at only if every live input is a newly
+// allocated oop.  A raw pointer's type alone does not establish this.
+static bool has_allocation_origin(Node* raw_oop) {
+  Unique_Node_List<Node> worklist;
+  worklist.push(raw_oop);
+  bool found_allocation = false;
+
+  for (uint i = 0; i < worklist.size(); i++) {
+    Node* value = worklist.at(i);
+    if (is_proj_to_alloc(value)) {
+      found_allocation = true;
+    } else if (value->is_ConstraintCast() && value->in(1)->bottom_type()->isa_rawptr()) {
+      worklist.push(value->in(1));
+    } else if (value->is_Phi()) {
+      RegionNode* region = value->as_Phi()->region();
+      for (uint j = 1; j < value->req(); j++) {
+        Node* predecessor = region->in(j);
+        Node* input = value->in(j);
+        if (predecessor == nullptr || input == nullptr) {
+          return false;
+        }
+        if (!predecessor->is_top()) {
+          worklist.push(input);
+        }
+      }
+    } else if (value->is_CMove()) {
+      worklist.push(value->in(CMoveNode::IfFalse));
+      worklist.push(value->in(CMoveNode::IfTrue));
+    } else {
+      return false;
     }
-    addr = addr->in(AddPNode::Address);
   }
-  assert(false, "wrong shape of address expression: %s", dumpNode(adr));
-  return false;
+  return found_allocation;
 }
 #endif // ASSERT
 
@@ -602,10 +619,13 @@ static bool move_referent_up(Node* referent,
   } else if ((referent->is_Load() || referent->is_LoadStore()) &&
               referent->in(MemNode::Address)->is_AddP() &&
               !referent->in(MemNode::Address)->in(AddPNode::Base)->is_top()) {
-    // Move fence to base oop.
+    // AddP's base is the oop to keep alive. Its address can be a Phi of
+    // derived addresses, so it need not be a linear AddP chain from the base.
     AddPNode* ld_adr = referent->in(MemNode::Address)->as_AddP();
     Node* base = ld_adr->in(AddPNode::Base);
-    assert(validate_addr_shape(ld_adr), "");
+    assert(ld_adr->address_input_has_same_base(), "mismatched AddP base");
+    assert(base->bottom_type()->isa_oopptr() != nullptr,
+           "AddP base is not an oop: %s %d", base->Name(), base->_idx);
     ReachabilityEdge fence_on_base = ReachabilityEdge::fence(base, referent_ctrl);
     worklist.push(fence_on_base);
     return true;
@@ -657,7 +677,7 @@ static bool enumerate_reachability_edges(PhaseIdealLoop* phase,
       // TODO
       if (referent_ctrl != sfpt && phase->is_dominator(referent_ctrl, sfpt)) {
         // Has the safepoint been already processed?
-        bool is_processed = !is_initial_pass && phase->is_dominator(fence_ctrl, sfpt);
+        bool is_processed = !is_initial_pass && phase->is_strict_dominator(fence_ctrl, sfpt);
         if (!is_processed) {
           NOT_PRODUCT( if (TraceReachabilityFences) { tty->print("+E%d", referent->_idx); } )
           ReachabilityEdge edge = ReachabilityEdge::edge(referent, sfpt);
@@ -798,26 +818,27 @@ void PhaseIdealLoop::add_reachability_fence(Node* referent, Node* ctrl) {
                                         referent->in(1)->bottom_type() == TypeRawPtr::NOTNULL)) {
     // No need to climb beyond an allocation site.
     // NB! In some pathological cases, an allocation may be hidden behind multiple layers of Phis.
+    assert(has_allocation_origin(referent->in(1)),
+           "raw oop cast without an allocation origin: %s %d", referent->Name(), referent->_idx);
   } else if (referent->is_Parm() && ctrl->is_Start()) {
     // No special care is needed for arguments.
   } else if (referent->is_Proj() &&
-              referent->as_Proj()->in(0)->is_Call()) {
-
-    CallNode* call = referent->as_Proj()->in(0)->as_Call();
-    if ((call->is_CallStaticJava() &&
-        (call->as_CallStaticJava()->is_boxing_or_unboxing_call())) ||
-         call->is_CallLeafPure()) {
-      // Can go away during macro expansion if result projection disappears.
-    } else {
-      // Proj can go away, but the call should stay unless dominating part of CFG dies.
-      // C->assert_alive_node(referent->as_Proj()->in(0));
-    }
+              referent->as_Proj()->in(0)->is_Call() &&
+              !referent->as_Proj()->in(0)->is_CallLeafPure()) {
+    // Calls should stay unless dominating part of CFG dies.
+    // The only exception is primitive boxing/unboxing calls: unused ones are pruned
+    // during macro expansion. But there's no point in keeping them alive solely for
+    // reachability fence purposes.
   } else if (referent->is_CreateEx()) {
-    // Safe to drop a freshly created exception.
+    // An exception (either new or pre-existing) originated from a call.
+    // It's kept alive inside the call and there are reachability edges added
+    // if there are any interfering safepoints. So, safe to drop the fence.
   } else {
     assert(referent->bottom_type()->isa_oopptr() ||
            referent->bottom_type()->isa_narrowoop(),
            "not an oop? %s %s %d", Type::str(referent->bottom_type()), referent->Name(), referent->_idx);
+    assert(referent->as_Proj()->in(0)->is_Call() &&
+           referent->as_Proj()->in(0)->is_CallLeafPure(), "interesting");
     assert(referent->Opcode() == Op_CastI2N ||
            (referent->is_Con() && PreserveReachabilityFencesOnConstants) ||
            ((referent->is_Load() || referent->is_LoadStore()) &&
@@ -833,6 +854,11 @@ void PhaseIdealLoop::add_reachability_fence(Node* referent, Node* ctrl) {
     }
 #endif // !PRODUCT
     Node* normalized_ctrl = normalize_ctrl(C, ctrl, referent);
+    assert(is_dominator(ctrl, normalized_ctrl),
+           "normalized control is outside the referent's CFG path");
+    assert(normalized_ctrl->unique_ctrl_out_or_null() != nullptr,
+           "reachability fence insertion requires one CFG successor: %s %d for %s %d",
+           normalized_ctrl->Name(), normalized_ctrl->_idx, referent->Name(), referent->_idx);
     insert_rf(normalized_ctrl, referent);
   }
 }
