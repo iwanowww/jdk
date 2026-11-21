@@ -28,7 +28,7 @@
  * @requires vm.compiler2.enabled
  * @enablePreview
  * @run main/othervm -XX:-TieredCompilation -Xbatch -XX:+UnlockDiagnosticVMOptions
- *                   -XX:+StressLateSubstitutabilityExpansion
+ *                   -XX:+StressReachabilityFences
  *                   -XX:CompileCommand=compileonly,${test.main.class}::test
  *                   ${test.main.class}
  */
