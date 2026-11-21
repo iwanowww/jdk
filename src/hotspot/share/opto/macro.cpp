@@ -1348,7 +1348,6 @@ bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc,
     // to the allocated object with "sobj"
     JVMState *jvms = sfpt->jvms();
     sfpt->replace_edges_in_range(alloc_result, sobj, jvms->debug_start(), jvms->debug_end(), &_igvn);
-    non_debug_edges_worklist.remove_edge_if_present(alloc_result); // drop scalarized input from non-debug info
     sfpt->restore_non_debug_edges(non_debug_edges_worklist);
     _igvn._worklist.push(sfpt);
 
@@ -1403,6 +1402,20 @@ bool PhaseMacroExpand::scalar_replacement(AllocateNode* alloc,
       assert(field_reachability_fences.size() == 0, "not empty");
       undo_previous_scalarizations(alloc, safepoints_done, scalar_objects_done, field_reachability_fences);
       return false; // can't scalarize reachability fence uses
+    }
+  }
+
+  // After scalar replacement succeeds (no more rollbacks possible), drop old reachability edges.
+  for (uint i = 0; i < safepoints_done.size(); i++) {
+    SafePointNode* sfpt = safepoints_done.at(i);
+    int edge = sfpt->find_edge_in_range(alloc_result, sfpt->jvms()->debug_end(), sfpt->req());
+    if (edge != -1) {
+      DEBUG_ONLY(bool was_reachability_edge = (uint)edge <
+                                             sfpt->jvms()->debug_end() + sfpt->reachability_edges_count();)
+      _igvn.delete_input_of(sfpt, edge);
+      DEBUG_ONLY(if (was_reachability_edge) { sfpt->record_reachability_edge_removal(); })
+      sfpt->verify_reachability_edges();
+      _igvn._worklist.push(sfpt);
     }
   }
 

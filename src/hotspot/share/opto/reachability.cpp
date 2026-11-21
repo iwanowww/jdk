@@ -186,8 +186,10 @@ void PhaseIdealLoop::insert_rf(Node* ctrl, Node* referent) {
   set_idom(new_rf, ctrl, dom_depth(ctrl) + 1);
   lpt->register_reachability_fence(new_rf);
 
-  igvn().rehash_node_delayed(ctrl_end);
-  ctrl_end->replace_edge(ctrl, new_rf);
+  igvn().replace_edge_of(ctrl_end, ctrl, new_rf);
+
+  // Inserting a fence can make later fences redundant.
+  igvn().add_users_to_worklist(new_rf);
 
   if (idom(ctrl_end) == ctrl) {
     set_idom(ctrl_end, new_rf, dom_depth(new_rf) + 1);
