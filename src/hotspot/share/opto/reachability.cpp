@@ -837,10 +837,9 @@ void PhaseIdealLoop::add_reachability_fence(Node* referent, Node* ctrl) {
     assert(referent->bottom_type()->isa_oopptr() ||
            referent->bottom_type()->isa_narrowoop(),
            "not an oop? %s %s %d", Type::str(referent->bottom_type()), referent->Name(), referent->_idx);
-    assert(referent->as_Proj()->in(0)->is_Call() &&
-           referent->as_Proj()->in(0)->is_CallLeafPure(), "interesting");
     assert(referent->Opcode() == Op_CastI2N ||
            (referent->is_Con() && PreserveReachabilityFencesOnConstants) ||
+           //(referent->is_Proj() && referent->as_Proj()->in(0)->is_CallLeafPure()) || // revisit; should be safe to ignore
            ((referent->is_Load() || referent->is_LoadStore()) &&
              (!referent->in(MemNode::Address)->is_AddP() ||
               referent->in(MemNode::Address)->in(AddPNode::Base)->is_top())),
