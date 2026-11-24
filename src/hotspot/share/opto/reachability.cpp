@@ -253,6 +253,11 @@ bool PhaseIdealLoop::optimize_reachability_fences() {
               IfNode* outer_loop_end = outer_lpt->head()->as_OuterStripMinedLoop()->outer_loop_end();
               if (outer_loop_end != nullptr && outer_loop_end->false_proj_or_null() != nullptr) {
                 unique_loop_exit = outer_loop_end->false_proj_or_null();
+              } else {
+                // An attempt to insert an RF node inside outer strip-mined loop breaks
+                // its IR invariants and manifests as assertion failures.
+                assert(false, "no exit projection in outer strip-mined loop");
+                continue; // skip
               }
             } else {
               // An attempt to insert an RF node inside outer strip-mined loop breaks

@@ -1160,9 +1160,11 @@ void GraphKit::add_safepoint_edges(SafePointNode* call, bool must_throw) {
   assert(call->jvms()->debug_end()   == call->req(), "");
   assert(call->jvms()->debug_depth() == call->req() - non_debug_edges, "");
 
+  // Plant reachability fence edges on the freshly allocated safepoint.
   for (int i = 0; i < _post_debug_sfpt_edges.length(); i++) {
     Node* post_debug_edge = _post_debug_sfpt_edges.at(i);
     call->add_req(post_debug_edge);
+    call->record_reachability_edge();
   }
 
   assert(call->jvms()->debug_end() + _post_debug_sfpt_edges.length() == call->req(), "");
